@@ -14,7 +14,7 @@ Je les ai remplacés par une page que j'ai écrite.
 
 ## Ce que ça fait
 
-Un collecteur interroge dix-sept sources — API des services, `/proc`, `/sys`, `docker`, SMART — et écrit **un seul fichier JSON**. Une page statique le lit et se redessine. C'est tout.
+Un collecteur interroge dix-sept sources (API des services, `/proc`, `/sys`, `docker`, SMART) et écrit **un seul fichier JSON**. Une page statique le lit et se redessine. C'est tout.
 
 - **Latence de 4 secondes** sur les valeurs vivantes, contre 80 au départ
 - **Historique maison** sur 24 heures et 7 jours, avec alertes et notifications sur téléphone
@@ -27,7 +27,7 @@ Un collecteur interroge dix-sept sources — API des services, `/proc`, `/sys`, 
 
 La page ne sert que des fichiers. Pas de processus permanent, donc rien qui puisse tomber en dehors du serveur web lui-même. Le vrai push par WebSocket a été écarté pour cette raison précise : il aurait rendu à la page la fragilité qu'on lui retirait.
 
-Conséquence assumée : la fraîcheur dépend du cron, qui ne descend pas sous la minute. Le collecteur rapide boucle donc à l'intérieur de sa minute, **borné dans le temps et non en nombre de tours** — une boucle comptée en tours finissait par déborder la minute suivante et faisait sauter un passage entier.
+Conséquence assumée : la fraîcheur dépend du cron, qui ne descend pas sous la minute. Le collecteur rapide boucle donc à l'intérieur de sa minute, **borné dans le temps et non en nombre de tours** : une boucle comptée en tours finissait par déborder la minute suivante et faisait sauter un passage entier.
 
 ### Un rendu par différences écrit à la main
 
@@ -61,6 +61,10 @@ Leçon générale, au-delà des disques : un numéro attribué par le noyau est 
 | Écart entre la série tracée et la série lue | — | **0,003 point** |
 
 ## Architecture
+
+Le tout tourne sur un **UGREEN DXP480T Plus**, une machine **tout NVMe** : Intel Core i5-1235U, **7,5 Gio de RAM utiles**, quatre emplacements M.2 dont deux occupés, 128 Go pour le système et 8 To pour les données, sous UGOS Pro, sur base Debian 12.
+
+Ces 7,5 Gio gouvernent le reste. C'est la contrainte qui a fait retirer les deux outils de supervision, et c'est elle aussi qui explique pourquoi la page distingue partout la mémoire **résidente** de ce que le noyau a **compressé en zram** : sur cette machine, la moitié de la mémoire des conteneurs est évacuée, et un outil qui additionne les deux ne décrit plus rien.
 
 ```
 collecteurs (cron)          page statique              serveur
