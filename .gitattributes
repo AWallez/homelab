@@ -1,0 +1,18 @@
+# ⚠️ LF PARTOUT, Y COMPRIS DANS LA COPIE DE TRAVAIL.
+#
+# Sous Windows, git convertit par defaut les fins de ligne en CRLF au checkout.
+# Un script shell ainsi converti echoue des sa premiere ligne, avec le message
+# trompeur `$'\r': command not found` : le contenu semble correct, seul le
+# caractere invisible de fin de ligne est en cause. Le piege a coute trois
+# echecs le 01/09/2026 sur un tout autre chemin.
+#
+# `eol=lf` impose donc LF au checkout comme au commit, quelle que soit la
+# plateforme. Les collecteurs partent sur un NAS Linux : c est la seule fin de
+# ligne qui ait un sens ici.
+* text=auto eol=lf
+
+# Les binaires ne doivent subir aucune conversion.
+*.ico binary
+*.png binary
+*.webp binary
+*.jpg binary

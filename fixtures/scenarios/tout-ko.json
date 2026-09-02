@@ -1,0 +1,16 @@
+{ "nas": { "run": 21, "all": 26, "ram": 93, "disk": 94, "temp": 87, "swap": 71 },
+  "site": { "ok": false, "ms": 0, "cert": 6 },
+  "vpn":  { "open": false, "health": "unhealthy", "ip": "", "port": 0 },
+  "backup": { "h": 96, "date": "10/03 a 06:00" },
+  "updates": { "total": 6, "age": 61 },
+  "qbit": { "etat": "disconnected", "pairs": 0, "dl": 0, "ul": 0, "dette": 5 },
+  "prowlarr": { "sante": 3, "msg": "Trois indexeurs en echec" },
+  "radarr": { "mis": 17, "q": 4 }, "sonarr": { "mis": 9, "q": 2 },
+  "bazarr": { "ep": 23, "mv": 6 }, "seerr": { "pending": 5, "done": 12 },
+  "cross": { "idx": 0, "idxtot": 3, "run": "@-5j", "actifs": 0 },
+  "kuma": { "down": 5, "up": 25, "pc": 86.4,
+    "groupes": [
+      { "n": "Portfolio",      "tot": 6,  "ko": 2, "att": 0, "noms": ["site-vitrine","statistiques"], "natt": [] },
+      { "n": "Mediatheque",    "tot": 12, "ko": 2, "att": 1, "noms": ["serveur-media","indexeurs"], "natt": ["transcodage"] },
+      { "n": "Infrastructure", "tot": 12, "ko": 1, "att": 0, "noms": ["dns-filtrant"], "natt": [] }
+    ] } }

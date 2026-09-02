@@ -1,0 +1,26 @@
+# Tableau de bord, servi comme en production.
+#
+#   docker compose up -d      puis http://localhost:4173
+#
+# POURQUOI CE FICHIER ALORS QU UN SERVEUR NODE EXISTE. `outils/serveur.js` sert
+# le meme dossier et suffit pour developper, mais il ne prouve rien sur la
+# configuration reelle : c est nginx qui sert la page sur le NAS. Ce compose
+# reproduit son comportement, en particulier le `no-cache`, pour qu un ecart de
+# configuration se voie ici plutot qu apres un deploiement.
+#
+# ⚠️ AUCUNE REECRITURE D URL, ni ici ni dans le serveur Node. Le dossier `www/`
+# porte deja les fichiers aux noms que la page demande, ce qui garantit que le
+# rendu local, le rendu sur le NAS et celui de GitHub Pages sont identiques.
+# Si une alias devenait necessaire un jour, ce serait le signe que la
+# generation des fixtures est a corriger, pas la configuration du serveur.
+
+services:
+  tableau-de-bord:
+    image: nginx:alpine
+    container_name: homelab-demo
+    ports:
+      - "4173:80"
+    volumes:
+      - ./www:/usr/share/nginx/html:ro
+      - ./outils/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
