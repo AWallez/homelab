@@ -2,7 +2,7 @@
 
 Supervision d'une infrastructure auto-hébergée de vingt-six conteneurs, écrite à la main : pas de framework, pas de base de données, pas de processus permanent. Un serveur web statique, quelques scripts shell, et un fichier JSON.
 
-**[▶ Démonstration en ligne](https://VOTRE-COMPTE.github.io/homelab/)** · les données y sont fictives, et un sélecteur permet de rejouer onze états du système, du fonctionnement nominal à la panne généralisée.
+**[▶ Démonstration en ligne](https://awallez.github.io/homelab/)** · les données y sont fictives, et un sélecteur permet de rejouer onze états du système, du fonctionnement nominal à la panne généralisée.
 
 ---
 
