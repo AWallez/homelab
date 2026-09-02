@@ -75,9 +75,10 @@ done
 # `temp1_input` est le capteur « Composite », celui que SMART rapporte ; les
 # suivants sont des points chauds toujours plus eleves (57 C contre 46), on ne
 # les enregistre pas pour rester comparable.
-# CINQ positions NVMe : un SSD systeme integre au PCB, qui compte comme un
-# controleur sans occuper d emplacement, PLUS quatre M.2. On releve les cinq
-# d office, un disque ajoute plus tard est donc pris en compte sans retouche.
+# CINQ positions NVMe : un SSD systeme en PCIe, dedie au systeme, qui compte
+# comme un controleur sans occuper d emplacement, PLUS quatre M.2. On releve
+# les cinq d office, un disque ajoute plus tard est donc pris en compte sans
+# retouche.
 # Une position vide vaut 0, et la page ecarte d elle-meme une serie nulle.
 # ⚠️ Toute position supplementaire demanderait AUSSI une colonne dans
 # `history-build.sh` (NC et `champs`) et dans `history-min.sh` (la liste C et
