@@ -75,8 +75,13 @@ done
 # `temp1_input` est le capteur « Composite », celui que SMART rapporte ; les
 # suivants sont des points chauds toujours plus eleves (57 C contre 46), on ne
 # les enregistre pas pour rester comparable.
-# La machine a QUATRE emplacements M.2 : on les releve tous d office, un disque
-# ajoute plus tard sera pris en compte sans retoucher ce script.
+# ⚠️ QUATRE COLONNES POUR CINQ DISQUES POSSIBLES. La machine porte un SSD systeme
+# integre au PCB, qui compte comme un controleur NVMe, PLUS quatre emplacements
+# M.2 : elle peut donc presenter cinq disques. `nvme-slots.sh` les decouvre tous
+# et attribuerait un slot 4, mais il n existe ni `NV4` ici, ni colonne `nvme4`
+# dans `history-build.sh`. Le cinquieme disque serait donc releve puis JETE, en
+# silence. Sans consequence tant que trois emplacements M.2 restent libres ; a
+# corriger avant d installer le quatrieme.
 SLOTS=$(/volume1/docker/homelab/nvme-slots.sh 2>/dev/null)
 ctrl() { echo "$SLOTS" | awk -v n="$1" '$1==n { print $2; exit }'; }
 NV0=$(cat /sys/class/nvme/$(ctrl 0)/hwmon*/temp1_input 2>/dev/null | head -n 1)
