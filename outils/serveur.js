@@ -2,11 +2,10 @@
  *
  *   node outils/serveur.js            puis http://localhost:4173
  *
- * POURQUOI UN SERVEUR NODE A COTE DU COMPOSE. Le depot porte un `compose.yml`
- * qui reproduit le nginx de production, mais Docker n est pas installe sur
- * toutes les machines de developpement, alors que Node l est des qu on veut
- * regenerer les fixtures. Les deux servent exactement le meme dossier `www/`,
- * sans la moindre reecriture d URL : ce qu on voit en local est donc ce que
+ * Le depot porte aussi un `compose.yml` qui reproduit le nginx de production ;
+ * ce serveur existe parce que Docker n est pas installe partout, alors que Node
+ * l est des qu on veut regenerer les fixtures. Les deux servent le meme dossier
+ * `www/` sans aucune reecriture d URL : ce qu on voit en local est ce que
  * GitHub Pages affichera.
  *
  * ⚠️ `no-cache` sur tout ce qui est texte, comme en production. Sans ca la page

@@ -66,29 +66,22 @@ const coupure = (v, pas) => v.reduce((a, x) => a + (x > 0 ? (x - 1) * pas : 0), 
 
 /* Ruban de joignabilite. Reprend `.batt` de la carte Kuma pour garder le meme
    vocabulaire visuel, avec deux differences reglees dans `fond.css` :
-
-   - 48 cases et non 96. Kuma occupe la pleine largeur ; sur une carte d une
-     colonne, 340 px interieurs, les 95 gouttieres de 3 px en mangeraient 285
-     et les cases tomberaient a 0,6 px. Un `gap` ne se comprime pas en flex.
+   - 48 cases et non 96 : sur une carte d une colonne, 340 px interieurs, les
+     95 gouttieres de 3 px en mangeraient 285 et les cases tomberaient a 0,6 px.
    - un quatrieme etat, `nd`, pour un creneau SANS MESURE. Sans lui le ruban
-     serait ecarlate pendant ses 24 premieres heures, la colonne n existant
-     pas dans l historique anterieur.
-
-   Chaque case prend le PIRE des creneaux qu elle couvre : une panne de dix
+     serait ecarlate pendant ses 24 premieres heures.
+   ⚠️ Chaque case prend le PIRE des creneaux qu elle couvre : une panne de dix
    minutes ne doit pas se diluer dans une moyenne de demi-heure. */
 /* ⚠️ SVG ETIRE, PAS UNE RANGEE DE DIVS. La version en flex donnait des barres
-   INEGALES et, en dessous d une certaine largeur, inexistantes. Mesure du
-   28/08 sur un ruban de 317 px : les cases faisaient 2,42 ou 2,44 px sur la
-   carte VPN — donc 2 ou 3 px une fois peintes, d ou l irregularite visible — et
-   0,19 px sur la carte Kuma, ou les 144 gouttieres de 2 px mangeaient 288 des
-   317 px disponibles.
+   INEGALES et, sous une certaine largeur, inexistantes : sur un ruban de 317 px,
+   des cases de 2,42 ou 2,44 px — donc 2 ou 3 px une fois peintes — sur la carte
+   VPN, et de 0,19 px sur la carte Kuma, ou 144 gouttieres de 2 px mangeaient 288
+   des 317 px disponibles.
    La cause est structurelle : UNE GOUTTIERE FIXE NE SE COMPRIME PAS, et le
-   rapport barre/gouttiere se degrade avec la largeur. Le commentaire de la
-   section 14 de `fond.css` l avertissait deja pour la carte Site.
+   rapport barre/gouttiere se degrade avec la largeur.
    Dans un viewBox de n unites etire par `preserveAspectRatio="none"`, chaque
-   barre occupe exactement une unite : les largeurs sont egales PAR
-   CONSTRUCTION et la gouttiere devient proportionnelle. Meme technique que
-   `.courbe`, qui ignore ce probleme depuis le debut. */
+   barre occupe exactement une unite : les largeurs sont egales PAR CONSTRUCTION
+   et la gouttiere devient proportionnelle. Meme technique que `.courbe`. */
 const ruban = (v, n, alt, ts) => {
   n = n || 48;
   const c = [];
@@ -110,23 +103,20 @@ const ruban = (v, n, alt, ts) => {
     + `</svg>`;
 };
 
-/* ECHELLE HORAIRE D UN RUBAN (28/08/2026).
+/* ECHELLE HORAIRE D UN RUBAN.
+   Le ruban disait QUE le port avait lache, jamais QUAND — premiere question
+   devant une case rouge, et la reponse doit se recouper avec `watchdog.log`.
 
-   Le ruban disait QUE le port avait lache, jamais QUAND. Or c est la premiere
-   question devant une case rouge, et la reponse doit pouvoir se recouper avec
-   `watchdog.log`, qui horodate ses constats a la seconde.
+   ⚠️ LES HEURES VIENNENT DES HORODATAGES REELS, colonne `t` de l historique, et
+   non d un « maintenant moins 24 h ». La serie couvre 23,83 h, et moins encore
+   dans les heures qui suivent un redemarrage : une echelle supposee decalerait
+   tous les reperes sans que rien ne le dise.
 
-   ⚠️ LES HEURES VIENNENT DES HORODATAGES REELS, colonne `t` de l historique,
-   et non d un « maintenant moins 24 h ». La serie couvre 23,83 h et pas 24,
-   et elle est plus courte encore dans les heures qui suivent un redemarrage :
-   une echelle supposee decalerait tous les reperes sans que rien ne le dise.
+   ⚠️ Les reperes tombent sur des HEURES RONDES LOCALES, pas a intervalle regulier
+   depuis le bord. « 14 h » se recoupe avec un journal ; « il y a 6 h » demande un
+   calcul mental a chaque lecture.
 
-   ⚠️ Les reperes tombent sur des HEURES RONDES LOCALES, pas a intervalle
-   regulier depuis le bord. « 14 h » se recoupe avec un journal ; « il y a
-   6 h » demande un calcul mental a chaque lecture.
-
-   ⚠️ Rien au-dela de 90 % : l etiquette y chevaucherait « maintenant », et une
-   echelle illisible est pire qu absente. */
+   ⚠️ Rien au-dela de 90 % : l etiquette y chevaucherait « maintenant ». */
 const echelle = (ts, pas, n) => {
   if (!ts || ts.length < 2) return "";
   const t0 = ts[0], t1 = ts[ts.length - 1], d = t1 - t0;
@@ -155,23 +145,22 @@ const echelle = (ts, pas, n) => {
   return `<div class="ech">${m.join("")}</div>`;
 };
 
-/* RUBAN HORODATÉ : légende, ruban à pas fixe, échelle. Facteur commun aux
-   cartes VPN et Kuma, qui ne différaient que par la colonne lue.
+/* RUBAN HORODATE : legende, ruban a pas fixe, echelle. Facteur commun aux cartes
+   VPN et Kuma, qui ne differaient que par la colonne lue.
 
-   ⚠️ UNE CASE = UNE DURÉE FIXE. `ruban` découpe par INDEX : 96 cases pour
-   145 relevés donnaient 1,5 relevé par case, soit — mesuré — 47 cases de
-   10 min et 49 de 20 min. Une case rouge valait le simple ou le double, ce qui
-   vide de son sens l'échelle horaire. On fixe donc le NOMBRE DE RELEVÉS PAR
-   CASE et le nombre de cases s'en déduit.
+   ⚠️ UNE CASE = UNE DUREE FIXE. Un decoupage par INDEX donnait, pour 96 cases et
+   145 releves, 47 cases de 10 min et 49 de 20 : une case rouge valait le simple
+   ou le double, ce qui vide l echelle horaire de son sens. On fixe donc le NOMBRE
+   DE RELEVES PAR CASE et le nombre de cases s en deduit.
 
-   ⚠️ Le reste de la division est retiré au DÉBUT : l'alignement est exact du
-   côté le plus récent, celui qu'on regarde, et c'est la case la plus ancienne
-   qui est sacrifiée. La même troncature s'applique aux horodatages, sans quoi
-   l'échelle serait décalée d'un relevé par rapport au ruban qu'elle légende.
+   ⚠️ Le reste de la division est retire au DEBUT : l alignement est exact du cote
+   le plus recent, celui qu on regarde, et c est la case la plus ancienne qui est
+   sacrifiee. La meme troncature s applique aux horodatages, sans quoi l echelle
+   serait decalee d un releve par rapport au ruban qu elle legende.
 
-   ⚠️ Deux relevés et pas trois : à 30 min les trous de cinq à dix minutes se
-   fondraient tous en ambre. À 20 min, un trou de 10 min reste ambre et un
-   créneau entièrement mort devient rouge. */
+   ⚠️ Deux releves et pas trois : a 30 min les trous de cinq a dix minutes se
+   fondraient tous en ambre. A 20 min, un trou de 10 min reste ambre et un creneau
+   entierement mort devient rouge. */
 const rubanH = (d, col, alt, par) => {
   const v = Hn(d, col), PAR = par || 2;
   const dec = v.length % PAR;
@@ -188,19 +177,14 @@ const rubanH = (d, col, alt, par) => {
     + echelle(tsc, 3, n);
 };
 
-/* ETAT PAR GROUPE DE SONDES (28/08/2026).
-
-   La carte annonçait « 3 sondes hors ligne » sans dire lesquelles : il fallait
-   ouvrir Kuma pour savoir par où commencer. Elle NOMME désormais les fautives,
-   groupe par groupe.
-
-   ⚠️ Aucun ruban par groupe, et c'est délibéré. Trois rubans tripleraient
-   l'encre pour trois lignes vertes en permanence — la raison même qui a fait
-   retirer celui de la carte Site le jour même.
-
-   ⚠️ Au-delà de trois noms on abrège. Une ligne qui déborde ne se lit pas, et
-   passé le troisième c'est le groupe entier qui est en cause, pas une sonde
-   qu'on irait chercher par son nom. */
+/* ETAT PAR GROUPE DE SONDES.
+   La carte annoncait « 3 sondes hors ligne » sans dire lesquelles : il fallait
+   ouvrir Kuma pour savoir par ou commencer. Elle les NOMME, groupe par groupe.
+   ⚠️ Aucun ruban par groupe, et c est delibere : trois rubans tripleraient
+   l encre pour trois lignes vertes en permanence.
+   ⚠️ Au-dela de trois noms on abrege. Une ligne qui deborde ne se lit pas, et
+   passe le troisieme c est le groupe entier qui est en cause, pas une sonde
+   qu on irait chercher par son nom. */
 const grpk = (gs) => {
   if (!gs || !gs.length) return "";
   /* ⚠️ « en attente » n est PAS « hors ligne ». Kuma enchaine ses tentatives
@@ -228,18 +212,15 @@ const grpk = (gs) => {
 /* Serie d historique : colonne i du resume 24 h. */
 const H = (d, i) => ((d.hist && d.hist.j) || []).map(p => +p[i] || 0);
 
-/* Acces a l historique PAR NOM de colonne (24/08/2026).
-
+/* Acces a l historique PAR NOM de colonne.
    `history.json` publie la liste `champs` : s en servir plutot que de compter
    les colonnes a la main supprime toute une classe de bug. La page a trace
-   pendant des semaines la colonne 12 sous l etiquette « swap » alors que le
-   swap etait en 11 — parfaitement invisible, parce que 43 % et 46 °C
-   dessinent la meme ligne au meme endroit du graphique.
-
-   Consequence heureuse : `collect.sh` peut desormais ajouter ses colonnes en
-   FIN de ligne, dans l ordre d apparition plutot que dans l ordre logique, ce
-   qui evite de deplacer une colonne existante et de rendre faux tout
-   l historique deja enregistre. La page ne s en apercoit pas. */
+   pendant des semaines la colonne 12 sous l etiquette « swap » alors que le swap
+   etait en 11 — invisible, parce que 43 % et 46 °C dessinent la meme ligne au
+   meme endroit du graphique.
+   Consequence heureuse : `collect.sh` peut ajouter ses colonnes en FIN de ligne
+   plutot que dans l ordre logique, ce qui evite de deplacer une colonne existante
+   et de rendre faux tout l historique deja enregistre. */
 const col = (d, n) => (((d.hist || {}).champs) || []).indexOf(n);
 const Hn = (d, n) => { const i = col(d, n); return i < 0 ? [] : H(d, i); };
 
@@ -253,24 +234,21 @@ const Hs = (d, n) => { const i = col(d, n);
 const disquesHist = (d) => (((d.hist || {}).champs) || [])
   .filter(n => /^nvme\d+$/.test(n)).sort();
 
-/* ---- Série FINE, au pas d'une minute (30/08/2026) -------------------------
+/* ---- Serie FINE, au pas d une minute --------------------------------------
+   `history.json` resume 24 h en 145 points de 10 minutes, ou une pointe de
+   processeur d une minute disparait dans la moyenne. `history-min.json` publie
+   les memes 24 h au pas d UNE MINUTE, pour les onze colonnes que tracent les
+   trois cartes concernees.
 
-   `history.json` résume 24 h en 145 points de 10 minutes : une pointe de
-   processeur d'une minute y disparaît dans la moyenne, et le survol ne pouvait
-   pas répondre mieux qu'au créneau. `history-min.json` publie les mêmes 24 h au
-   pas d'UNE MINUTE, pour les onze colonnes que tracent les trois cartes
-   concernées.
+   ⚠️ IL N ENTRE PAS DANS LA BOUCLE DE 2 s. Il pese le triple et ne change qu une
+   fois par minute : le retelecharger trente fois par minute serait du trafic
+   pur. Il est mis en cache ici et renouvele toutes les 30 s.
 
-   ⚠️ IL N'ENTRE PAS DANS LA BOUCLE DE 2 s. Il pèse le triple de
-   `history.json` et ne change qu'une fois par minute : le retélécharger trente
-   fois par minute serait du trafic pur. Il est mis en cache ici et renouvelé
-   toutes les 30 s, la boucle courte réutilisant la copie.
-
-   ⚠️ LES DEUX SÉRIES N'ONT PAS LES MÊMES COLONNES. Chercher un indice dans
-   l'une pour lire dans l'autre rendrait une température à la place d'un débit.
-   `colf` interroge les champs de la série fine, et `Hf` retombe proprement sur
-   la série à 10 min tant que le fichier n'existe pas — au premier démarrage,
-   ou si le cron n'est pas encore passé. */
+   ⚠️ LES DEUX SERIES N ONT PAS LES MEMES COLONNES. Chercher un indice dans l une
+   pour lire dans l autre rendrait une temperature a la place d un debit. `colf`
+   interroge les champs de la serie fine, et `Hf` retombe proprement sur la serie
+   a 10 min tant que le fichier n existe pas — au premier demarrage, ou si le
+   cron n est pas encore passe. */
 let FIN = null, FINT = 0;
 async function histFin() {
   if (FIN && Date.now() - FINT < 30000) return FIN;
@@ -284,23 +262,20 @@ const colf = (d, n) => (((d.fin || {}).champs) || []).indexOf(n);
 const Hf = (d, n) => { const i = colf(d, n);
   return i < 0 ? Hn(d, n) : (((d.fin || {}).m) || []).map(p => +p[i] || 0); };
 
-/* MOYENNE PAR PAQUETS, POUR LE TRACÉ SEULEMENT (30/08/2026).
+/* MOYENNE PAR PAQUETS, POUR LE TRACE SEULEMENT.
+   La serie fine compte 1440 points sur 24 h pour une aire de trace de 480 px :
+   trois points par pixel, sous un trait qui en vaut 3,2. Le resultat n etait plus
+   une courbe mais une bande pleine, et la silhouette de qBittorrent etait pire —
+   1440 points sur 256 px. On vise donc environ UN POINT PAR PIXEL, et le trait
+   descend a 1,2 unite.
 
-   La série fine compte 1440 points sur 24 h. L'aire de tracé d'un graphe fait
-   272 unités sur 300, soit environ 480 px à l'écran : cela fait trois points
-   par pixel, sous un trait de 1,8 unité qui en vaut 3,2. Le résultat n'était
-   plus une courbe mais une bande pleine — et la silhouette de qBittorrent
-   était pire encore, 1440 points sur 256 px. On vise donc environ UN POINT
-   PAR PIXEL, et le trait descend à 1,2 unité.
+   ⚠️ ON REDUIT CE QU ON DESSINE, PAS CE QU ON LIT. `data-v` conserve la serie
+   entiere et le survol continue de repondre a la minute. Consequence assumee :
+   la courbe montre une moyenne de trois minutes la ou l infobulle donne une
+   seule valeur, et les deux peuvent s ecarter sur une pointe breve.
 
-   ⚠️ ON RÉDUIT CE QU'ON DESSINE, PAS CE QU'ON LIT. `data-v` conserve la série
-   entière et le survol continue de répondre à la minute. Conséquence assumée :
-   la courbe montre une moyenne de trois minutes là où l'infobulle donne la
-   valeur d'une seule, et les deux peuvent s'écarter de quelques points sur une
-   pointe brève. C'est le prix d'un tracé lisible.
-
-   ⚠️ Sans la série fine, `p` vaut 1 et la fonction rend le tableau intact :
-   les 145 points de la série à 10 min ne sont jamais degrades. */
+   ⚠️ Sans la serie fine, `p` vaut 1 et la fonction rend le tableau intact : les
+   145 points de la serie a 10 min ne sont jamais degrades. */
 const reduis = (v, cible) => {
   const p = Math.max(1, Math.ceil(v.length / cible));
   if (p === 1) return v;
@@ -359,20 +334,15 @@ const dern = (d) => (((d.hist || {}).j) || []).slice(-1)[0] || [];
 /* Graphique : echelle chiffree a gauche, axe de temps en bas, point terminal,
    seuil optionnel en pointille. Gouttiere de 26 px pour les etiquettes.
 
-   Deux options ajoutees le 24/08/2026 pour la carte Temperatures :
-
    - `o.min` deplace le BAS de l echelle. Quatre capteurs vivant entre 40 et
-     72 degres etaient ecrases dans le tiers superieur d un axe partant de
-     zero ; l axe se lit desormais de 30 a 90 et les ecarts se voient. Les
-     trois etiquettes suivent automatiquement.
-   - `x.d0` sur une serie la fait demarrer LA OU SES DONNEES COMMENCENT, au
-     lieu du bord gauche. Une mesure ajoutee aujourd hui n a pas d historique
-     hier : sans ca elle tracerait une ligne plate a zero sur vingt-trois
-     heures, ce qui ressemble beaucoup a une panne. La courbe s allonge d
-     elle-meme au fil des passages.
+     72 degres etaient ecrases dans le tiers superieur d un axe partant de zero ;
+     l axe se lit de 30 a 90 et les trois etiquettes suivent.
+   - `x.d0` fait demarrer une serie LA OU SES DONNEES COMMENCENT. Une mesure
+     ajoutee aujourd hui n a pas d historique hier : sans ca elle tracerait une
+     ligne plate a zero sur vingt-trois heures, ce qui ressemble a une panne.
      ⚠️ A n activer que la ou zero signifie « pas de donnee ». Pour un
-     pourcentage de processeur, zero est une valeur parfaitement legitime et
-     l option masquerait de vraies mesures. */
+     pourcentage de processeur, zero est une valeur legitime et l option
+     masquerait de vraies mesures. */
 const graphe = (series, o) => {
   o = o || {};
   const ok = series.filter(x => x.v && x.v.length > 1
@@ -383,15 +353,13 @@ const graphe = (series, o) => {
   const f = o.f || (v => String(Math.round(v)));
   const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 66).toFixed(1);
   const X = (i, n) => (26 + i / (n - 1) * 272).toFixed(1);
-  /* ⚠️ LE MOT « SEUIL » A ETE RETIRE, ce n est pas un oubli. Ecrit en entier
+  /* ⚠️ LE MOT « SEUIL » A ETE RETIRE, ce n est pas un oubli. Ecrit en entier,
      l etiquette faisait 36,5 unites pour une gouttiere de 26 : elle debordait
-     dans l aire de trace, ou elle a d abord traverse la courbe memoire a 67 %.
-     Reduite au seul nombre, elle tient dans la gouttiere et se lit comme une
-     QUATRIEME GRADUATION de l axe, entre « 100 % » et « 50 % ». C est la
-     couleur et le trait pointille qui disent qu il s agit d un seuil.
-     ⚠️ Le `Math.min` retient l etiquette dans le cadre : un seuil bas — 15 %
-     par exemple sur un futur graphique — la ferait sinon sortir sous l aire de
-     trace, jusque dans l axe du temps. */
+     dans l aire de trace, ou elle traversait la courbe memoire. Reduite au seul
+     nombre elle tient dans la gouttiere et se lit comme une QUATRIEME GRADUATION
+     de l axe ; la couleur et le pointille disent qu il s agit d un seuil.
+     ⚠️ Le `Math.min` retient l etiquette dans le cadre : un seuil bas la ferait
+     sinon sortir sous l aire de trace, jusque dans l axe du temps. */
   const sl = o.seuil == null ? "" :
     `<line x1="26" y1="${Y(o.seuil)}" x2="298" y2="${Y(o.seuil)}" stroke="#ff453a"
        stroke-width=".9" stroke-dasharray="3 3" opacity=".75"/>
@@ -446,23 +414,20 @@ const leg = (l) => `<div class="leg">${l.map(([t, c, v]) =>
 const moC = (p, rt) => rt ? Math.round(p / 100 * rt / 1024) : 0;
 const reelC = (x, rt) => moC(x.mem, rt) + (x.swap || 0);
 
-/* Une ligne par conteneur, refonte du 24/08/2026.
+/* Une ligne par conteneur.
+   LA BARRE EST SCINDEE : le plein est ce qui tient en memoire, le voile ce qui a
+   ete evacue en zram. Les additionner en un seul nombre masquait le sujet meme
+   de la carte — Jellyfin affichait 524 Mo dont 449 evacues, soit 75 Mo
+   reellement residents. Sur un NAS de 7,5 Go qui swappe a 42 %, c est
+   precisement la distinction qui compte.
 
-   LA BARRE EST SCINDEE. Le plein est ce qui tient en memoire, le voile ce qui
-   a ete evacue en zram. `reelC` additionnait les deux en un seul nombre, ce
-   qui masquait le sujet meme de cette carte : Jellyfin affichait 524 Mo dont
-   449 evacues, autrement dit 75 Mo reellement residents. Sur un NAS de 7,5 Go
-   qui swappe a 42 %, c est precisement la distinction qui compte.
+   LE REPERE FIN marque la moyenne de residence sur 24 h : au-dela le conteneur
+   consomme plus que d habitude, en deca moins. C est la seule grandeur de cette
+   carte qui BOUGE vraiment, le classement ne changeant quasiment jamais.
 
-   LE REPERE FIN marque la moyenne de residence sur 24 h. `mem24` etait
-   collecte depuis toujours et n avait jamais servi. Au-dela du repere le
-   conteneur consomme plus que d habitude, en deca moins — c est la seule
-   grandeur de cette carte qui BOUGE vraiment, le classement, lui, ne change
-   quasiment jamais.
-
-   ⚠️ Le repere se lit sur la meme echelle que les segments, mais il ne
-   concerne que la RESIDENCE : il n existe pas de `swap24`, et melanger un
-   total actuel avec une moyenne de residence donnerait un repere faux. */
+   ⚠️ Le repere ne concerne que la RESIDENCE : il n existe pas de `swap24`, et
+   melanger un total actuel avec une moyenne de residence donnerait un repere
+   faux. */
 const bars = (l, ramt) => {
   if (!l.length) return `<div class="note">Relevé en attente</div>`;
   const mx = Math.max(1, ...l.map(c => reelC(c, ramt)));
@@ -477,42 +442,21 @@ const bars = (l, ramt) => {
   }).join("")}</div>`;
 };
 
-/* Sante SMART : une ligne par disque, refonte du 24/08/2026.
+/* Sante SMART : une ligne par disque.
+   L anneau d endurance a ete retire : 99 % et 100 %, deux valeurs qui ne bougent
+   quasiment jamais et ne peuvent que baisser, pour la moitie de la hauteur de la
+   carte. Le remplacent les deux grandeurs qui VARIENT — la temperature sur son
+   echelle de 25 a 75 degres, repere au seuil de 65, et le RYTHME D ECRITURE en
+   Go/jour, deduit du total ecrit et de l age du disque, seule grandeur sur
+   laquelle une action est possible.
 
-   L anneau d endurance a ete retire. Il affichait 99 % et 100 %, deux
-   valeurs qui ne bougent quasiment jamais et qui ne peuvent que baisser :
-   un anneau plein en permanence occupe beaucoup de place pour ne rien
-   apprendre. Il prenait a lui seul la moitie de la hauteur de la carte.
-
-   Ce qui le remplace, ce sont les deux grandeurs qui VARIENT reellement :
-
-   - LA TEMPERATURE, replacee sur son echelle de 25 a 75 degres. Le
-     chiffre seul ne dit pas si 45 degres est tiede ou brulant ; le
-     curseur sur la reglette le dit d un coup d oeil. Un repere marque le
-     seuil d alerte a 65 degres.
-   - LE RYTHME D ECRITURE en Go par jour, deduit du total ecrit et de
-     l age du disque. C est la grandeur qui pilote l usure, donc la seule
-     sur laquelle une action est possible.
-
-   L usure reste presente, en chiffre, la ou elle a sa place, accompagnee
-   d une DUREE DE VIE MINIMALE affichee pour chaque disque.
-
-   Le calcul ne suppose aucune specification constructeur. Il repose sur
-   une seule propriete du releve : la NVMe expose « Percentage Used »
-   comme un ENTIER TRONQUE, un plancher. Un compteur a 0 signifie donc une
-   usure reelle strictement inferieure a 1 %, un compteur a 1 une usure
-   inferieure a 2 %, et ainsi de suite. Au rythme observe, la duree
-   restante vaut par consequent AU MOINS 100 / (usure + 1) fois l age du
-   disque.
-
-   C est une borne basse, jamais une promesse : elle est donc annoncee
-   avec un « au moins ». Elle a trois qualites — elle existe meme a 0 %
-   d usure, ce qui etait justement le cas sans projection auparavant ;
-   elle ne peut pas se reveler optimiste ; et elle se resserre toute
-   seule a mesure que le disque vieillit.
-
-   Mise en page prevue pour les cartes etroites : le modele se tronque
-   avec des points de suspension, les pastilles passent a la ligne. */
+   DUREE DE VIE MINIMALE, sans aucune specification constructeur. La NVMe expose
+   « Percentage Used » comme un ENTIER TRONQUE : un compteur a 0 signifie une
+   usure reelle strictement inferieure a 1 %, un compteur a 1 inferieure a 2 %.
+   Au rythme observe, la duree restante vaut donc AU MOINS 100 / (usure + 1) fois
+   l age du disque. C est une borne basse, annoncee avec un « au moins » : elle
+   existe des 0 % d usure, ne peut pas se reveler optimiste, et se resserre seule
+   a mesure que le disque vieillit. */
 const disques = (s) => {
   const l = (s && s.d) || [];
   if (!l.length) return `<div class="note">Relevé SMART en attente</div>`;
@@ -593,19 +537,17 @@ function card(s, d) {
   return main ? `<a class="${kl}" rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}">${body}</div>`;
 }
 
-/* ⚠️ LA CARTE EST DEJA UN `<a>`, vers `s.u || s.x` — donc vers le service LOCAL
-   des qu il en existe un. On ne peut pas y imbriquer un second lien : le
-   navigateur fermerait le premier et casserait la structure de la carte.
-   Le domaine public est donc un `<span>` rendu cliquable par DELEGATION.
+/* ⚠️ LA CARTE EST DEJA UN `<a>`, vers le service LOCAL des qu il en existe un.
+   On ne peut pas y imbriquer un second lien : le navigateur fermerait le premier
+   et casserait la structure de la carte. Le domaine public est donc un `<span>`
+   rendu cliquable par DELEGATION.
    ⚠️ `stopPropagation` ET `preventDefault` : le premier empeche le clic
    d atteindre le lien de la carte, le second annule la navigation par defaut.
-   Sans les deux, cliquer sur « media.exemple.fr » ouvrait le port
-   local, exactement l inverse de ce qu on demande.
-   ⚠️ Phase de CAPTURE : le gestionnaire doit passer avant que le lien de la
-   carte ne prenne la main.
-   ℹ️ Ouverture dans le MEME onglet, comme le lien de la carte : le tableau de
-   bord n est pas un portail qu on garde ouvert derriere soi, et le retour se
-   fait par le bouton precedent. */
+   Sans les deux, cliquer sur le domaine ouvrait le port local — l inverse de ce
+   qu on demande.
+   ⚠️ Phase de CAPTURE : le gestionnaire doit passer avant le lien de la carte.
+   ℹ️ Ouverture dans le MEME onglet : le tableau de bord n est pas un portail
+   qu on garde ouvert derriere soi. */
 addEventListener("click", (e) => {
   const el = e.target.closest("[data-lien]");
   if (!el) return;
@@ -617,13 +559,12 @@ addEventListener("click", (e) => {
 function bar(d) {
   const now = new Date();
   const ok = d.nas.run === d.nas.all, off = d.nas.all - d.nas.run;
-  /* LES CARTES EN ALERTE, NOMMEES (01/09/2026).
-     Le fond passait a l ambre sans dire d ou ca venait, et il fallait parcourir
-     les vingt-sept cartes pour trouver la coupable.
+  /* LES CARTES EN ALERTE, NOMMEES. Le fond passait a l ambre sans dire d ou ca
+     venait, et il fallait parcourir les vingt-sept cartes pour trouver la
+     coupable.
      ⚠️ MEME FILTRE QUE `sante()`, et surtout MEME LISTE `TACHES` : une carte
      qui ne fait pas virer le fond ne doit pas etre nommee ici, sinon la barre
-     accuserait un innocent. Les deux ne divergeront pas tant qu elles lisent la
-     meme liste et les memes predicats.
+     accuserait un innocent.
      ⚠️ Calcule sur les DONNEES et non sur le DOM. `sante()` tourne sur son
      propre intervalle : si elle ecrivait dans la barre, `fusionne` effacerait
      son texte au rendu suivant.
@@ -773,19 +714,17 @@ async function majState() {
 }
 
 /* ⚠️ COLONNE DES VERSIONS. `x.v` est la version installee, `x.nv` la cible,
-   toutes deux lues dans l etiquette `org.opencontainers.image.version` — la
-   premiere sur le conteneur qui tourne, la seconde sur l image que Watchtower
-   a deja telechargee pour comparer les identifiants.
+   toutes deux lues dans `org.opencontainers.image.version` — la premiere sur le
+   conteneur qui tourne, la seconde sur l image que Watchtower a deja telechargee.
 
    `x.nv` est VIDE quand elle n apporterait rien : cinq conteneurs n ont aucune
-   etiquette de version, et celle d arr-gluetun vaut litteralement « latest ».
-   La ligne n affiche alors que la version installee, barree par le CSS, ce qui
-   suffit a dire qu elle est depassee. La version precedente ecrivait
-   « 1.37.1 -> nouvelle » : une fleche pointant vers un mot.
+   etiquette de version, et celle d arr-gluetun vaut litteralement « latest ». La
+   ligne n affiche alors que la version installee, barree par le CSS, ce qui
+   suffit a dire qu elle est depassee.
 
    Les lignes en attente passent sur DEUX HAUTEURS (cf. `fond.css`) :
-   « 5.2.3_v2.0.14-ls471 -> 5.2.3_v2.0.14-ls473 » fait 41 caracteres, environ
-   250 px, quand la colonne en mesure 104. */
+   « 5.2.3_v2.0.14-ls471 -> 5.2.3_v2.0.14-ls473 » fait environ 250 px quand la
+   colonne en mesure 104. */
 function paintUpd(u, note) {
   const it = u.items || [];
   const risque = (n) => /postgres|db$|broker/.test(n);
@@ -907,17 +846,13 @@ async function popConteneurs() {
         `<span><i style="background:${p.c}"></i>${esc(p.n)} <b>${p.t} Mo</b></span>`).join("")
     + `</div></div>`;
 
-  /* En-tete de colonnes (24/08/2026). La colonne « swap » n existait pas :
-     l information ne vivait que dans une infobulle, alors qu elle represente
-     la MOITIE de la memoire des conteneurs sur ce NAS. Sans en-tete, un
-     nombre nu au milieu d une ligne serait indechiffrable.
-
-     ⚠️ Il est place AU-DESSUS de la zone defilante, et son alignement se
-     regle entierement dans `fond.css` : `.scroll` reserve 10 px de barre
-     de defilement et 8 px de `padding-right`, l en-tete compense donc
-     par 18 px de marge droite. Le placer DANS `.scroll` alignait aussi,
-     mais imposait de le rendre collant, donc de lui donner un fond, qui
-     dessinait une barre sombre en travers du verre. */
+  /* En-tete de colonnes. Sans lui, la colonne « swap » ne serait qu un nombre nu
+     au milieu d une ligne.
+     ⚠️ Il est place AU-DESSUS de la zone defilante, et son alignement se regle
+     dans `fond.css` : `.scroll` reserve 10 px de barre et 8 de remplissage,
+     l en-tete compense donc par 18 px de marge droite. Le placer DANS `.scroll`
+     alignait aussi, mais imposait de le rendre collant, donc de lui donner un
+     fond, qui barrait le verre. */
   const entete = `<div class="ln lnh"><span class="nm">service</span>`
     + `<span class="mm">réel</span><span class="sw">swap</span>`
     + `<span class="cp">proc.</span><span class="dv">dérive</span></div>`;
@@ -1226,23 +1161,19 @@ document.querySelector("form.search")?.addEventListener("submit", (e) => {
   location.href = url;
 });
 
-/* ============ Le fond suit l etat du NAS (23/08/2026) ============
-   Aucun couplage avec le calcul interne : on relit ce que la page vient
-   d afficher. Une pastille `warn` dans la barre du haut signale qu au moins
-   un conteneur est arrete. `fond.css` se charge de la couleur et du fondu.
+/* ============ Le fond suit l etat du NAS ============
+   Aucun couplage avec le calcul interne : on relit ce que la page vient d
+   afficher. `fond.css` se charge de la couleur et du fondu.
 
-   Revision du 24/08/2026 — TOUTES LES PASTILLES NE SE VALENT PAS.
-   La premiere version comptait n importe quel `.dot.warn`, et le fond restait
-   donc ambre en permanence : le CRM signale des leads non lus, Radarr des
-   films manquants, Mises a jour des versions en attente. Ce sont des TACHES,
-   vraies en continu, pas des incidents. Un fond d alerte allume tout le temps
-   ne signale plus rien, ce qui lui fait perdre exactement la fonction qu on
-   lui a donnee.
+   ⚠️ TOUTES LES PASTILLES NE SE VALENT PAS. Compter n importe quel `.dot.warn`
+   laissait le fond ambre en permanence : le CRM signale des leads non lus,
+   Radarr des films manquants, Mises a jour des versions en attente. Ce sont des
+   TACHES, vraies en continu, pas des incidents — et une alerte allumee tout le
+   temps ne signale plus rien.
 
-   La liste ci-dessous enumere les TACHES a ignorer, et non les incidents a
-   surveiller. Ce sens compte : une carte ajoutee plus tard sera comptee comme
-   un incident par defaut. Une alerte nouvelle se verra donc, au pire a tort,
-   plutot que d etre passee sous silence.
+   ⚠️ La liste enumere les TACHES A IGNORER, et non les incidents a surveiller.
+   Ce sens compte : une carte ajoutee plus tard sera comptee comme un incident
+   par defaut, donc vue au pire a tort plutot que passee sous silence.
 
    ⚠️ La correspondance se fait sur le NOM AFFICHE de la carte. Renommer une
    carte de cette liste la ferait de nouveau compter comme un incident. */
@@ -1259,32 +1190,26 @@ sante();
 setInterval(sante, 2000);
 
 
-/* ============ LECTURE AU POINTEUR (30/08/2026) ============
+/* ============ LECTURE AU POINTEUR ============
+   Un panneau suit le pointeur et donne l instant vise et la valeur de chaque
+   serie : les graphes montraient une forme sans jamais donner un chiffre.
 
-   Les graphes montraient une forme sans jamais donner un chiffre : « la mémoire
-   est montée vers 3 h » se lisait, « montée à combien » demandait d'aller ouvrir
-   l'historique. Un panneau suit désormais le pointeur et donne l'instant visé
-   et la valeur de chaque série.
-
-   ⚠️ RIEN N'EST AJOUTÉ DANS L'ARBRE DESSINÉ. `fusionne` remplace les enfants
-   d'un nœud dès que leur NOMBRE change, et `majAttributs` réécrit les attributs
-   toutes les deux secondes : un repère injecté dans le SVG serait détruit au
-   rafraîchissement suivant, et une position écrite en `style` effacée aussitôt.
-   Le panneau et le trait de visée vivent donc dans `<body>`, en
-   `position: fixed`, hors de toute zone rendue.
+   ⚠️ RIEN N EST AJOUTE DANS L ARBRE DESSINE. `fusionne` remplace les enfants d
+   un noeud des que leur NOMBRE change, et `majAttributs` reecrit les attributs
+   toutes les deux secondes : un repere injecte dans le SVG serait detruit au
+   rafraichissement suivant. Le panneau et le trait de visee vivent donc dans
+   `<body>`, en `position: fixed`, hors de toute zone rendue.
 
    ⚠️ CHAQUE GRAPHE PORTE UN RECTANGLE DE CAPTURE. Un `<path>` en `fill="none"`
-   ne reçoit aucun événement, et les barres d'un ruban ne couvrent que 0,74
-   unité sur 1 : sans ce rectangle, rien ne répondrait au-dessus d'une courbe et
-   l'infobulle clignoterait entre deux barres. ⚠️ Sa transparence tient à une
-   règle de `fond.css` et NON à son attribut `fill` : `.batt rect { fill: … }`
-   l'emporte sur un attribut de présentation et le peindrait en vert par-dessus
-   tout le ruban.
+   ne recoit aucun evenement, et les barres d un ruban ne couvrent que 0,74 unite
+   sur 1 : sans lui, rien ne repondrait au-dessus d une courbe et l infobulle
+   clignoterait entre deux barres. ⚠️ Sa transparence tient a une regle de
+   `fond.css` et NON a son attribut `fill`, que `.batt rect { fill: … }`
+   l emporterait et peindrait en vert par-dessus le ruban.
 
-   ⚠️ LA CONVERSION SOURIS → DONNÉES PASSE PAR `getScreenCTM()`. Les rubans sont
-   étirés (`preserveAspectRatio="none"`), les graphes ne le sont pas : une règle
-   de trois sur la largeur serait juste pour les uns et fausse pour les autres.
-   La matrice du SVG répond correctement dans les deux cas. */
+   ⚠️ LA CONVERSION SOURIS → DONNEES PASSE PAR `getScreenCTM()`. Les rubans sont
+   etires (`preserveAspectRatio="none"`), les graphes non : une regle de trois
+   sur la largeur serait juste pour les uns et fausse pour les autres. */
 
 const TIPV = document.createElement("div"); TIPV.id = "tipv";
 const TIPP = document.createElement("div"); TIPP.id = "tip";
@@ -1464,28 +1389,25 @@ addEventListener("click", (e) => {
 });
 
 
-/* ============ MODE DEMONSTRATION (01/09/2026) ============
-
-   Le depot public sert les memes fichiers que le NAS, remplis de donnees
-   inventees. Par-dessus, un CALQUE ecrase quelques champs pour montrer un etat
-   degrade sans avoir a maintenir une copie complete du jeu de donnees : le
-   calque du port VPN injoignable fait quarante octets.
+/* ============ MODE DEMONSTRATION ============
+   Les memes fichiers que le NAS, remplis de donnees inventees. Par-dessus, un
+   CALQUE ecrase quelques champs pour montrer un etat degrade sans maintenir une
+   copie complete du jeu de donnees : celui du port VPN injoignable fait quarante
+   octets.
 
    ⚠️ ACTIVE PAR LA PRESENCE D UN FICHIER, jamais par une constante ni un
    drapeau. Le NAS n a pas `fixtures/scenarios.json` : la requete echoue, `DEMO`
-   reste null, le selecteur n est jamais construit, et `demo()` rend son
-   argument tel quel. Rien a desactiver avant un deploiement, donc rien a
-   oublier de desactiver.
+   reste null, le selecteur n est jamais construit et `demo()` rend son argument
+   tel quel. Rien a desactiver avant un deploiement, donc rien a oublier.
 
    ⚠️ FUSION PROFONDE et surtout pas `Object.assign`, qui remplacerait `nas` en
    entier : un calque voulant changer la seule valeur `nas.ram` effacerait les
    dix-neuf autres mesures. Les TABLEAUX sont en revanche remplaces en bloc, et
-   c est voulu : un calque qui redefinit les groupes de sondes les redefinit
-   tous, fusionner element par element n aurait aucun sens ici.
+   c est voulu — un calque qui redefinit les groupes de sondes les redefinit tous.
 
-   ⚠️ LE SELECTEUR VIT DANS `<body>`, comme le panneau de survol et pour la
-   meme raison : `fusionne` reconstruit la barre toutes les deux secondes et un
-   `<select>` place dedans perdrait le focus a chaque rendu. */
+   ⚠️ LE SELECTEUR VIT DANS `<body>`, comme le panneau de survol et pour la meme
+   raison : un `<select>` place dans une zone rendue perdrait le focus a chaque
+   rafraichissement. */
 
 let DEMO = null, DEMO_ID = null, DEMO_CALQUE = null;
 
@@ -1521,20 +1443,19 @@ const horodate = (o) => {
 };
 
 /* ⚠️ REBASAGE DES SERIES D HISTORIQUE. Les fixtures portent des horodatages
-   absolus, figes au moment de leur generation : une demonstration publiee en
-   mars afficherait six mois plus tard des courbes vieilles de six mois, avec
-   une echelle horaire fausse et une carte Sauvegarde rouge a perpetuite. On
-   decale donc toute la fenetre pour que son dernier point tombe sur maintenant.
+   absolus, figes a leur generation : une demonstration publiee en mars
+   afficherait six mois plus tard des courbes vieilles d autant, avec une echelle
+   horaire fausse et une carte Sauvegarde rouge a perpetuite. On decale donc
+   toute la fenetre pour que son dernier point tombe sur maintenant.
 
    ⚠️ UN SEUL DECALAGE POUR TOUTES LES SERIES, calcule sur le point le plus
    recent de l ensemble. Rebaser chaque serie sur son propre dernier point les
    ferait glisser les unes par rapport aux autres, et les incidents que le
    generateur a pris soin de correler se decaleraient entre le ruban du VPN et
-   celui de Kuma. C est justement ce que ces rubans servent a recouper.
+   celui de Kuma — ce que ces rubans servent justement a recouper.
 
-   ⚠️ Modifie les tableaux EN PLACE. C est sans danger parce que la page
-   retelecharge ses fichiers a chaque tour : l objet rebase est jete aussitot
-   apres le rendu. */
+   ⚠️ Modifie les tableaux EN PLACE, sans danger : la page retelecharge ses
+   fichiers a chaque tour et l objet rebase est jete apres le rendu. */
 function rebase(d) {
   const series = [d.hist && d.hist.j, d.hist && d.hist.s, d.fin && d.fin.m];
   let dernier = 0;

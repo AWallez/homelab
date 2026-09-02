@@ -64,24 +64,19 @@ for hw in /sys/class/hwmon/hwmon*; do
   done
 done
 
-# --- Temperatures detaillees, ajoutees le 24/08/2026 ---
+# --- Temperatures detaillees ---
 # NVT ci-dessus ne garde que le MAXIMUM des deux disques : on perd lequel
-# chauffe. On releve donc chacun separement, par le chemin STABLE
-# /sys/class/nvme/<dev>/ et non par l index hwmon, qui change au redemarrage.
-# ⚠️ CE CHEMIN NON PLUS N EST PAS UNE IDENTITE : le 01/09/2026 le noyau 6.18 a
-# interverti nvme0 et nvme1, et les deux courbes se sont echangees en silence,
-# exactement ce que cette phrase promettait d eviter. Voir la resolution par
-# numero de serie juste apres.
+# chauffe. On releve donc chacun separement.
+# ⚠️ LE CHEMIN NOYAU N EST PAS UNE IDENTITE : le noyau 6.18 a interverti nvme0
+# et nvme1, et les deux courbes se sont echangees en silence. Le slot vient
+# desormais du NUMERO DE SERIE (`nvme-slots.sh`). Un slot vide rend un
+# controleur vide, le chemin ne correspond a rien, la temperature retombe a 0,
+# ce que la page ecarte deja.
 # `temp1_input` est le capteur « Composite », celui que SMART rapporte ; les
-# capteurs suivants sont des points chauds toujours plus eleves (57 C contre
-# 46 C releves le 24/08), on ne les enregistre pas pour rester comparable.
-# La machine a QUATRE emplacements M.2, deux libres au 24/08/2026. On releve
-# donc les quatre d office : un disque ajoute plus tard sera pris en compte
-# sans retoucher ce script. Un emplacement vide vaut 0, et la page ecarte
-# d elle-meme une serie entierement nulle.
-# Le slot vient du NUMERO DE SERIE (`nvme-slots.sh`), plus du nom noyau. Un
-# slot vide rend un controleur vide, le chemin ne correspond alors a rien et la
-# temperature retombe a 0, ce que la page ecarte deja.
+# suivants sont des points chauds toujours plus eleves (57 C contre 46), on ne
+# les enregistre pas pour rester comparable.
+# La machine a QUATRE emplacements M.2 : on les releve tous d office, un disque
+# ajoute plus tard sera pris en compte sans retoucher ce script.
 SLOTS=$(/volume1/docker/homelab/nvme-slots.sh 2>/dev/null)
 ctrl() { echo "$SLOTS" | awk -v n="$1" '$1==n { print $2; exit }'; }
 NV0=$(cat /sys/class/nvme/$(ctrl 0)/hwmon*/temp1_input 2>/dev/null | head -n 1)
@@ -100,20 +95,15 @@ for hw in /sys/class/hwmon/hwmon*; do
 done
 
 # --- Site public : joignabilite, temps de reponse, expiration du certificat ---
-# ⚠️ REMONTE ICI le 24/08/2026, depuis le bas du script : ses mesures
-# alimentent desormais la ligne d historique, qui s ecrit juste en dessous.
-# Le bloc ne depend que de NOWS et du data.json du passage PRECEDENT (celui-ci
-# n est reecrit qu a la toute fin), il se deplace donc sans risque.
-#
-# `%{http_code}` est indispensable : en cas d echec curl ecrit quand meme une
+# ⚠️ `%{http_code}` est indispensable : en cas d echec curl ecrit quand meme une
 # duree (8000 ms sur un delai depasse, 0 sur un refus de connexion), le temps
 # seul ne permet donc pas de conclure. Sans code valide, SMS est laisse VIDE
 # pour que la mesure ratee n entre pas dans la moyenne de l historique.
 #
-# ⚠️ SUP vaut 1 ou 2, JAMAIS 0. history-build.sh ecrit 0 pour un creneau ou
-# la colonne n a aucune donnee ; sans cette convention on ne pourrait pas
-# distinguer « le site etait mort » de « la colonne n existait pas encore », et
-# le ruban de la carte Site serait ecarlate pendant ses premieres 24 heures.
+# ⚠️ SUP vaut 1 ou 2, JAMAIS 0. history-build.sh ecrit 0 pour un creneau sans
+# donnee ; sans cette convention on ne distinguerait pas « le site etait mort »
+# de « la colonne n existait pas encore », et le ruban de la carte Site serait
+# ecarlate pendant ses premieres 24 heures.
 SRAW=$(curl -s -o /dev/null --max-time 8 -w '%{http_code} %{time_total}' \
   ${SITE_URL:-https://example.com} 2>/dev/null)
 SCODE=$(echo "$SRAW" | awk '{print $1+0}')
@@ -131,15 +121,8 @@ fi
 # --- qBittorrent ---
 # ⚠️ UNE SEULE REQUETE. `sync/maindata` renvoie `server_state` ET l objet
 # `torrents` au complet : compter les torrents ne demande pas un appel a
-# `torrents/info`. La version precedente en faisait un second, uniquement pour
-# des agregats — torrents n ayant rien envoye, taille totale — que la carte a
-# cesse d afficher le 24/08 au soir. Le collecteur passant deux fois par
-# minute, ce retrait evite 2880 requetes et 5760 lancements de jq par jour.
-#
-# Ce bloc a ete remonte ici le 24/08 parce que ses debits alimentent
-# l historique. La contrainte a disparu depuis que le printf a migre en fin de
-# script, mais il reste groupe avec la sonde du site, qui a suivi le meme
-# chemin le meme jour.
+# `torrents/info`. Le collecteur passant deux fois par minute, ce retrait evite
+# 2880 requetes et 5760 lancements de jq par jour.
 g -c "$TMP/qb" -d "username=$HOMEPAGE_VAR_QBIT_USER&password=$HOMEPAGE_VAR_QBIT_PASS" \
   "http://$IP:8080/api/v2/auth/login" >/dev/null
 QMD=$(g -b "$TMP/qb" "http://$IP:8080/api/v2/sync/maindata")
@@ -159,16 +142,14 @@ QCX=$(echo "$QB" | jq -r '.connection_status // ""')
 QPR=$(echo "$QB" | jq -r '.total_peer_connections // 0')
 
 # --- qBittorrent : ratio PAR TRACKER, et dette de partage ---
-# ⚠️ SEUIL FIXE depuis le 01/09/2026, et NON PLUS la preference du client.
-# La limite de partage de qBittorrent a ete DESACTIVEE ce jour-la pour que les
-# torrents continuent de semer au-dela de trois jours. Or la preference valait
-# alors 0, et le `if $s <= 0 then 0` des deux calculs plus bas aurait fait
-# tomber la dette a zero POUR TOUJOURS, sans le moindre signe : une pastille
-# muette qui affirme que tout va bien est pire que pas de pastille.
-# Les deux notions etaient confondues et sont desormais separees. Ce seuil est
-# l ENGAGEMENT envers les trackers prives — trois jours de partage minimum —
-# et non le moment ou le client s arrete, puisqu il ne s arrete plus.
-# L appel HTTP aux preferences disparait au passage, un de moins par passage.
+# ⚠️ SEUIL FIXE, et NON PLUS la preference du client. La limite de partage de
+# qBittorrent a ete DESACTIVEE pour que les torrents sement au-dela de trois
+# jours — mais la preference valait alors 0, et le `if $s <= 0 then 0` des deux
+# calculs plus bas aurait fait tomber la dette a zero POUR TOUJOURS, sans le
+# moindre signe : une pastille muette qui affirme que tout va bien est pire que
+# pas de pastille.
+# Ce seuil est l ENGAGEMENT envers les trackers prives — trois jours de partage
+# minimum — et non le moment ou le client s arrete, puisqu il ne s arrete plus.
 QLIM=4320
 
 # ⚠️ Correspondance ECRITE A LA MAIN. Vega annonce sous deux hotes distincts :
@@ -285,16 +266,14 @@ KD=$(echo "$KH" | jq '[.heartbeatList[] | last | .status] | map(select(.==0)) | 
 KPC=$(echo "$KH" | jq '[.uptimeList[]] | if length>0 then ((add/length*1000|floor)/10) else 0 end')
 
 # --- Kuma : etat PAR GROUPE, avec le nom des sondes en defaut ---
-# La carte annoncait « 3 sondes hors ligne » sans dire lesquelles : il fallait
-# ouvrir Kuma pour savoir quoi regarder. Le nom du groupe et celui des sondes
-# fautives suffisent a partir du bon endroit.
-# ⚠️ DEUX POINTS D ENTREE, joints sur l identifiant. `/status-page/<slug>` donne
+# La carte annoncait « 3 sondes hors ligne » sans dire lesquelles.
+# ⚠️ DEUX POINTS D ENTREE, joints sur l identifiant : `/status-page/<slug>` donne
 # la COMPOSITION des groupes, `/heartbeat/<slug>` l ETAT courant. Aucun des deux
 # ne porte les deux informations.
 # ⚠️ Les identifiants sont des ENTIERS cote composition et des CHAINES cote
 # battements : sans `tostring` la jointure ne remonte rien, en silence.
-# ⚠️ Une sonde sans battement (fraichement creee) vaut « en ligne » par defaut,
-# et non « en panne » : elle est en attente, pas en echec.
+# ⚠️ Une sonde sans battement (fraichement creee) vaut « en ligne » par defaut :
+# elle est en attente, pas en echec.
 KS=$(g "http://$IP:3001/api/status-page/$HOMEPAGE_VAR_KUMA_SLUG")
 # ⚠️ `$KH` PESE 177 Ko. Le passer en `--argjson` depasse la taille maximale d un
 # argument (128 Ko) : l execve echoue avec « Argument list too long », jq ne
@@ -366,12 +345,11 @@ CS=$(jq -nc --argjson q "$CSQ" --argjson run "$(n $CSRUN)" --argjson m "$(n $CSM
      '$q + {run:$run, match:$m, suivis:$s, idx:$ia, idxtot:$it}' 2>/dev/null)
 echo "$CS" | jq -e . >/dev/null 2>&1 || CS='{}'
 # ⚠️ KUMA A QUATRE STATUTS, pas deux : 0 hors ligne, 1 en ligne, 2 EN ATTENTE
-# (tentatives en cours), 3 en maintenance. Mesure du 28/08 : `diun` arrete a
-# 14:34:57 passe en 2 au bout d une minute et y reste plus de deux minutes
-# avant toute bascule en 0. Ne retenir que le 0 — ce que faisait la premiere
-# version, et ce que fait encore $KD — rend AVEUGLE pendant toute cette
-# fenetre : la page passait au rouge grace a la carte des conteneurs pendant
-# que la carte Kuma restait verte.
+# (tentatives en cours), 3 en maintenance. Mesure : un conteneur arrete passe en
+# 2 au bout d une minute et y reste plus de deux minutes avant toute bascule en
+# 0. Ne retenir que le 0 rend AVEUGLE pendant toute cette fenetre — la page
+# passait au rouge grace a la carte des conteneurs pendant que la carte Kuma
+# restait verte.
 # Une sonde en attente echoue DEJA. On la compte, sous un autre mot.
 KG=$(jq -n --argjson s "${KS:-null}" --argjson e "$KLAST" '
   if ($s | type) != "object" then []
@@ -518,25 +496,21 @@ else
   rm -f "$OUT.tmp"; echo "data.json NON remplace : assemblage jq en echec" >&2
 fi
 
-# --- Historique : une ligne par passage, en CSV (bien plus leger que du JSON a relire) ---
-# ⚠️ TROIS REGLES, apprises a leurs depens le 24/08/2026 :
+# --- Historique : une ligne par passage, en CSV (bien plus leger que du JSON) ---
+# ⚠️ TROIS REGLES :
 #
-# 1. CE BLOC EST LE DERNIER DU SCRIPT, ET IL DOIT LE RESTER. Il a passe la
-#    journee au milieu du fichier, et trois mesures successives — le site,
-#    qBittorrent, puis Gluetun — se sont retrouvees calculees APRES lui, donc
-#    invisibles a l historique. Il a fallu remonter chaque bloc a son tour.
-#    Ecrit en dernier, il voit tout, et le piege disparait.
-#    Verifie avant le deplacement : aucune de ses variables n est reaffectee
-#    plus bas, et le script n a aucune sortie anticipee.
+# 1. CE BLOC EST LE DERNIER DU SCRIPT, ET IL DOIT LE RESTER. Place au milieu du
+#    fichier, il laissait trois mesures — le site, qBittorrent, Gluetun — se
+#    calculer APRES lui, donc invisibles a l historique. Ecrit en dernier, il
+#    voit tout.
 # 2. Toute colonne ajoutee ici doit l etre AUSSI dans history-build.sh (`NC` et
 #    la liste `champs`), sans quoi elle n atteindra jamais la page.
 # 3. On AJOUTE TOUJOURS EN FIN, jamais au milieu. Deplacer une colonne rendrait
 #    faux tout l historique deja enregistre, sans le moindre signe exterieur :
-#    la page a longtemps trace la colonne 12 sous l etiquette « swap » alors
-#    que le swap etait en 11, et personne ne pouvait le voir parce que 43 % et
-#    46 °C dessinent la meme ligne. D ou l ordre inesthetique ci-dessous, avec
-#    nvme2 et nvme3 apres eth0 : c est l ordre d apparition, pas l ordre
-#    logique. La page cherche desormais ses colonnes PAR NOM, elle s en moque.
+#    la page a longtemps trace la colonne 12 sous l etiquette « swap » alors que
+#    le swap etait en 11, invisible parce que 43 % et 46 °C dessinent la meme
+#    ligne. D ou l ordre inesthetique ci-dessous, nvme2 et nvme3 apres eth0 :
+#    c est l ordre d apparition. La page cherche ses colonnes PAR NOM.
 printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$NOWS" "$CPU" "$RAM" "$DPC" "$NET" \
   "$LOAD1" "$TEMP" "$DR" "$DW" "$LOAD5" "$LOAD15" "$SWP" "$NVT" "$NV0" "$NV1" "$ETH" "$NV2" "$NV3" \
   "$SMS" "$SUP" "$QDL" "$QUL" "$VUP" "$KUP" \
