@@ -33,7 +33,7 @@ awk -F, -v c=$((NOW - 604800)) '$1+0 >= c' "$SRC" > "$SRC.tmp" && mv "$SRC.tmp" 
 # ne pas avoir choisi 0 pour la panne : la page ne pourrait pas les separer,
 # et peindrait en rouge les 24 heures precedant la mise en service.
 awk -F, -v now="$NOW" '
-BEGIN { J=600; S=3600; NC=24 }
+BEGIN { J=600; S=3600; NC=25 }
 {
   t=$1+0
   # Comptage PAR COLONNE et non global. Les lignes anterieures a l ajout d une
@@ -57,5 +57,5 @@ function bloc(nb, val, pas, deb, fin,   b, i, first) {
 END {
   printf "{\"j\":"; printf "["; bloc(Jn, Jv, J, int((now-86400)/J), int(now/J)); printf "]"
   printf ",\"s\":"; printf "["; bloc(Sn, Sv, S, int((now-604800)/S), int(now/S)); printf "]"
-  printf ",\"champs\":[\"t\",\"cpu\",\"ram\",\"disque\",\"reseau\",\"charge\",\"temp\",\"lecture\",\"ecriture\",\"charge5\",\"charge15\",\"swap\",\"nvme\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"site\",\"siteup\",\"qbdl\",\"qbul\",\"vpnup\",\"kumaup\"]}\n"
+  printf ",\"champs\":[\"t\",\"cpu\",\"ram\",\"disque\",\"reseau\",\"charge\",\"temp\",\"lecture\",\"ecriture\",\"charge5\",\"charge15\",\"swap\",\"nvme\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"site\",\"siteup\",\"qbdl\",\"qbul\",\"vpnup\",\"kumaup\",\"nvme4\"]}\n"
 }' "$SRC" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" && chmod 644 "$OUT"

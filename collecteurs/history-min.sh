@@ -22,7 +22,7 @@ NOW=$(date +%s)
 
 # 24 h a 30 s = 2880 lignes ; on prend large pour absorber les trous de collecte.
 tail -n 4000 "$SRC" | awk -F, -v now="$NOW" '
-BEGIN { M=60; NB=split("2 3 7 12 14 15 16 17 18 21 22", C, " "); mn=-1; mx=0 }
+BEGIN { M=60; NB=split("2 3 7 12 14 15 16 17 18 21 22 25", C, " "); mn=-1; mx=0 }
 {
   t=$1+0
   if (t < now-86400) next
@@ -47,7 +47,7 @@ END {
     printf "]"
     first=0
   }
-  printf "],\"champs\":[\"t\",\"cpu\",\"ram\",\"temp\",\"swap\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"qbdl\",\"qbul\"]}\n"
+  printf "],\"champs\":[\"t\",\"cpu\",\"ram\",\"temp\",\"swap\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"qbdl\",\"qbul\",\"nvme4\"]}\n"
 }' > "$OUT.tmp"
 
 # Ecriture atomique et validee : la page ne doit jamais recevoir un JSON tronque.

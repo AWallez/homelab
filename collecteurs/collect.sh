@@ -75,21 +75,22 @@ done
 # `temp1_input` est le capteur « Composite », celui que SMART rapporte ; les
 # suivants sont des points chauds toujours plus eleves (57 C contre 46), on ne
 # les enregistre pas pour rester comparable.
-# ⚠️ QUATRE COLONNES POUR CINQ DISQUES POSSIBLES. La machine porte un SSD systeme
-# integre au PCB, qui compte comme un controleur NVMe, PLUS quatre emplacements
-# M.2 : elle peut donc presenter cinq disques. `nvme-slots.sh` les decouvre tous
-# et attribuerait un slot 4, mais il n existe ni `NV4` ici, ni colonne `nvme4`
-# dans `history-build.sh`. Le cinquieme disque serait donc releve puis JETE, en
-# silence. Sans consequence tant que trois emplacements M.2 restent libres ; a
-# corriger avant d installer le quatrieme.
+# CINQ positions NVMe : un SSD systeme integre au PCB, qui compte comme un
+# controleur sans occuper d emplacement, PLUS quatre M.2. On releve les cinq
+# d office, un disque ajoute plus tard est donc pris en compte sans retouche.
+# Une position vide vaut 0, et la page ecarte d elle-meme une serie nulle.
+# ⚠️ Toute position supplementaire demanderait AUSSI une colonne dans
+# `history-build.sh` (NC et `champs`) et dans `history-min.sh` (la liste C et
+# `champs`), sinon elle serait relevee puis jetee en silence.
 SLOTS=$(/volume1/docker/homelab/nvme-slots.sh 2>/dev/null)
 ctrl() { echo "$SLOTS" | awk -v n="$1" '$1==n { print $2; exit }'; }
 NV0=$(cat /sys/class/nvme/$(ctrl 0)/hwmon*/temp1_input 2>/dev/null | head -n 1)
 NV1=$(cat /sys/class/nvme/$(ctrl 1)/hwmon*/temp1_input 2>/dev/null | head -n 1)
 NV2=$(cat /sys/class/nvme/$(ctrl 2)/hwmon*/temp1_input 2>/dev/null | head -n 1)
 NV3=$(cat /sys/class/nvme/$(ctrl 3)/hwmon*/temp1_input 2>/dev/null | head -n 1)
+NV4=$(cat /sys/class/nvme/$(ctrl 4)/hwmon*/temp1_input 2>/dev/null | head -n 1)
 NV0=$(( ${NV0:-0} / 1000 )); NV1=$(( ${NV1:-0} / 1000 ))
-NV2=$(( ${NV2:-0} / 1000 )); NV3=$(( ${NV3:-0} / 1000 ))
+NV2=$(( ${NV2:-0} / 1000 )); NV3=$(( ${NV3:-0} / 1000 )); NV4=$(( ${NV4:-0} / 1000 ))
 # Controleur reseau 10 GbE, capteur PHY (temp1 ; temp2 est le MAC, meme valeur).
 # Il tourne autour de 71 C en permanence : c est NORMAL par conception, et ca
 # avait ete pris pour une surchauffe le 12/07. L enregistrer evite d y revenir.
@@ -516,7 +517,7 @@ fi
 #    le swap etait en 11, invisible parce que 43 % et 46 °C dessinent la meme
 #    ligne. D ou l ordre inesthetique ci-dessous, nvme2 et nvme3 apres eth0 :
 #    c est l ordre d apparition. La page cherche ses colonnes PAR NOM.
-printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$NOWS" "$CPU" "$RAM" "$DPC" "$NET" \
+printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$NOWS" "$CPU" "$RAM" "$DPC" "$NET" \
   "$LOAD1" "$TEMP" "$DR" "$DW" "$LOAD5" "$LOAD15" "$SWP" "$NVT" "$NV0" "$NV1" "$ETH" "$NV2" "$NV3" \
-  "$SMS" "$SUP" "$QDL" "$QUL" "$VUP" "$KUP" \
+  "$SMS" "$SUP" "$QDL" "$QUL" "$VUP" "$KUP" "$NV4" \
   >> /volume1/docker/homelab/history.csv
