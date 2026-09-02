@@ -62,7 +62,7 @@ Leçon générale, au-delà des disques : un numéro attribué par le noyau est 
 
 ## Architecture
 
-Le tout tourne sur un **UGREEN DXP480T Plus**, une machine **tout NVMe** : Intel Core i5-1235U, **7,5 Gio de RAM utiles**, et cinq positions NVMe. La première est **intégrée au PCB** et réservée au système, avec son SSD de 128 Go ; les quatre autres sont des emplacements M.2 pour les données, dont un seul occupé aujourd'hui, par un 8 To. Le tout sous UGOS Pro, sur base Debian 12.
+Le tout tourne sur un **UGREEN DXP480T Plus**, une machine **tout NVMe** : Intel Core i5-1235U, **7,5 Gio de RAM utiles**, et cinq positions NVMe. La première est en **PCIe**, réservée au système, avec son SSD de 128 Go ; les quatre autres sont des emplacements M.2 pour les données, dont un seul occupé aujourd'hui, par un 8 To. Le tout sous UGOS Pro, sur base Debian 12.
 
 Ces 7,5 Gio gouvernent le reste. C'est la contrainte qui a fait retirer les deux outils de supervision, et c'est elle aussi qui explique pourquoi la page distingue partout la mémoire **résidente** de ce que le noyau a **compressé en zram** : sur cette machine, la moitié de la mémoire des conteneurs est évacuée, et un outil qui additionne les deux ne décrit plus rien.
 
