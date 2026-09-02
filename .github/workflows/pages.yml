@@ -1,0 +1,44 @@
+# Publication de la demonstration sur GitHub Pages.
+#
+# ⚠️ SEUL `www/` EST PUBLIE. Pages ne sait servir qu une racine ou `/docs`, et le
+# front vit dans `www/` : c est ce workflow qui fait le pont, en televersant ce
+# seul dossier comme racine du site. Le lien du README reste donc
+# https://awallez.github.io/homelab/ sans `/www` au bout.
+#
+# ⚠️ La demonstration s active par la presence de `www/fixtures/scenarios.json`,
+# qui est versionne. Rien a activer ici, et rien a desactiver au deploiement du
+# vrai tableau de bord, qui passe par `outils/deploie.js` et ne connait pas ce
+# fichier.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Le jeton n a que ce qu il faut pour publier, rien pour ecrire dans le depot.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Deux poussees rapprochees ne doivent pas se depasser l une l autre.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publication:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+      - id: pages
+        uses: actions/deploy-pages@v4
