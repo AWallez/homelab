@@ -1,0 +1,6 @@
+{ "kuma": { "down": 1, "up": 21, "pc": 97.4,
+    "groupes": [
+      { "n": "Portfolio",      "tot": 6, "ko": 0, "att": 0, "noms": [], "natt": [] },
+      { "n": "Mediatheque",    "tot": 7, "ko": 0, "att": 0, "noms": [], "natt": [] },
+      { "n": "Infrastructure", "tot": 9, "ko": 1, "att": 0, "noms": ["dns-filtrant"], "natt": [] }
+    ] } }

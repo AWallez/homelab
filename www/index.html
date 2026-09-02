@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homelab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0a0b'/%3E%3Crect x='7' y='8' width='18' height='6' rx='2' fill='%230e8c8a'/%3E%3Crect x='7' y='18' width='18' height='6' rx='2' fill='%232670d6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="fond.css">
+  <meta name="referrer" content="no-referrer">
+</head>
+<body>
+<div class="aurora"></div>
+<main>
+  <div id="bar" class="bar"></div>
+  <div id="shortcuts" class="shortcuts"></div>
+  <form class="search" action="https://www.google.com/search" method="get">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input type="search" name="q" autofocus autocomplete="off" placeholder="Rechercher sur Google…" aria-label="Rechercher sur Google">
+  </form>
+  <div id="filters" class="filters"></div>
+  <div id="groups"></div>
+</main>
+<dialog id="dlg" class="dlg"></dialog>
+<script src="services.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

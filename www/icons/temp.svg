@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="#dfe3ec" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Thermometre, d apres la reference d Alexis (24/08/2026).
+       ⚠️ Rendu a 34 px, soit 1,42 px par unite du viewBox. La reference a huit
+       graduations et une colonne interieure dessinee en DOUBLE TRAIT : a cette
+       taille les graduations tomberaient a 2,3 px d ecart pour un trait de
+       2 px, et les deux lignes de la colonne seraient distantes de 1 px. On
+       garde donc la silhouette et l alternance long/court, mais en cinq
+       graduations et avec un mercure plein. Couleur #dfe3ec comme les autres
+       icones : chargee via <img>, une SVG ne peut pas heriter de currentColor. -->
+
+  <!-- Corps evide : colonne a sommet arrondi ouvrant sur le bulbe. -->
+  <path d="M7.2 14.9V4.4a2.8 2.8 0 0 1 5.6 0v10.5a4.6 4.6 0 1 1-5.6 0Z"/>
+
+  <!-- Mercure : colonne pleine et bulbe plein. -->
+  <path d="M10 6.6v9.2" stroke-width="1.9"/>
+  <circle cx="10" cy="18.55" r="2.6" fill="#dfe3ec" stroke="none"/>
+
+  <!-- Graduations, longues et courtes en alternance. -->
+  <path d="M14.6 3.2h4.2M14.6 5.7h2.3M14.6 8.2h4.2M14.6 10.7h2.3M14.6 13.2h4.2"
+        stroke-width="1.3"/>
+</svg>

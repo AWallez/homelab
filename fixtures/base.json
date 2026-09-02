@@ -1,0 +1,104 @@
+{
+  "_": "Etat NOMINAL du tableau de bord. Toutes les valeurs sont inventees. Les scenarios de fixtures/scenarios/ sont des CALQUES appliques par-dessus ce fichier : ils n en redefinissent que les champs utiles, ce qui evite d avoir a maintenir une copie complete par scenario.",
+  "_horodatages": "Les dates s ecrivent en DECALAGE, jamais en absolu : \"@-13h\", \"@-4j\", \"@-90min\". Une fixture figee annoncerait « il y a trois ans » dans trois ans. La resolution se fait a l affichage, cote page.",
+
+  "ts": "14:32",
+
+  "nas": {
+    "cpu": 11, "ram": 54, "swap": 18, "temp": 61, "nvme": 44,
+    "up": 23, "uptime": 2013840,
+    "run": 26, "all": 26,
+    "ramu": 4404019, "ramt": 8155136, "cores": 8,
+    "net": 1524288, "disk": 63, "disktot": 7984990126080,
+    "load": 0.74, "load5": 0.91, "load15": 1.12,
+    "dr": 486210, "dw": 1932544
+  },
+
+  "site":   { "ms": 68, "cert": 74, "ok": true },
+  "crm":    { "tot": 31, "traites": 24, "age": 12 },
+  "leads":  7,
+  "umami":  { "visitors": 9, "views": 21, "visits": 14,
+              "serie": [4, 11, 6, 0, 13, 8, 9] },
+
+  "jellyfin": { "films": 42, "series": 7, "episodes": 318, "now": "" },
+  "seerr":    { "pending": 0, "done": 12 },
+
+  "radarr":  { "mis": 2, "q": 0, "size": 91238400000 },
+  "sonarr":  { "mis": 0, "q": 0, "size": 304100000000 },
+  "bazarr":  { "ep": 0, "mv": 0 },
+  "prowlarr": {
+    "sante": 0, "msg": "",
+    "ix": [ { "n": "Orion",  "g": 214 },
+            { "n": "Vega",   "g": 168 },
+            { "n": "Altair", "g": 97 } ]
+  },
+
+  "qbit": {
+    "dl": 0, "ul": 184320,
+    "ratio": "1.87",
+    "adl": 1204800000000, "aul": 2251800000000,
+    "etat": "connected",
+    "pairs": 34, "nb": 61, "dette": 0,
+    "tr": [
+      { "n": "Orion",  "u": 1503238553, "d": 806354022, "r": 1.86,
+        "vr": { "r": 1.92, "inf": false, "min": null, "up": null, "down": null, "ts": "@-42min" } },
+      { "n": "Vega",   "u": 984116428,  "d": 402653184, "r": 2.44,
+        "vr": { "r": 2.61, "inf": false, "min": 0.8,
+                "up": 251255255040, "down": 96223625216, "ts": "@-42min" } },
+      { "n": "Altair", "u": 412316860,  "d": 0,         "r": 0,
+        "vr": { "r": null, "inf": true, "min": null,
+                "up": 412316860416, "down": 0, "ts": "@-42min" } }
+    ]
+  },
+
+  "cross": {
+    "nb": 4, "taille": 32212254720, "envoye": 8589934592,
+    "actifs": 2, "purge": 1,
+    "run": "@-3.2h",
+    "match": 47, "suivis": 61,
+    "idx": 3, "idxtot": 3
+  },
+
+  "kuma": {
+    "up": 30, "down": 0, "pc": 99.8,
+    "groupes": [
+      { "n": "Portfolio",       "tot": 6,  "ko": 0, "att": 0, "noms": [], "natt": [] },
+      { "n": "Mediatheque",     "tot": 12, "ko": 0, "att": 0, "noms": [], "natt": [] },
+      { "n": "Infrastructure",  "tot": 12, "ko": 0, "att": 0, "noms": [], "natt": [] }
+    ]
+  },
+
+  "adguard": { "q": 18734, "b": 4102, "lat": 5 },
+
+  "wg": {
+    "c": 1, "t": 3, "noms": "Telephone",
+    "clients": [
+      { "n": "Telephone", "on": true  },
+      { "n": "Portable",  "on": false },
+      { "n": "Tablette",  "on": false }
+    ]
+  },
+
+  "vpn": {
+    "ip": "203.0.113.42",
+    "port": 51820,
+    "health": "healthy",
+    "open": true,
+    "loc": "Amsterdam, Pays-Bas"
+  },
+
+  "updates": {
+    "total": 0, "verifies": 11, "maj": "14/03 07:00", "age": 8,
+    "items": [
+      { "n": "serveur-media",  "v": "10.9.11", "nv": "10.9.11", "upd": false },
+      { "n": "supervision",    "v": "2.1.4",   "nv": "2.1.4",   "upd": false },
+      { "n": "coffre-fort",    "v": "1.32.7",  "nv": "1.32.7",  "upd": false },
+      { "n": "dns-filtrant",   "v": "0.107.6", "nv": "0.107.6", "upd": false },
+      { "n": "notifications",  "v": "2.11.0",  "nv": "2.11.0",  "upd": false },
+      { "n": "indexeurs",      "v": "1.28.2",  "nv": "1.28.2",  "upd": false },
+      { "n": "client-torrent", "v": "5.2.3",   "nv": "5.2.3",   "upd": false }
+    ]
+  },
+
+  "backup": { "h": 4, "date": "14/03 a 06:00" }
+}

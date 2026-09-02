@@ -1,0 +1,4 @@
+{ "radarr": { "mis": 17, "q": 4 },
+  "sonarr": { "mis": 9,  "q": 2 },
+  "bazarr": { "ep": 23, "mv": 6 },
+  "seerr":  { "pending": 5, "done": 12 } }

@@ -1,0 +1,1572 @@
+/* =====================================================================
+   fond.css — fond du tableau de bord (23/08/2026)
+   Charge APRES style.css : a specificite egale, la derniere feuille gagne,
+   donc ce fichier n a besoin de redeclarer que ce qu il change.
+
+   Trois idees, dans l ordre ou elles comptent :
+
+   1. LE VERRE DOIT AVOIR QUELQUE CHOSE A REFRACTER. L ancien fond etait
+      floute a 40px et les cartes le refloutaient a 30px. Flouter du flou
+      ne donne rien : les cartes rendaient grises. Le fond est maintenant
+      net, et le verre descendu a 4px.
+   2. UN VERRE QUI DESATURE. A faible flou la couleur du fond traverse
+      presque intacte et teinte les cartes. `saturate(.95)` la laisse
+      passer telle quelle sans la surcharger.
+   3. TOUT TIENT SUR `.aurora` ET SES DEUX PSEUDO-ELEMENTS. Aucun element
+      a ajouter dans index.html : les projecteurs sont des couches de fond
+      de `.aurora`, la trame est sur `::before`, le vignettage sur
+      `::after`.
+   ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+   1. LES TROIS TEINTES D ETAT
+   `@property` enregistre les variables comme des couleurs, ce qui les
+   rend INTERPOLABLES : sans ca une variable change d un coup et le fond
+   sauterait d une teinte a l autre. Avec, le passage calme -> alerte est
+   un fondu de 2,4 s. `app.js` pose `data-sante` sur le body.
+   --------------------------------------------------------------------- */
+@property --e1 { syntax: "<color>"; inherits: true; initial-value: rgba(42,111,214,.70) }
+@property --e2 { syntax: "<color>"; inherits: true; initial-value: rgba(122,68,198,.52) }
+@property --e3 { syntax: "<color>"; inherits: true; initial-value: rgba(14,154,148,.44) }
+
+body {
+  --fond: #07080c;
+  --e1: rgba(42,111,214,.70);   /* bleu    : haut gauche */
+  --e2: rgba(122,68,198,.52);   /* violet  : haut droite */
+  --e3: rgba(14,154,148,.44);   /* sarcelle: bas centre  */
+  background: var(--fond);
+  transition: --e1 2.4s ease, --e2 2.4s ease, --e3 2.4s ease,
+              background-color 2.4s ease;
+}
+/* au moins une sonde en alerte */
+body[data-sante="warn"] { --e1: rgba(214,138,44,.68); --e2: rgba(168,86,44,.50); --e3: rgba(120,104,32,.38) }
+/* au moins un conteneur arrete */
+body[data-sante="crit"] { --e1: rgba(212,62,52,.72); --e2: rgba(140,34,60,.54); --e3: rgba(110,28,28,.42) }
+
+
+/* ---------------------------------------------------------------------
+   2. LE VERRE — une dalle, pas un panneau teinte
+   Ce qui manquait n etait pas du flou, c etait la physique du BORD. Une
+   vitre ne se signale pas par un voile blanc uniforme, mais par :
+
+   - UN FILTRE QUI COUVRE TOUTE LA SURFACE. ⚠️ Une bande de refraction
+     limitee au pourtour a ete essayee, et c etait une erreur : seul
+     l anneau transmettait la couleur, le centre restait mat, et la
+     frontiere entre les deux se lisait comme un fond sombre a
+     l interieur d un cadre lumineux. La navbar, dont le filtre a
+     toujours couvert toute l etendue, etait la seule surface exempte du
+     defaut. Le filtre est donc uniforme partout. Ne pas reintroduire de
+     traitement limite au bord sans un degrade de masque qui efface la
+     frontiere.
+   - UN REFLET SPECULAIRE. L arete fait 1,5 px et son intensite VARIE
+     selon l orientation : vive en haut a gauche, moyenne en bas a droite,
+     presque nulle ailleurs. Un `border-color` donne au contraire un trait
+     d intensite constante, qui se lit comme un contour dessine.
+   - PRESQUE PAS DE TEINTE. Le remplissage s eclaircit au sommet et
+     s assombrit au fond, comme une tranche posee a plat. Le voile blanc
+     uniforme d avant opacifiait la dalle.
+
+   La SATURATION est concentree sur la bande de bord, le corps restant
+   neutre : un verre disperse les couleurs dans son epaisseur, pas en son
+   centre. Les cartes gardent donc leur rendu monochrome.
+
+   L anneau des deux pseudo-elements est obtenu par SOUSTRACTION : deux
+   masques identiques, l un limite a la boite de contenu, composes en
+   `exclude`. Il ne reste que la bande definie par le `padding`.
+
+   COUT, mesure au defilement sur cette page : image mediane a 2,8 ms et
+   maximum a 8,5 ms, contre 5,5 ms de mediane et 33,3 ms de maximum SANS
+   ce fichier. Ce verre est donc DEUX FOIS plus leger que celui d origine,
+   qui appliquait un `blur(30px)` a 37 elements ; on est ici a 10 px, une
+   seule couche filtree par element, et plus aucune image ne depasse les
+   16,7 ms d une image a 60 Hz.
+   --------------------------------------------------------------------- */
+:root {
+  --blur: blur(3px) saturate(1) brightness(1.03);
+  --a: rgba(255,255,255,.042);   /* encore lus par style.css */
+  --b: rgba(255,255,255,.012);
+  --edge: rgba(255,255,255,.13);
+  --shine: rgba(255,255,255,.30);
+
+  /* La dalle vue de face : la lumiere accroche les DEUX faces, la
+     superieure surtout, et la tranche reste mince au milieu. Aucun noir :
+     un premier essai assombrissait le bas et les cartes devenaient plus
+     sombres que leur propre fond, soit l inverse d une vitre. Les valeurs
+     restent volontairement basses, mais pas nulles : une dalle qui ne
+     tient QUE par transmission devient noire des que le fond l est. */
+  --dalle: linear-gradient(180deg,
+    rgba(255,255,255,.075)   0%,
+    rgba(255,255,255,.030)  40%,
+    rgba(255,255,255,.022)  72%,
+    rgba(255,255,255,.045) 100%);
+
+  /* anneau par soustraction, l epaisseur vient du `padding` */
+  --anneau: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+}
+
+/* Les fenetres modales ont leur propre voile de fond : voir le paragraphe 10,
+   qui porte tout leur habillage. Ces variables ne servent plus qu aux enfants
+   qui liraient `--a` / `--b` ; leur `--blur` est neutralise la-bas, le flou
+   etant desormais porte par `::backdrop`. */
+dialog.dlg {
+  --a: rgba(255,255,255,.09);
+  --b: rgba(255,255,255,.05);
+}
+
+/* `h2 svg` est absent de toutes les regles a pseudo-elements de ce bloc :
+   les elements SVG ne rendent PAS `::before` / `::after` (la propriete est
+   bien calculee, mais la boite ne l est jamais). Sa version est traitee
+   au paragraphe 6, entierement en `inset`. */
+/* ⚠️ UN SEUL `backdrop-filter` PAR ELEMENT, ET SUR TOUTE SA SURFACE.
+   Deux regles a ne pas enfreindre, apprises l une apres l autre :
+
+   1. JAMAIS DE FILTRE IMBRIQUE. Un `backdrop-filter` pose sur un element
+      qui en contient deja un casse le rendu : le parent devient une
+      RACINE DE FOND, l enfant n a donc plus rien a filtrer et Chromium le
+      compose en noir. Symptome vecu : cartes et tuiles viraient au
+      rectangle sombre. C est pour ca que `::after` n a aucun filtre.
+   2. JAMAIS DE FILTRE PARTIEL. Un filtre limite au pourtour laisse le
+      centre non filtre, et la frontiere entre les deux se lit comme un
+      fond sombre cerne d un cadre lumineux.
+
+   Les valeurs sont celles de la navbar, qui n a jamais presente ni l un
+   ni l autre des deux defauts. */
+.card, .bar, .search, .t .i {
+  position: relative;
+  border: 0;
+  backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  background: var(--dalle);
+  /* ⚠️ OMBRES COURTES, ET C EST UNE CONTRAINTE DE GEOMETRIE, PAS UN GOUT.
+     Les cartes sont espacees de 11 a 13 px. Une ombre porte vers le bas
+     sur environ `offsetY + flou / 2 + etalement` : un premier essai a
+     `0 14px 34px -10px` et `0 34px 70px -26px` portait a 21 et 43 px,
+     donc BIEN au-dela de l ecart. Chaque carte tombait dans l ombre de sa
+     voisine, et comme le verre est translucide cette ombre se voyait AU
+     TRAVERS. Avec l ancien fond opaque elle etait simplement masquee.
+     Portee actuelle : 6 px, 8 px au survol. Toute ombre plus genereuse
+     doit s accompagner d un ecart plus grand entre les cartes. */
+  box-shadow: 0 1px 2px rgba(0,0,0,.26),          /* contact */
+              0 6px 16px -8px rgba(0,0,0,.46);    /* portee  */
+}
+
+/* reflet speculaire sur l arete
+   Il reste, lui, parce que c est un TRAIT de 1,5 px et non une zone : il
+   ne cree aucune frontiere entre deux traitements. C est ce qui donne le
+   caractere « verre » sans le defaut decrit plus haut. */
+.card::after, .bar::after, .search::after, .t .i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1.5px;
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.14) 10%, rgba(255,255,255,0) 26%),
+    linear-gradient(320deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.06)  9%, rgba(255,255,255,0) 24%),
+    linear-gradient(180deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.02) 40%, rgba(255,255,255,.05) 100%);
+  -webkit-mask: var(--anneau);
+  -webkit-mask-composite: xor;
+          mask: var(--anneau);
+          mask-composite: exclude;
+}
+
+/* au survol la source se rapproche : le reflet monte, l ombre s allonge */
+a.card:hover::after, .card.clic:hover::after {
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.24) 10%, rgba(255,255,255,0) 28%),
+    linear-gradient(320deg, rgba(255,255,255,.46) 0%, rgba(255,255,255,.10)  9%, rgba(255,255,255,0) 26%),
+    linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 40%, rgba(255,255,255,.08) 100%);
+}
+a.card:hover, .card.clic:hover {
+  box-shadow: 0 2px 3px rgba(0,0,0,.30),
+              0 8px 18px -9px rgba(0,0,0,.56);
+}
+
+/* ---------------------------------------------------------------------
+   LA NAVBAR : plus de barre, des pastilles
+   Le conteneur ne peint plus rien du tout, et c est chaque bouton qui
+   porte son propre verre. Entre les pastilles, la page reste visible
+   telle quelle pendant le defilement.
+
+   SPECIFICITE : `style.css` cible les boutons par `#filters button:not(.on)`
+   et `#filters button.on`, soit (1,1,1) et (1,2,1). Un simple
+   `#filters button` (1,0,1) perdrait. D ou la reprise des deux memes
+   selecteurs ci-dessous.
+   --------------------------------------------------------------------- */
+#filters {
+  border: 0;
+  box-shadow: none;
+  background: none;
+  /* ⚠️ 18 px de remplissage lateral ANNULES. `style.css` pose
+     `#filters { padding: 10px 18px }` : les boutons rentraient donc de 18 px
+     alors que la barre venait d etre alignee sur les cartes par
+     `margin-inline: 0`. Les deux reglages se contredisaient, l un rattrapant
+     ce que l autre venait de supprimer.
+     ⚠️ Le VERTICAL est conserve. La barre est collante : sans ces 10 px,
+     « Tout » et « Compact » toucheraient le haut de l ecran au defilement.
+     ⚠️ `#filters .panneau { left }` DOIT suivre cette valeur, voir plus bas. */
+  padding-inline: 6px;
+}
+#filters::before { display: none }
+
+#filters button:not(.on),
+#filters button.on {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  background: var(--dalle);
+  box-shadow: 0 1px 2px rgba(0,0,0,.26),
+              0 5px 12px -7px rgba(0,0,0,.42),
+              inset 0 1px 0 rgba(255,255,255,.22),
+              inset 0 -1px 0 rgba(0,0,0,.26),
+              inset 0 0 0 1px rgba(255,255,255,.06);
+}
+/* l onglet actif est plus dense, la couleur et la graisse du texte
+   restent celles de style.css */
+#filters button.on {
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+  box-shadow: 0 1px 2px rgba(0,0,0,.30),
+              0 6px 14px -7px rgba(0,0,0,.48),
+              inset 0 1px 0 rgba(255,255,255,.42),
+              inset 0 -1px 0 rgba(0,0,0,.26),
+              inset 0 0 0 1px rgba(255,255,255,.12);
+}
+
+/* Meme arete que les cartes sur chaque pastille. Un trait de 1 px dont
+   l intensite varie, jamais une zone. */
+#filters button:not(.on),
+#filters button.on { position: relative }
+
+#filters button:not(.on)::after,
+#filters button.on::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1px;
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.12) 12%, rgba(255,255,255,0) 30%),
+    linear-gradient(320deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.05) 10%, rgba(255,255,255,0) 28%);
+  -webkit-mask: var(--anneau);
+  -webkit-mask-composite: xor;
+          mask: var(--anneau);
+          mask-composite: exclude;
+}
+
+/* LISIBILITE DU TEXTE NON SELECTIONNE
+   `style.css` le laissait a `var(--mut)`, soit #8a94a6. Mesure sur la
+   pastille : 5,3 de contraste. C est au-dessus du seuil AA de 4,5, mais
+   sur du 11,5 px pose sur un verre dont le fond varie au defilement, la
+   marge est trop mince. #b8c2d2 monte le rapport a 9,0. */
+#filters button:not(.on),
+#menu {
+  color: #b8c2d2;
+  font-weight: 550;
+}
+#filters button:not(.on):hover { color: #fff }
+
+/* ---------------------------------------------------------------------
+   LE MENU DEROULANT (sous 820 px)
+   Il se comporte comme la liste d un champ de selection : un bloc ancre
+   SOUS le bouton de groupe, cale sur son bord gauche, largeur au contenu.
+   Il occupait auparavant toute la largeur de la barre, ce qui le faisait
+   lire comme un bandeau et non comme un menu.
+
+   Il reprend le langage des cartes : meme voile clair, meme arete, meme
+   famille d ombres. Un fond sombre est ajoute SOUS le voile, ce qu une
+   carte n a pas, parce qu il recouvre du contenu. Il reste volontairement
+   tres bas (.26) : c est le flou qui fait le travail de lisibilite, pas
+   l opacite.
+
+   ⚠️ Les onglets vivent DANS ce panneau, qui porte deja un
+   `backdrop-filter`. Leur en donner un serait un filtre imbrique, donc
+   des pastilles noires. Ils redeviennent donc de simples lignes, sans
+   filtre ni arete : des pastilles dans une pastille feraient redondant,
+   exactement comme les blocs a l interieur d une carte.
+   --------------------------------------------------------------------- */
+@media (max-width: 820px) {
+  #filters .panneau {
+    /* Ancre sur le BOUTON, pas sur la barre. Cette valeur doit rester egale
+       au remplissage horizontal de `#filters`, qui est passe de 18 a 6 px
+       le 28/08/2026 : un panneau reste a 18 px se serait decale de toute cette
+       distance par rapport au bouton qui l ouvre. Le commentaire d origine
+       annoncait la dependance, c est ce qui a evite le bogue. */
+    left: 6px;
+    right: auto;
+    top: calc(100% - 4px);          /* 6 px sous le bouton */
+    width: max-content;             /* epouse l entree la plus longue */
+    min-width: 0;
+    max-width: calc(100vw - 56px);
+    padding: 5px;
+    background-color: rgba(13,15,20,.26);
+    background-image: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.028));
+    backdrop-filter: blur(20px) saturate(1.4) brightness(1.06);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4) brightness(1.06);
+    border: 1px solid transparent;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.34),
+                0 16px 34px -14px rgba(0,0,0,.62),
+                inset 0 1px 0 rgba(255,255,255,.24),
+                inset 0 -1px 0 rgba(0,0,0,.30),
+                inset 0 0 0 1px rgba(255,255,255,.07);
+  }
+  #filters .panneau button:not(.on),
+  #filters .panneau button.on {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: none;
+    box-shadow: none;
+    border-color: transparent;
+    border-radius: 10px;
+  }
+  #filters .panneau button:not(.on)::after,
+  #filters .panneau button.on::after { display: none }
+
+  #filters .panneau button.on {
+    background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.05));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28),
+                inset 0 0 0 1px rgba(255,255,255,.10);
+  }
+
+  /* Les entrees s alignent a gauche, comme dans un champ de selection.
+     SPECIFICITE : `style.css` les cadre via
+     `#filters.ouvert button:not(#menu):not(#compact)`, soit (1,4,1). Il
+     faut donc au moins autant, d ou la reprise du meme motif. */
+  #filters.ouvert .panneau button:not(#menu):not(#compact) {
+    justify-content: flex-start;
+    text-align: left;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* FOCUS DU CHAMP DE RECHERCHE
+   Le champ a `autofocus`, donc cet etat est actif en permanence au
+   chargement : il doit rester discret et dans la matiere du site.
+   Deux essais ecartes : le `border-color` d origine a `.38` recouvrait
+   l arete d un trait uniforme, et un anneau `0 0 0 3px` bleu-gris jurait
+   avec la palette. C est donc le verre lui-meme qui reagit, le voile
+   s epaissit et l arete speculaire s illumine. Aucune couleur ajoutee,
+   aucune geometrie nouvelle. */
+.search:focus-within {
+  box-shadow: 0 1px 2px rgba(0,0,0,.26),
+              0 6px 16px -8px rgba(0,0,0,.46),
+              inset 0 0 0 1px rgba(255,255,255,.10);
+  background: linear-gradient(180deg,
+    rgba(255,255,255,.105)   0%,
+    rgba(255,255,255,.048)  40%,
+    rgba(255,255,255,.038)  72%,
+    rgba(255,255,255,.065) 100%);
+}
+.search:focus-within::after {
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.90) 0%, rgba(255,255,255,.26) 12%, rgba(255,255,255,0) 30%),
+    linear-gradient(320deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.11) 10%, rgba(255,255,255,0) 28%),
+    linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 40%, rgba(255,255,255,.09) 100%);
+}
+/* ceinture et bretelles : aucun contour natif par-dessus */
+.search input:focus,
+.search input:focus-visible { outline: none }
+
+/* L info est POSEE sur le verre : les sous-blocs s allegent au lieu
+   d etre eux-memes des panneaux. Des panneaux dans un panneau annulaient
+   l effet de dalle unique. */
+.st, .note, .past span, .wgt {
+  border: 1px solid rgba(255,255,255,.075);
+  background: rgba(255,255,255,.045);
+  box-shadow: none;
+}
+/* les jauges sont creusees dans la dalle */
+.tr, .jauge-b { box-shadow: inset 0 1px 2px rgba(0,0,0,.45) }
+
+
+/* ---------------------------------------------------------------------
+   3. LES PROJECTEURS
+   Trois sources posees sur le CONTOUR : leur centre est sur le bord de
+   l ecran, donc la moitie exterieure sort du cadre et seule la moitie
+   interieure eclaire la page. Le milieu reste sombre, ce qui fait tenir
+   le texte sur un verre aussi fin.
+
+   Deux details qui font toute la proprete du rendu :
+   - NEUF PALIERS EN CLOCHE au lieu d un seul. Un unique palier donne une
+     rampe lineaire et l oeil voit exactement ou le disque s arrete.
+   - INTERPOLATION `in oklab`. En sRGB, le trajet d une couleur saturee
+     vers le transparent passe par des valeurs grisatres qui encrassent
+     tout le pourtour ; oklab tient la teinte jusqu au dernier palier.
+
+   Rappel de syntaxe : les deux longueurs sont des RAYONS, pas une taille.
+
+   ⚠️ LA PORTEE DOIT ATTEINDRE LE MILIEU DE L ECRAN. Premiers rayons
+   essayes : 32 vh et 25 vh. Les sources eclairaient alors le haut et le
+   bas mais laissaient une BANDE NOIRE en plein milieu, or `.aurora` est
+   en `fixed` : cette bande reste derriere les cartes a tout moment du
+   defilement. Les cartes etant translucides, elles n avaient rien a
+   transmettre et se lisaient comme des panneaux noirs. Les centres
+   restent sur le contour, seule la portee a ete allongee.
+   --------------------------------------------------------------------- */
+.aurora {
+  background-color: var(--fond);
+  background-image:
+    radial-gradient(62vw 62vh at 16vw 0% in oklab,
+      var(--e1) 0%,
+      color-mix(in oklab, var(--e1) 88%, transparent) 15%,
+      color-mix(in oklab, var(--e1) 68%, transparent) 30%,
+      color-mix(in oklab, var(--e1) 46%, transparent) 45%,
+      color-mix(in oklab, var(--e1) 27%, transparent) 60%,
+      color-mix(in oklab, var(--e1) 14%, transparent) 73%,
+      color-mix(in oklab, var(--e1)  6%, transparent) 85%,
+      color-mix(in oklab, var(--e1)  2%, transparent) 93%,
+      color-mix(in oklab, var(--e1)  0%, transparent) 100%),
+    radial-gradient(46vw 52vh at 94vw 6% in oklab,
+      var(--e2) 0%,
+      color-mix(in oklab, var(--e2) 88%, transparent) 15%,
+      color-mix(in oklab, var(--e2) 68%, transparent) 30%,
+      color-mix(in oklab, var(--e2) 46%, transparent) 45%,
+      color-mix(in oklab, var(--e2) 27%, transparent) 60%,
+      color-mix(in oklab, var(--e2) 14%, transparent) 73%,
+      color-mix(in oklab, var(--e2)  6%, transparent) 85%,
+      color-mix(in oklab, var(--e2)  2%, transparent) 93%,
+      color-mix(in oklab, var(--e2)  0%, transparent) 100%),
+    radial-gradient(58vw 50vh at 48vw 100% in oklab,
+      var(--e3) 0%,
+      color-mix(in oklab, var(--e3) 88%, transparent) 15%,
+      color-mix(in oklab, var(--e3) 68%, transparent) 30%,
+      color-mix(in oklab, var(--e3) 46%, transparent) 45%,
+      color-mix(in oklab, var(--e3) 27%, transparent) 60%,
+      color-mix(in oklab, var(--e3) 14%, transparent) 73%,
+      color-mix(in oklab, var(--e3)  6%, transparent) 85%,
+      color-mix(in oklab, var(--e3)  2%, transparent) 93%,
+      color-mix(in oklab, var(--e3)  0%, transparent) 100%);
+
+  /* la perspective est portee par le parent, la trame la subit.
+     Point de fuite AU CENTRE, pas en haut : c est ce qui garde la
+     composition centree. */
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+
+
+/* ---------------------------------------------------------------------
+   4. LA TRAME — centree et symetrique
+   Un `repeating-linear-gradient` demarre son motif au COIN de la boite :
+   la phase des lignes est alors arbitraire et rien n est symetrique.
+   D ou la construction ci-dessous, qui est le vrai sujet de ce bloc :
+
+     - chaque echelle est une TUILE (`background-size`) contenant UNE
+       ligne posee en son milieu (`calc(50% ...)`) ;
+     - `background-position: center` centre le pavage sur la boite.
+
+   Consequence : une ligne tombe exactement au centre de l ecran pour les
+   deux echelles, et le motif est son propre miroir de part et d autre.
+   Les deux periodes s emboitent (148 = 4x37), donc chaque ligne de trame
+   retombe pile sur une ligne de sous-trame, au centre comme partout.
+
+   PAS DE TROISIEME ECHELLE. Un renfort d une ligne sur quatre (592 px)
+   avait ete essaye : au centre il empilait trois epaisseurs, et comme les
+   renforts suivants tombent a plus ou moins 592 px, la ou le masque a
+   deja eteint la trame, le seul visible etait celui du centre. Il se
+   lisait comme une croix posee par-dessus. A ne pas reintroduire sans
+   reduire aussi la periode.
+
+   Le `rotateX` pivote autour du CENTRE de la boite : le point central ne
+   bouge pas, la symetrie gauche/droite est exacte, et seule la fuite
+   haut/bas reste, ce qui est l effet recherche.
+   --------------------------------------------------------------------- */
+.aurora::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  filter: none;
+  animation: none;
+  transform: rotateX(9deg);
+  transform-origin: 50% 50%;
+  background-color: transparent;
+  background-repeat: repeat;
+  background-position: center;
+  background-size:
+     37px 100%, 100%  37px,      /* sous-trame */
+    148px 100%, 100% 148px;      /* trame      */
+  background-image:
+    linear-gradient(90deg, transparent calc(50% - .5px),
+      rgba(255,255,255,.020) calc(50% - .5px), rgba(255,255,255,.020) calc(50% + .5px),
+      transparent calc(50% + .5px)),
+    linear-gradient(180deg, transparent calc(50% - .5px),
+      rgba(255,255,255,.020) calc(50% - .5px), rgba(255,255,255,.020) calc(50% + .5px),
+      transparent calc(50% + .5px)),
+    linear-gradient(90deg, transparent calc(50% - .5px),
+      rgba(255,255,255,.055) calc(50% - .5px), rgba(255,255,255,.055) calc(50% + .5px),
+      transparent calc(50% + .5px)),
+    linear-gradient(180deg, transparent calc(50% - .5px),
+      rgba(255,255,255,.055) calc(50% - .5px), rgba(255,255,255,.055) calc(50% + .5px),
+      transparent calc(50% + .5px));
+  /* masque centre lui aussi, sinon la trame s eteindrait de travers */
+  -webkit-mask-image: radial-gradient(72% 72% at 50% 50%, #000 20%, transparent 82%);
+          mask-image: radial-gradient(72% 72% at 50% 50%, #000 20%, transparent 82%);
+}
+
+
+/* ---------------------------------------------------------------------
+   5. LE VIGNETTAGE
+   Centre au milieu de l ecran pour rester coherent avec la trame.
+   Courbe en cloche la aussi : en rampe simple, il reintroduisait un cerne
+   visible a mi-hauteur.
+
+   Il commence maintenant a 42 % du rayon et non plus a 28 % : il mangeait
+   la lumiere que les projecteurs venaient d apporter au centre, la ou les
+   cartes en ont justement besoin pour ne pas paraitre noires.
+   --------------------------------------------------------------------- */
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(118% 118% at 50% 50% in oklab,
+      rgba(2,4,9,0)   42%,
+      rgba(2,4,9,.08) 58%,
+      rgba(2,4,9,.24) 72%,
+      rgba(2,4,9,.44) 86%,
+      rgba(2,4,9,.60) 100%);
+}
+
+
+/* ---------------------------------------------------------------------
+   6. TITRES DE SECTION
+   Le filet qui prolongeait le titre etait un trait horizontal de 1 px,
+   soit exactement la meme famille de traits que la trame du fond : il ne
+   pouvait que s y fondre. Et comme la trame porte des lignes dans les
+   DEUX directions, aucun filet ne convient, quelle que soit son
+   orientation. La separation ne passe donc plus par un trait :
+
+     - une pastille RONDE autour de l icone, une forme que la trame ne
+       produit jamais, avec le meme verre que les cartes.
+
+   Le titre ne cree plus de rupture : sa marge haute vaut exactement
+   l ecart de la grille (13 px), donc les sections s enchainent au meme
+   pas que les cartes. C est la pastille qui signale le changement, pas
+   un blanc.
+
+   `.sec:first-child h2 { margin-top: 0 }` de style.css reste plus
+   specifique que la regle ci-dessous, donc la premiere section garde son
+   titre colle en haut. Le mode compact gere ses titres a part, il n est
+   pas touche.
+   --------------------------------------------------------------------- */
+h2::after { content: none }
+
+h2 {
+  margin: 13px 0 12px;           /* 13 px = l ecart de `.grid` */
+  gap: 11px;
+  opacity: 1;                    /* la lisibilite passait par l opacite */
+  color: #96a1b4;                /* un cran plus clair que --mut */
+  letter-spacing: .22em;
+}
+
+/* Meme matiere que les cartes, mais tout en `inset` : un element SVG ne
+   rend pas `::before` / `::after`, donc ni bande de refraction ni reflet
+   variable ici. A cette taille la difference ne se voit pas. */
+h2 svg {
+  width: 13px;
+  height: 13px;
+  box-sizing: content-box;
+  padding: 6px;                  /* 25 px au total */
+  border: 0;
+  border-radius: 999px;
+  color: #b6c0d2;
+  background: var(--dalle);
+  backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,.26),
+              0 5px 12px -7px rgba(0,0,0,.42),
+              inset 0 1px 0 rgba(255,255,255,.30),
+              inset 0 -1px 0 rgba(0,0,0,.28),
+              inset 0 0 0 1px rgba(255,255,255,.07);
+}
+
+
+/* ---------------------------------------------------------------------
+   7. WIDGET DISQUES NVMe (24/08/2026)
+   Accompagne la refonte de `disques()` dans `app.js`.
+
+   L anneau d endurance a saute : il affichait 99 % et 100 %, deux valeurs
+   qui ne bougent presque jamais et qui ne peuvent que baisser, pour la
+   moitie de la hauteur de la carte. A la place, une REGLETTE DE
+   TEMPERATURE, la seule grandeur du releve SMART qui varie vraiment.
+
+   La reglette porte son echelle dans son degrade, du froid au chaud sur
+   25 a 75 degres, avec un repere blanc au seuil d alerte de 65 degres,
+   soit 80 % de la course. Le chiffre seul ne dit pas si 45 degres est
+   tiede ; le curseur sur la reglette le dit sans legende.
+
+   Responsive : le modele se tronque en `text-overflow`, la capacite et la
+   temperature gardent leur place a droite, et les pastilles passent a la
+   ligne toutes seules. Aucun point de rupture n est necessaire.
+   --------------------------------------------------------------------- */
+.nvme { display: flex; flex-direction: column; gap: 11px }
+.nv   { display: flex; flex-direction: column; gap: 7px }
+
+.nv-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;                  /* sans quoi l ellipse ne se declenche pas */
+}
+.nv-p {                          /* pastille d etat */
+  align-self: center;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sok);
+  box-shadow: 0 0 7px rgba(52,199,89,.55);
+}
+.nv-p.cr {
+  background: var(--scr);
+  box-shadow: 0 0 7px rgba(255,69,58,.60);
+}
+.nv-n {                          /* modele : c est lui qui cede la place */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .82rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.nv-c { flex: 0 0 auto; font-size: .68rem; color: var(--mut) }
+.nv-d {
+  flex: 0 0 auto;
+  font-size: .74rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.nv-d.ok { color: var(--sok) }
+.nv-d.wn { color: var(--swn) }
+.nv-d.cr { color: var(--scr) }
+
+/* la reglette : degrade froid -> chaud, plus un repere au seuil d alerte */
+.nv-b {
+  position: relative;
+  height: 3px;
+  border-radius: 99px;
+  background:
+    linear-gradient(90deg,
+      transparent            calc(80% - .5px),
+      rgba(255,255,255,.40)  calc(80% - .5px),
+      rgba(255,255,255,.40)  calc(80% + .5px),
+      transparent            calc(80% + .5px)),
+    linear-gradient(90deg,
+      rgba(77,151,238,.40)   0%,
+      rgba(52,199,89,.40)   38%,
+      rgba(255,179,64,.42)  72%,
+      rgba(255,69,58,.50)  100%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.45);
+}
+.nv-b > i {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(4,6,12,.55),
+              0 1px 3px rgba(0,0,0,.60);
+}
+
+
+/* ---------------------------------------------------------------------
+   8. LÉGENDE PORTEUSE DE VALEURS (24/08/2026)
+   Accompagne la fusion de « Système » et « Mémoire et swap » dans `app.js`.
+
+   La légende ne se contente plus de nommer les séries, elle porte leur
+   VALEUR INSTANTANÉE — c'est elle qui a remplacé les trois anneaux de la
+   carte Système, lesquels répétaient la barre du haut pour trente fois
+   leur hauteur. Elle change donc de rôle : d'étiquette discrète elle
+   devient chiffre-clé, d'où la taille relevée et le contraste porté sur
+   la valeur plutôt que sur le libellé.
+
+   Elle passe aussi AU-DESSUS du graphique : on lit d'abord où l'on en
+   est, ensuite d'où l'on vient. `flex-wrap` était déjà là, trois séries
+   avec leur valeur passent donc à la ligne sans réglage.
+   --------------------------------------------------------------------- */
+.leg {
+  margin: 0 0 6px;
+  gap: 16px;
+  font-size: .69rem;
+}
+.leg b {
+  margin-left: 6px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;   /* les chiffres ne dansent pas */
+  color: var(--ink);
+}
+
+
+/* ---------------------------------------------------------------------
+   9. BARRES DE CONTENEURS (24/08/2026)
+   Accompagne la refonte de `bars()` dans `app.js`.
+
+   `.br i` n'était qu'un trait posé à nu, sans piste : impossible d'y lire
+   une proportion, et rien n'y distinguait la mémoire résidente de ce qui
+   a été évacué en zram. Il devient une PISTE contenant trois éléments :
+
+     `em`  ce qui tient en mémoire, plein ;
+     `u`   ce qui a été évacué en swap, voilé ;
+     `s`   la moyenne de résidence sur 24 h, un trait fin.
+
+   `overflow: hidden` sur la piste fait tout le travail de découpe : les
+   segments héritent de la forme en pilule sans avoir à gérer leurs
+   propres coins, et le repère ne peut pas déborder quand la moyenne
+   dépasse le maximum de l'échelle.
+   --------------------------------------------------------------------- */
+.br i {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  background: rgba(255,255,255,.07);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.40);
+}
+.br i em { flex: 0 0 auto; background: var(--sbl) }
+.br i u  { flex: 0 0 auto; background: var(--sbl); opacity: .38 }
+.br i s {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  margin-left: -.75px;           /* le trait est centré sur sa valeur */
+  background: #e8edf6;
+  box-shadow: 0 0 3px rgba(0,0,0,.55);
+}
+
+/* La légende passe SOUS les barres ici, alors qu'elle coiffe le graphique
+   de « Système ». Sa marge est donc inversée.
+
+   ⚠️ La marge BASSE est indispensable et ne peut pas être portée par la note.
+   `style.css` pose `.vizb > .note { margin-top: auto }`, qui plaque la note
+   au bas de la carte pour que toutes s'alignent. Lui donner un `margin-top`
+   fixe écraserait ce `auto` et casserait l'alignement de la grille entière ;
+   une marge basse sur la légende, elle, s'ADDITIONNE au `auto` et garantit
+   l'écart minimal sans rien perdre. */
+.bars + .leg { margin: 9px 0 14px }
+
+/* Extrémités : la piste étant en `overflow: hidden` et arrondie, elle taille
+   déjà le bord gauche du premier segment. Reste le bord droit du dernier,
+   qu'on arrondit explicitement — la jointure entre deux segments, elle, doit
+   rester franche, sinon une encoche apparaît au milieu de la barre.
+   Quand il n'y a qu'un segment, les deux règles portent sur lui. */
+.br i > *,
+.ln .tr > * { border-radius: 0 }
+.br i > :last-child,
+.ln .tr > :last-child { border-radius: 0 99px 99px 0 }
+
+/* ---- La fenêtre des conteneurs suit la même grammaire ----
+   Elle affichait une barre d'un seul tenant alors que la carte en montre
+   deux : même donnée, deux lectures contradictoires. `.ln .tr` avait déjà
+   sa piste et son `overflow`, il lui manquait d'être en flex.
+   Le segment évacué garde la COULEUR DE SA PILE et n'en change que
+   l'opacité : on continue de lire à quelle pile appartient la ligne. */
+.ln .tr { display: flex }
+.ln .tr u { display: block; height: 100%; flex: 0 0 auto; opacity: .38 }
+
+
+/* ---------------------------------------------------------------------
+   10. LES FENÊTRES MODALES REJOIGNENT LE VERRE (24/08/2026)
+
+   C'était le dernier îlot de l'ancien habillage : un aplat
+   `rgba(22,24,30,.94)`, donc quasi opaque, posé sur un voile noir à 55 %
+   sans le moindre flou. Et son `backdrop-filter` de 22 px ne servait
+   strictement à rien — à 94 % d'opacité, il n'y a plus rien à voir au
+   travers de quoi que ce soit.
+
+   ⚠️ LE FLOU EST PORTÉ PAR LE VOILE, PAS PAR LA FENÊTRE, et c'est
+   délibéré. Empiler un `backdrop-filter` sur `::backdrop` ET sur la
+   fenêtre revient à demander deux filtrages successifs sur la même
+   région : c'est la construction qui avait produit des rectangles noirs
+   sur les cartes ce matin. Ici elle est inutile de surcroît — une fois
+   la page brouillée par le voile, ce qui transparaît à travers la
+   fenêtre est déjà une nappe indistincte. Un seul filtre suffit, il
+   coûte deux fois moins cher, et le résultat est le même.
+
+   La fenêtre ne porte plus qu'un fond très léger (`.30`) : c'est le voile
+   qui assure la lisibilité en brouillant la page derrière, la fenêtre n'a
+   donc pas besoin de s'opacifier pour être lue. Un premier essai à `.66`
+   rendait le verre inexistant.
+   --------------------------------------------------------------------- */
+/* Le voile fait TOUT le travail : il floute la page à 22 px, la désature et
+   l'assombrit d'un cran. C'est lui qui rend la fenêtre lisible, et c'est
+   pour ça qu'elle peut se permettre d'être aussi transparente.
+   `brightness` est le réglage à toucher si la lisibilité venait à manquer :
+   plus bas, la page passe moins ; plus haut, elle transparaît davantage. */
+dialog.dlg::backdrop {
+  background: rgba(3,5,10,.34);
+  backdrop-filter: blur(22px) saturate(.8) brightness(.85);
+  -webkit-backdrop-filter: blur(22px) saturate(.8) brightness(.85);
+}
+
+dialog.dlg {
+  border: 0;
+  backdrop-filter: none;         /* voir l'avertissement ci-dessus */
+  -webkit-backdrop-filter: none;
+  background-color: rgba(13,15,21,.30);
+  background-image: var(--dalle);
+  box-shadow: 0 1px 2px rgba(0,0,0,.36),
+              0 24px 60px -18px rgba(0,0,0,.72),
+              0 64px 128px -44px rgba(0,0,0,.62);
+}
+
+/* Même arête spéculaire que les cartes : un trait de 1,5 px dont
+   l'intensité varie selon l'orientation. La fenêtre est positionnée, elle
+   sert donc de bloc conteneur à son propre pseudo-élément. */
+dialog.dlg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  padding: 1.5px;
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.60) 0%, rgba(255,255,255,.16) 10%, rgba(255,255,255,0) 26%),
+    linear-gradient(320deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.07)  9%, rgba(255,255,255,0) 24%),
+    linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 40%, rgba(255,255,255,.06) 100%);
+  -webkit-mask: var(--anneau);
+  -webkit-mask-composite: xor;
+          mask: var(--anneau);
+          mask-composite: exclude;
+}
+
+
+/* ---------------------------------------------------------------------
+   11. LE SWAP EST ENCODÉ PAR L'OPACITÉ, PAS PAR LA TEINTE (24/08/2026)
+
+   Un essai avait aligné la carte sur le graphique de « Système », qui
+   trace le swap en ambre : mémoire résidente en vert, swap en ambre.
+   Écarté à l'usage — le bleu Docker est l'identité de cette carte, et le
+   dégradé de la même teinte se lit mieux que deux couleurs opposées pour
+   deux états d'une même grandeur.
+
+   La règle retenue vaut donc partout : LA COULEUR DIT DE QUI IL S'AGIT,
+   L'OPACITÉ DIT OÙ SE TROUVE LA MÉMOIRE. Sur la carte, le bleu Docker
+   plein pour ce qui réside, le même en sourdine pour ce qui est évacué.
+   Dans la fenêtre, la couleur de la pile joue le même rôle — et c'est
+   heureux, car sa palette occupe déjà tout l'espace des teintes : un
+   segment ambre s'y confondrait avec la pile Umami. L'en-tête de
+   colonnes nomme explicitement la valeur, ce qui lève l'ambiguïté.
+   --------------------------------------------------------------------- */
+.br i em { background: var(--sbl) }                 /* résident, bleu Docker */
+.br i u  { background: var(--sbl); opacity: .38 }   /* évacué, le même en sourdine */
+
+/* ---- La fenêtre gagne sa colonne de swap ----
+   L'information n'existait que dans une infobulle, alors qu'elle
+   représente la moitié de la mémoire des conteneurs sur ce NAS.
+
+   ⚠️ COLONNES FIXES, ET C'EST INDISPENSABLE. Chaque ligne est SA PROPRE
+   grille : rien ne fait correspondre les colonnes d'une ligne à l'autre.
+   Avec des colonnes en `auto`, chacune se dimensionne sur son contenu —
+   l'en-tête, dont les libellés sont plus courts que les données, calculait
+   une colonne « service » de 137 px là où les lignes en faisaient 119, et
+   tout le reste tombait 18 px trop à droite. Des `min-width` ne suffisent
+   pas : elles ne posent qu'un plancher. Seules des largeurs fixes
+   garantissent que toutes les lignes partagent la même géométrie. */
+.ln { grid-template-columns: 1fr 64px 60px 46px 60px }
+.ln .sw {
+  font-size: .7rem;
+  text-align: right;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+
+/* En-tête de colonnes. Il est placé AU-DESSUS de la zone défilante, et son
+   alignement tient à une seule ligne : `margin-right: 18px`.
+
+   L'arithmétique, mesurée plutôt que devinée. La fenêtre offre 403 px
+   utiles. `.scroll` en réserve 10 pour la barre de défilement et 8 par son
+   `padding-right`, il ne reste donc que 385 px aux lignes. Un en-tête placé
+   hors de `.scroll` disposait des 403 px entiers : ses colonnes tombaient
+   18 px trop à droite, et aucun réglage de largeur de colonne n'y pouvait
+   rien puisque le décalage venait du CONTENEUR.
+
+   ⚠️ `scrollbar-gutter: stable` rend cette réserve permanente. Sans lui, le
+   jour où la liste tiendrait sans défilement, la barre disparaîtrait et les
+   18 px deviendraient faux.
+
+   Une variante collante à l'intérieur de `.scroll` a été essayée : elle
+   alignait bien, mais il fallait lui donner un fond pour masquer les lignes
+   défilant dessous, et ce fond dessinait une barre sombre en travers du
+   verre. Au-dessus, le problème ne se pose pas. */
+.dlg .scroll { scrollbar-gutter: stable }
+
+.ln.lnh {
+  margin-right: 18px;            /* 10 px de barre + 8 px de padding */
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255,255,255,.09);
+  font-size: .58rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.ln.lnh .nm,
+.ln.lnh .mm,
+.ln.lnh .sw,
+.ln.lnh .cp,
+.ln.lnh .dv {
+  font-size: .58rem;
+  color: var(--mut);
+  font-weight: 500;
+}
+
+
+/* ---------------------------------------------------------------------
+   12. MOINS DE FILETS DANS LA FENÊTRE (24/08/2026)
+
+   Chaque ligne de service portait un filet de séparation, soit vingt-sept
+   traits horizontaux empilés sous autant de barres de mesure. Le résultat
+   se lisait comme une grille, et les barres — la seule information
+   graphique de cette fenêtre — s'y noyaient.
+
+   Le filet qui SÉPARE VRAIMENT est celui des titres de groupe : il marque
+   le passage d'une pile à l'autre, c'est une frontière réelle. Il reste.
+   Les autres partent : l'alternance nom / barre suffit à découper les
+   lignes, et l'espacement fait le reste.
+   --------------------------------------------------------------------- */
+.ln + .ln { border-top: 0 }
+
+
+/* ---------------------------------------------------------------------
+   13. RUBAN DE JOIGNABILITÉ DU SITE (24/08/2026)
+
+   La carte « Site » affichait deux nombres immobiles : un temps de réponse
+   jamais conservé, donc incomparable, et un certificat que Caddy renouvelle
+   tout seul au tiers de sa vie restante. Elle ne disait pas si le site
+   avait été joignable, la seule question qui compte pour une vitrine.
+
+   Le ruban reprend `.batt`, la bande de battements d'Uptime Kuma, pour ne
+   pas inventer un composant de plus. Deux ajustements suffisent.
+
+   LA GOUTTIÈRE. `.batt i` est en `flex: 1 1 0` : les cases n'ont aucune
+   largeur propre et se partagent l'espace RESTANT. Kuma occupe la pleine
+   largeur, ses 95 gouttières de 3 px n'y pèsent rien. Sur une carte d'une
+   colonne, 340 px intérieurs, elles mangeraient 285 px et les cases
+   tomberaient à 0,6 px — un `gap` ne se comprime pas en flex. Le ruban du
+   site compte donc 48 cases (une demi-heure chacune) pour 2 px de
+   gouttière, soit 5,1 px par case.
+
+   L'ÉTAT NEUTRE. Un créneau sans mesure n'est pas une panne. La colonne
+   `siteup` est née aujourd'hui : tout ce qui la précède dans l'historique
+   est vide, et sans quatrième état le ruban serait écarlate pendant ses
+   vingt-quatre premières heures. D'où la convention de `collect.sh`, où
+   `siteup` vaut 1 ou 2 et jamais 0 : le 0 reste réservé à l'absence de
+   donnée, que `history-build.sh` écrit pour un créneau vide.
+   --------------------------------------------------------------------- */
+.batt.fin { gap: 2px }
+
+
+/* ---------------------------------------------------------------------
+   14. MISE EN REGARD — `.duo` (24/08/2026)
+
+   `.gr` a un `viewBox` de 300 × 96 avec `width: 100%` et `height: auto` :
+   sa hauteur suit donc sa largeur. Sur une carte de deux colonnes,
+   757 px de large moins 32 de remplissage, ça donnait
+
+       725 × 96 / 300 = 232 px
+
+   de graphique pour deux courbes souvent plates. Personne ne l'avait vu
+   parce que la carte Système a trois séries qui remplissent l'espace.
+
+   Rien à corriger dans le composant : le mettre à moitié largeur suffit.
+   353 px de large valent 113 px de haut, et la place libérée à droite
+   accueille le ratio. Cent dix-neuf pixels gagnés sans toucher à une
+   seule règle de `.gr`.
+
+   ⚠️ La base est en POURCENTAGE, pas en pixels. Une première version
+   disait `flex: 1 1 260px` : le retour à la ligne se déclenchait dès que
+   le conteneur passait sous 538 px — deux fois 260 plus la gouttière —
+   et la carte qBittorrent est en dessous, donc les deux moitiés
+   s'empilaient. Une base en pixels est une largeur devinée. `calc(50% -
+   9px)` tient toujours exactement deux par ligne, quelle que soit la
+   carte, et le `min-width` réserve l'empilement aux cas où c'est
+   vraiment trop étroit : en dessous de 380 px de conteneur.
+
+   ℹ️ La carte qBittorrent est allée plus loin et a remplacé `.gr` par
+   `.courbe` — une silhouette sans axe ni étiquette. Un débit s'y constate,
+   il ne s'y lit pas. `.duo` reste valable pour les deux.
+   --------------------------------------------------------------------- */
+.duo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  margin-top: 13px;
+}
+.duo > * { flex: 1 1 calc(50% - 9px); min-width: 190px }
+/* Le premier bloc de chaque moitié ne rajoute pas sa marge : `.duo` la porte
+   déjà. Les suivants gardent la leur, c'est elle qui espace la légende de la
+   courbe et les deux jauges entre elles. */
+.duo > * > :first-child { margin-top: 0 }
+
+
+/* ---------------------------------------------------------------------
+   15. FENÊTRE DES MISES À JOUR — CENTRAGE ET RYTHME (25/08/2026)
+
+   LA LISTE ÉTAIT DÉCENTRÉE DE 20 PX. Mesuré sur la page ouverte : les
+   lignes commencent bien à `x=533`, comme le titre, mais s'arrêtent 20 px
+   avant le bord droit de leur cadre. Dix viennent du `padding-right` de
+   `.scroll`, dix de `scrollbar-gutter: stable`.
+
+   ⚠️ Cette gouttière est un effet de bord de la section 9. Elle y avait
+   été posée pour aligner l'en-tête de colonnes de la fenêtre Conteneurs
+   sur ses lignes, et elle s'appliquait à TOUTES les zones défilantes de
+   fenêtre. La fenêtre des mises à jour n'a pas d'en-tête à aligner, et sa
+   liste tient sans déborder (`scrollHeight` = `clientHeight`) : la
+   réserve n'y servait qu'à pousser le contenu vers la gauche. Elle est
+   donc rendue à la seule fenêtre qui en a besoin, celle qui porte
+   `.large`.
+
+   La marge droite négative fait sortir le rembourrage du cadre : les
+   lignes reprennent toute la largeur, alignées sur le titre des deux
+   côtés, et la barre de défilement se logera dans le débord le jour où la
+   liste s'allongera.
+   --------------------------------------------------------------------- */
+.dlg .scroll { scrollbar-gutter: auto }
+.dlg.large .scroll { scrollbar-gutter: stable }
+.dlg:not(.large) .scroll { margin-right: -10px }
+
+/* Le bandeau de titre avait trois écarts pour trois lignes : 14 px sous le
+   titre, 6 px entre les deux sous-titres, 17 px avant la liste. Le 6
+   venait d'une marge négative sur `.sub2`, qui trahissait deux paragraphes
+   voulant n'en former qu'un. Ils sont désormais serrés l'un contre
+   l'autre, et l'air est reporté avant la liste : titre, légende, contenu. */
+.dlg h3 { margin-bottom: 10px }
+.dlg .sub { margin-bottom: 3px }
+.sub2 { margin: 0 0 14px }
+
+
+/* ---------------------------------------------------------------------
+   16. FENÊTRE DES MISES À JOUR — LA TRANSITION DE VERSION (25/08/2026)
+
+   La colonne affichait « 1.37.1 → nouvelle » : une flèche pointant vers un
+   mot. `check-updates.sh` relève désormais aussi la version CIBLE, lue sur
+   l'image que Watchtower a déjà téléchargée pour comparer les identifiants.
+
+   ⚠️ ELLES NE TIENNENT PAS SUR UNE LIGNE. Mesuré : la colonne des versions
+   fait 104 px, et « 5.2.3_v2.0.14-ls471 → 5.2.3_v2.0.14-ls473 » compte 41
+   caractères, soit environ 250 px à `.7rem`. Les lignes EN ATTENTE passent
+   donc sur deux hauteurs, nom au-dessus, transition en dessous. C'est
+   exactement la disposition que la règle mobile applique déjà sous 600 px.
+
+   Les lignes déjà à jour gardent leur ligne unique : elles n'ont qu'un
+   numéro à montrer, et elles sont dix contre trois.
+
+   ℹ️ N'afficher que ce qui diffère — « …ls471 → …ls473 » — a été écarté :
+   élégant pour qBittorrent, illisible pour « 1.37.1 → 1.37.2 », qui se
+   réduirait à « → 2 ».
+   --------------------------------------------------------------------- */
+.majl li.att { grid-template-columns: auto minmax(0, 1fr); row-gap: 3px }
+.majl li.att .vs { grid-column: 2; justify-content: flex-start }
+
+
+/* ---------------------------------------------------------------------
+   17. SÉLECTION DES MISES À JOUR (25/08/2026)
+
+   QUAND ON COCHAIT, SEULS 15 PX SUR 520 CHANGEAIENT. Le bouton du bas
+   annonçait « Mettre à jour (2) » et rien dans la liste ne disait
+   lesquels. La ligne entière porte désormais l'état : fond et bordure
+   bleus dès qu'elle contient une case cochée, via `:has(:checked)`.
+
+   LA LIGNE ÉTAIT CLIQUABLE SANS LE DIRE. Le `<label for>` ne couvre que
+   le nom : le curseur restait une flèche sur presque toute la surface, et
+   depuis le passage sur deux hauteurs (section 16) la seconde ligne
+   n'était plus cliquable du tout. Un `::before` en position absolue étend
+   la zone d'activation du label à toute la ligne — sans une ligne de
+   JavaScript, et le survol l'annonce.
+
+   LA CASE ÉTAIT LE SEUL WIDGET BRUT DE LA PAGE. `appearance: auto` au
+   milieu des pastilles, jauges, rubans et verre : elle se dessinait
+   différemment sur chaque système. Le chevron est une image de fond en
+   SVG plutôt qu'un pseudo-élément, ce qui garde la case comme une simple
+   boîte, sans mise en page interne.
+
+   ⚠️ `padding: 0` EST INDISPENSABLE, et son absence m'a coûté une demi-
+   douzaine d'essais. `style.css` porte une règle générale pour les champs
+   de saisie des fenêtres — `.dlg input { width: 100%; padding: .5rem .7rem }` —
+   qui s'applique AUSSI aux cases à cocher. Ces 0,7 rem de chaque côté font
+   22 px : la case sortait à 24,4 px de large pour 18 de haut, et aucune
+   largeur, fût-elle en `!important` et en style en ligne, n'y changeait
+   rien. Le symptôme trompe, parce qu'il ressemble à un étirement de
+   grille. 💡 Devant une boîte qui refuse sa largeur, mesurer la même hors
+   de son conteneur : ici elle faisait 18 px, ce qui innocentait la grille.
+   --------------------------------------------------------------------- */
+.majl input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  padding: 0;                    /* ⚠️ annule `.dlg input`, cf. ci-dessus */
+  margin: 0;
+  justify-self: start;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255,255,255,.24);
+  background: rgba(255,255,255,.04) no-repeat center / 11px 11px;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+.majl input[type=checkbox]:checked {
+  background-color: var(--sbl);
+  border-color: var(--sbl);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.4L4.6 9 10 3.2' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.majl input[type=checkbox]:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px }
+
+/* La case court sur les DEUX rangées de la ligne, pour être centrée sur toute
+   sa hauteur plutôt que collée au nom.
+   ⚠️ `span 2` et non `1 / -1`. Le `-1` désigne la fin de la grille EXPLICITE ;
+   ici les rangées sont implicites, créées par le placement automatique, donc
+   la grille explicite est vide et `-1` retombe sur la ligne 1 — l'élément ne
+   s'étend pas d'un pouce. La propriété calculée affiche pourtant fidèlement
+   « 1 / -1 », ce qui ne laisse rien voir du problème. */
+.majl li.att input[type=checkbox] { grid-row: 1 / span 2; align-self: center }
+
+.majl li.att {
+  position: relative;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+/* Étend la zone d'activation du label à toute la ligne. */
+.majl li.att label::before { content: ""; position: absolute; inset: 0; border-radius: 9px }
+/* ⚠️ Sans ceci, le clic sur le numéro de version ne sélectionnait pas. La
+   ligne de version est un frère du label, et elle capte le clic avant la
+   surcouche. Elle n'a rien d'interactif : on la rend transparente aux clics
+   plutôt que de se battre avec l'ordre de peinture. */
+.majl li.att .vs { pointer-events: none }
+.majl li.att:hover { background: rgba(255,255,255,.10) }
+.majl li.att:has(:checked) {
+  background: rgba(77,151,238,.14);
+  border-color: rgba(77,151,238,.42);
+}
+
+/* Le compteur des lignes en attente prend l'ambre du reste de la page ;
+   celui des lignes à jour reste neutre. */
+.majh:not(.discret) b { background: rgba(255,179,64,.16); color: #ffd08a }
+
+/* ---- 18. Ratios par tracker (28/08/2026) --------------------------------
+   ⚠️ AUCUNE BARRE. Une barre a besoin d une reference ; les trois ratios
+   depassent la leur, donc les trois barres restaient pleines en permanence.
+   La couleur du nombre porte seule le verdict.
+   ⚠️ LE TITRE EST INDISPENSABLE, pas decoratif. Sans lui « Vega 2,43 » ne se
+   lit que si l on sait deja qu il s agit d un ratio. C est LUI qui merite le
+   style etiquette : deux mots, majuscules, 0,55 rem. La MEME classe titre
+   la moitie gauche, « Activite sur 24 h » : le parallele entre les deux est
+   le sujet de la carte, ce qui se passe a gauche et ou j en suis a droite.
+   Effet de bord utile, leurs hauteurs se rapprochent, 106 contre 112 px au
+   lieu de 85 contre 112.
+   ⚠️ LE QUALIFICATIF N EST PLUS EN MAJUSCULES. A 8,8 px avec 0,8 px
+   d interlettrage, « 331,5 GO ENVOYES, RIEN RECU » appliquait un style
+   d etiquette a une phrase de vingt-sept caracteres. Casse normale, 0,66 rem,
+   et ALIGNE A GAUCHE dans sa colonne : cale a droite, les qualificatifs
+   courts flottaient a soixante pixels du nombre qu ils commentent.
+   ⚠️ Le nom et la valeur sont a LARGEUR FIXE. C est ce qui met les trois
+   nombres en colonne, ce qu un `space-between` ne fait pas quand les noms
+   different de longueur, et c est cet alignement qui les rend comparables.
+   ⚠️ `.inf` agrandit le seul glyphe infini : a taille egale il paraît plus
+   petit que « 2,43 », sa hauteur d oeil etant moindre. */
+.trkh{font-size:.55rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mut);margin-bottom:10px}
+.trks{display:flex;flex-direction:column;gap:9px}
+/* ⚠️ CENTRE, PAS BASELINE. Tant que la description tient sur une ligne, les
+   deux donnent le meme resultat. Des qu elle se replie — « 331,5 Go envoyes,
+   rien recu » sous 120 px — la baseline aligne le nombre sur la PREMIERE ligne
+   du texte, donc le chiffre remonte en haut d un bloc de 36 px : centre de la
+   valeur a 214, centre de la description a 227, treize pixels d ecart visibles.
+   Le centrage cale les trois elements sur le meme axe dans les deux cas. */
+.trk{display:flex;align-items:center;gap:9px}
+/* Seules les lignes de ratio repondent au survol : la carte Kuma affiche
+   deja sa description en clair, elle n a rien a reveler. */
+.trk[data-lec="ratio"]{cursor:help}
+.trk .n{flex:0 0 58px;font-size:.82rem;font-weight:600;letter-spacing:-.01em}
+/* ⚠️ CENTRE DANS SA CASE. Les trois valeurs partageaient le bord GAUCHE de
+   leurs 58 px : « 2,43 » en occupe 34 et laisse 24 de vide, l infini n en
+   occupe que 18 et en laissait 40. Il paraissait abandonne a gauche.
+   Aligner a DROITE a ete essaye : les trois finissent alors a 501, le vide
+   devient constant — traitement classique d une colonne de chiffres — mais la
+   case fait exactement la largeur utile, donc les nombres viennent coller la
+   gouttiere de 12 px et « 2,43 minimum 0,80 » se lit d un seul bloc. Le
+   centrage repartit le vide des deux cotes et garde la respiration. */
+.trk b{flex:0 0 58px;font-size:1.18rem;font-weight:500;letter-spacing:-.03em;
+  text-align:center}
+.trk b.inf{font-size:1.42rem;line-height:.85}
+.trk b.ok{color:var(--sok)}
+.trk b.wn{color:var(--swn)}
+/* ⚠️ CETTE REGLE SERT AUSSI A LA CARTE KUMA. `.trk` n appartient pas aux
+   seuls ratios : `grpk()` en emet pour ses groupes de sondes, avec une
+   description. Retiree le 02/09 en croyant nettoyer du mort, elle a fait
+   perdre a ces groupes leur taille et leur couleur. Restauree aussitot. */
+.trk .q{flex:1 1 auto;font-size:.66rem;color:var(--mut);line-height:1.3}
+
+/* Les deux moities de la carte qBittorrent s ETIRENT a la meme hauteur, et la
+   silhouette occupe tout ce qui reste sous sa legende. Les deux titres tombent
+   donc sur la meme ligne ET les deux colonnes se terminent ensemble.
+   ⚠️ `align-items: center` laissait la courbe finir six pixels au-dessus des
+   ratios ; un `flex-start` seul ne reglait que le haut, pas le bas.
+   ⚠️ Cela ne fonctionne QUE parce que `.courbe` porte
+   `preserveAspectRatio="none"` : sa hauteur est libre et ne suit pas sa
+   largeur. Ses `height: auto` et `max-height: 88px` d origine l en empechaient,
+   ils sont neutralises ici, et seulement ici.
+   ⚠️ Consequence voulue : si un qualificatif passe sur deux lignes, la colonne
+   de droite grandit et la courbe suit. Les deux restent solidaires. */
+.duo.tro{align-items:stretch}
+.duo.tro > *{display:flex;flex-direction:column}
+.duo.tro .courbe{flex:1 1 auto;height:auto;min-height:0;max-height:none}
+
+/* La legende se cale a GAUCHE, sous son titre. `.leg` est centree partout
+   ailleurs, et c est bon la ou elle est seule ; ici un titre a 40 px surmontait
+   une legende commencant a 88, d ou un flottement qu on ressent sans le nommer.
+   Les deux colonnes partent desormais de leur propre bord, 40 et 363.
+   ⚠️ Portee limitee a `.duo.tro` : la carte Systeme garde sa legende centree. */
+.duo.tro .leg{justify-content:center}
+
+/* ---- 19. Echelle horaire sous un ruban (28/08/2026) ---------------------
+   ⚠️ LE POSITIONNEMENT EN POURCENTAGE ne fonctionne que parce que `.batt` n a
+   aucun remplissage et que ses cases sont en `flex: 1 1 0` : le ruban occupe
+   exactement la largeur de son conteneur, bord a bord. Verifie sur la carte
+   Site : conteneur 36 -> 462, premiere case a 36, derniere finissant a 462.
+   Une echelle voisine de meme largeur partage donc le meme axe.
+   ⚠️ Le decalage du aux gouttieres de 2 px reste sous le pour cent sur
+   96 cases. Invisible a l echelle de six heures — et le dire ici evite qu on
+   tente un jour de le « corriger » au prix d un calcul illisible.
+   ⚠️ `.fin` est cale a DROITE sans translation : centre sur 100 %, il
+   deborderait de la carte d une demi-largeur. */
+.ech{position:relative;height:15px;margin-top:7px}
+.ech span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap;
+  font-size:.55rem;letter-spacing:.09em;color:var(--mut)}
+.ech span::before{content:"";position:absolute;left:50%;top:-7px;width:1px;height:5px;
+  background:currentColor;opacity:.4}
+/* La legende de la barre passe AU-DESSUS du ruban. Placee dans la ligne de
+   l echelle, elle occupait le bord gauche et obligeait a ignorer tout repere
+   tombant avant 17 % — le repere de 18 h sautait. Au-dessus, les deux ne se
+   disputent plus rien : la legende dit ce que vaut une barre, l echelle dit
+   quand. Meme graisse et meme couleur que l echelle, car meme rang.
+   ⚠️ `.batt` porte `margin-top: 13px` ; sans la regle d adjacence, les deux
+   marges s ajouteraient et decolleraient le ruban de sa legende. */
+.rleg{display:flex;justify-content:space-between;gap:12px;
+  font-size:.55rem;letter-spacing:.09em;color:var(--mut);margin-top:13px}
+.rleg + .batt{margin-top:6px}
+
+/* ---- 20. Etat par groupe de sondes (28/08/2026) -------------------------
+   Reprend `.trks` / `.trk` de la carte qBittorrent : meme grammaire, trois
+   colonnes alignees, plutot qu un composant de plus a maintenir. Seule la
+   premiere colonne s elargit — « 🎬 Stack *arr » ne tient pas dans les 68 px
+   qui suffisent a « Altair ».
+   ⚠️ Le qualificatif passe en ambre EN MEME TEMPS que la valeur : lire « 2 »
+   en ambre et « Diun, Dockge » en gris ferait hesiter sur ce qui est en cause,
+   alors que les deux disent la meme chose. */
+/* ⚠️ EN LIGNE, PAS EN COLONNE. `.trks` empile ses lignes, ce qui convient aux
+   trois ratios d une demi-carte. La carte Kuma fait la LARGEUR ENTIERE : trois
+   lignes empilees y laissaient les deux tiers du cadre vides. Les groupes
+   deviennent donc trois unites compactes, posees cote a cote et centrees.
+   ⚠️ Les largeurs fixes de `.trk` sautent ici. Elles servent a aligner des
+   colonnes les unes SOUS les autres ; cote a cote, elles ne feraient
+   qu ecarter le nom de sa valeur.
+   ⚠️ `flex-wrap` conserve : sous ~700 px les trois unites se rempilent d
+   elles-memes, sans regle de rupture a maintenir. */
+.grps{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:12px 36px}
+.grps .trk{flex:0 1 auto;gap:9px}
+.grps .trk .n{flex:0 0 auto}
+.grps .trk b{flex:0 0 auto;min-width:0}
+.grps .trk .q{flex:0 1 auto}
+.grps .trk.ko .q{color:var(--swn)}
+
+/* ---- 21. Le ruban a une hauteur PROPRE (28/08/2026) ---------------------
+   ⚠️ `style.css` pose `.vizb > .batt { flex: 1 1 auto; min-height: 0 }`, regle
+   pensee pour les composants qui GAGNENT a occuper la place : courbe, jauge,
+   hero. Un ruban de creneaux, non. Sa hauteur n etait pas choisie mais SUBIE,
+   c est ce qui restait une fois le reste place — et les deux extremites sont
+   mauvaises. Les trois cas ont ete observes le meme jour :
+     • carte Site a 274 px : les pastilles passent sur deux lignes, il ne reste
+       RIEN, le ruban tombe a 0 px et disparait sans que rien ne le signale ;
+     • carte Kuma apres l ajout des trois lignes de groupe : meme effet, et le
+       ruban du VPN a suivi des que la fenetre a retreci. Ils etaient toujours
+       dans le DOM, en 554x0 ;
+     • carte Kuma en pleine largeur : 24 px de vert plein, qui ne se lit plus
+       comme une suite de creneaux mais comme un bloc.
+   Une hauteur FIXE regle les trois. Le vide eventuel va aux blocs portant
+   `margin-top: auto`, ce qui etait deja leur role. */
+.vizb > .batt{flex:0 0 16px;height:16px;min-height:16px;max-height:16px}
+
+/* Ancrage des reperes d echelle pres des bords. Centree, une etiquette deborde
+   a 0 % comme a 100 % ; le plafond de 96 % qui l en empechait faisait sauter un
+   repere sur quatre. On cale donc l etiquette par son cote — et le TRAIT reste
+   a sa position exacte, c est lui qui porte la mesure, pas le texte. */
+.ech span.deb{transform:none}
+.ech span.deb::before{left:0}
+.ech span.bout{transform:translateX(-100%)}
+.ech span.bout::before{left:auto;right:0}
+
+/* ---- 22. Le ruban devient un SVG etire (28/08/2026) ---------------------
+   ⚠️ `.batt` n est plus un conteneur flex mais un SVG, et ses barres
+   sont des `<rect>`. Les regles `.batt i` de `style.css` et de la
+   section 21, devenues sans objet, ont ete retirees le 30/08/2026.
+   ⚠️ La gouttiere n est plus un `gap` en pixels mais un vide DANS le repere :
+   chaque barre occupe 0,74 unite sur 1. Elle suit donc la largeur au lieu de la
+   devorer, ce qui etait le defaut de la version flex a 145 cases. */
+.batt{display:block;width:100%;height:16px;gap:0}
+.batt rect{fill:rgba(52,199,89,.62)}
+.batt rect.wn{fill:var(--swn)}
+.batt rect.dn{fill:var(--scr)}
+.batt rect.nd{fill:rgba(255,255,255,.07)}
+
+/* ---- 23. Le repere de moyenne 24 h dans la fenetre (28/08/2026) ---------
+   Il existait sur la CARTE (`.br i s`) et pas dans la fenetre, alors que la
+   fenetre est justement l endroit ou l on compare service par service. La
+   meme donnee etait montree a un endroit et tue a l autre.
+   ⚠️ `.ln .tr` n avait pas de `position: relative`. Sans elle, le repere se
+   serait cale sur le premier ancetre positionne — la fenetre entiere — et
+   serait parti se poser n importe ou sur l ecran.
+   ⚠️ Meme trait, meme couleur, meme ombre que `.br i s` : deux reperes qui ne
+   se ressembleraient pas se liraient comme deux mesures differentes. */
+.ln .tr { position: relative }
+.ln .tr s { position: absolute; top: 0; bottom: 0; width: 1.5px; margin-left: -.75px;
+  background: #e8edf6; box-shadow: 0 0 3px rgba(0,0,0,.55) }
+
+/* ---- 23. Le repere de moyenne 24 h dans la fenetre (28/08/2026) ---------
+   Il existait sur la CARTE (`.br i s`) et pas dans la fenetre, alors que la
+   fenetre est justement l endroit ou l on compare service par service. La
+   meme donnee etait montree a un endroit et tue a l autre.
+   ⚠️ `.ln .tr` n avait pas de `position: relative`. Sans elle, le repere se
+   serait cale sur le premier ancetre positionne — la fenetre entiere — et
+   serait parti se poser n importe ou sur l ecran.
+   ⚠️ Meme trait, meme couleur, meme ombre que `.br i s` : deux reperes qui ne
+   se ressembleraient pas se liraient comme deux mesures differentes. */
+.ln .tr { position: relative }
+.ln .tr s { position: absolute; top: 0; bottom: 0; width: 1.5px; margin-left: -.75px;
+  background: #e8edf6; box-shadow: 0 0 3px rgba(0,0,0,.55) }
+
+/* ---- 24. Largeur de trois emplacements (28/08/2026) ---------------------
+   `style.css` ne connaissait que `c2` et `c4` ; une carte sans classe occupe
+   un emplacement. Il manquait le trois, pour la rangee qBittorrent 3 +
+   Cross-seed 1, qui referme exactement les quatre colonnes.
+   ⚠️ LES TROIS PALIERS DOIVENT SUIVRE. A 1080 px la grille tombe a deux
+   colonnes et a 640 px a une seule : sans ces deux reprises, une carte `c3`
+   demanderait trois colonnes sur une grille qui n en a que deux, et
+   deborderait de la page. C est exactement ce que `style.css` fait deja pour
+   `c4`, on ne fait que l etendre. */
+.card.c3{grid-column:span 3}
+@media(max-width:1080px){ .card.c3{grid-column:span 2} }
+@media(max-width:640px){ .card.c3{grid-column:span 1} }
+
+
+/* ---- 26. Ajustements de la carte qBittorrent a trois emplacements -------
+   ⚠️ REVIREMENT ASSUME sur la legende. Elle avait ete calee A GAUCHE le matin
+   meme, sous son titre lui aussi a gauche, pour supprimer un flottement. A
+   deux emplacements c etait juste. A trois, les deux moities n ont plus la
+   meme largeur et l alignement a gauche laissait les titres perdus au bord
+   d un bloc de 500 px. Titre et legende sont donc centres sur leur colonne.
+
+   Le bloc des ratios se centre EN HAUTEUR. Il est plus court que la
+   silhouette qui lui fait face ; cale en haut, il laissait un vide sous lui.
+   ⚠️ C est `justify-content` et non `align-self` : le bloc est une colonne
+   flex etiree par la section 19, dont l etirement doit etre conserve pour que
+   la courbe voisine remplisse sa hauteur. On centre son CONTENU, pas lui.
+
+   L etat passe sur UNE SEULE LIGNE quand la place le permet. `.etatv .vv b`
+   est en `display: block`, ce qui renvoie toujours le sous-titre a la ligne.
+   ⚠️ Porte par `:has(.duo.tro)` : `etatv` sert AUSSI a la carte VPN, qui n a
+   pas demande ce changement. Le `flex-wrap` conserve le repli sur deux lignes
+   des que la largeur ne suffit plus. */
+.duo.tro .trkh { text-align: center }
+/* Les ratios occupent TOUTE LA HAUTEUR. Le titre reste en haut, aligne sur
+   celui d en face, et les trois lignes se repartissent sur ce qui reste : le
+   bloc respire au lieu d etre tasse au milieu.
+   ⚠️ C est `.trks` qui grandit, pas le bloc : le titre doit rester colle en
+   haut, sinon il decroche de « ACTIVITE SUR 24 H » et les deux colonnes ne se
+   lisent plus sur la meme ligne. */
+.duo.tro > *:last-child { justify-content: flex-start }
+.duo.tro .trks { flex: 1 1 auto; justify-content: space-between }
+
+/* ⚠️ LA PASTILLE SE CALE SUR LA PREMIERE LIGNE, pas sur le bloc. `align-items:
+   center` la centrait sur la hauteur totale de `.vv` : tant que tout tenait sur
+   une ligne cela revenait au meme, mais des que le sous-titre se replie elle
+   descendait de 8 px, entre les deux lignes. Mesure du 28/08 : centre de la
+   pastille a 3103, centre du titre a 3095.
+   La ligne du titre fait 22 px et la pastille 7 : 11 - 3,5 = 7,5 px de marge
+   haute la posent exactement sur son axe, repli ou pas. */
+.vizb:has(.duo.tro) > .etatv { align-items: flex-start }
+.vizb:has(.duo.tro) > .etatv .ep { margin-top: 8.5px }
+/* ⚠️ 8,5 px et non 7,5 : un pixel de PLUS que le centrage geometrique.
+   A 7,5 la pastille etait exactement au milieu de la boite de ligne — mesure
+   du 28/08, ecart nul — et paraissait pourtant trop haute. C est que la boite
+   de ligne reserve la place des jambages, alors que l oeil centre sur la
+   hauteur d x. Pour cette police de 16,3 px le milieu de la hauteur d x tombe
+   environ un pixel sous le milieu de la boite. Correction OPTIQUE, donc :
+   ne pas la « corriger » en revenant au calcul, elle serait de nouveau juste
+   sur le papier et fausse a l oeil. */
+.vizb:has(.duo.tro) > .etatv .vv {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: center; gap: 2px 10px;
+}
+.vizb:has(.duo.tro) > .etatv .vv b { display: inline }
+
+/* Mention d incident dans une note. Reservee aux redemarrages automatiques de
+   conteneurs : le reste de la note est factuel, cette partie ne l est pas. */
+
+/* Bandeau des redemarrages automatiques sur 24 h. Distinct de la note, qui
+   reste factuelle : un incident ne se glisse pas au bout d une phrase de
+   comptage. ⚠️ PAS de `margin-top: auto` — `.note` le reclame deja, et deux
+   blocs qui se disputent l espace libre creuseraient un trou au milieu. */
+/* ⚠️ `justify-content` ET `text-align` : le premier centre la paire
+   icone + texte dans le bandeau, le second centre les lignes entre elles quand
+   le texte se replie. L un sans l autre laisse un repli aligne a gauche.
+   ⚠️ La marge basse ne fait pas double emploi avec le `margin-top: auto` de
+   `.note` : celui-ci ne joue que s il reste de la place libre dans la carte.
+   Quand elle est pleine, les deux blocs se touchent — c est le cas observe. */
+.evr{margin-top:13px;margin-bottom:12px;display:flex;align-items:center;
+  justify-content:center;text-align:center;gap:10px;padding:9px 12px;
+  border-radius:var(--rs);font-size:.72rem;line-height:1.35;
+  background:rgba(255,159,10,.10);border:1px solid rgba(255,159,10,.30);color:#ffd08a}
+.evr .k{font-size:.95rem;opacity:.85;flex:0 0 auto}
+.evr b{font-weight:600}
+
+/* Le domaine public devient cliquable. Il faut que ca se voie : sans indice
+   visuel, personne ne devine qu un fragment de texte dans un en-tete mene
+   ailleurs que le reste de la carte. */
+.adr .dom.lien{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;
+  text-underline-offset:3px;text-decoration-color:rgba(255,255,255,.28)}
+.adr .dom.lien:hover{color:#fff;text-decoration-style:solid;
+  text-decoration-color:rgba(255,255,255,.6)}
+
+
+/* ---- 27. Lecture au pointeur (30/08/2026) ------------------------------
+   ⚠️ `.capt` NE PEUT PAS se contenter d un attribut `fill` : une regle CSS
+   l emporte sur un attribut de presentation, et `.batt rect { fill: … }`
+   peindrait le rectangle de capture en vert par-dessus tout le ruban. D ou le
+   selecteur compose, plus specifique que celui qu il doit battre.
+   ⚠️ `pointer-events: all` est ce qui rend sensible au survol un rectangle
+   SANS remplissage. Sans lui, `fill: none` le rendrait transparent aux
+   evenements en meme temps qu a la vue.
+   ⚠️ Le panneau et le trait vivent dans `<body>` : `fusionne` remplace les
+   enfants d un noeud des que leur nombre change, ils ne survivraient pas a
+   l interieur d une carte. */
+.gr rect.capt, .courbe rect.capt, .batt rect.capt { fill: none; pointer-events: all }
+
+#tip, #tipv { position: fixed; top: 0; left: 0; z-index: 90; pointer-events: none;
+  opacity: 0; transition: opacity .12s ease }
+#tip.on, #tipv.on { opacity: 1 }
+
+#tipv { width: 1px; background: rgba(255,255,255,.38) }
+
+#tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px;
+  border-radius: 9px; font-size: .72rem; line-height: 1.35; white-space: nowrap;
+  color: var(--ink); background: rgba(18,19,22,.92);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 10px 26px rgba(0,0,0,.45);
+  backdrop-filter: blur(14px) saturate(160%) }
+#tip b { font-weight: 600; font-size: .68rem; color: var(--mut); letter-spacing: .02em }
+#tip span { display: flex; align-items: center; gap: 6px }
+#tip i { width: 7px; height: 7px; border-radius: 50%; flex: none }
+#tip em { margin-left: auto; padding-left: 12px; font-style: normal;
+  font-weight: 600; font-variant-numeric: tabular-nums }
+
+/* ---- 28. Repere du survol et echelle sous les graphes (30/08/2026) -------
+   Un TRAIT sur une courbe, un BLOC sur un ruban : sur un ruban la case visee
+   est l unite de lecture, un trait pose dessus se confondrait avec la
+   gouttiere voisine. */
+/* ⚠️ Pas de `background` ici : le lecteur le pose depuis la couleur de la
+   case visée. Seul le liseré, qui detache le repère d'un fond sombre comme
+   d'une case claire, est du ressort du style. */
+#tipv.bloc { border-radius: 1.5px; box-shadow: 0 0 0 1px rgba(255,255,255,.34) }
+
+/* L echelle horaire d un graphe doit s aligner sur son AIRE DE TRACE et non
+   sur la carte : celle-ci est en retrait de 26 unites sur 300 a gauche, pour
+   la gouttiere des etiquettes chiffrees, et de 2 a droite.
+   ⚠️ DES MARGES ET NON UN PADDING. `left: %` sur un enfant absolu se resout
+   contre la boite de PADDING de son ancetre positionne : un padding ne
+   deplacerait aucun repere, il elargirait seulement la boite. Une marge, elle,
+   retrecit vraiment le conteneur, et les pourcentages suivent. */
+.gech { margin: 0 .667% 0 8.667% }
+
+/* ---- 29. La barre nomme les cartes en alerte (01/09/2026) ----------------
+   Le fond virait a l ambre sans dire d ou ca venait.
+   ⚠️ `:empty` PLUTOT QU UNE CONDITION EN JAVASCRIPT : le conteneur est rendu a
+   chaque fois, ce qui garde CONSTANT le nombre d enfants de `.hp`. `fusionne`
+   remplace tout un niveau des que ce nombre change, et la barre entiere
+   clignoterait a chaque apparition ou disparition d une alerte. */
+.hp .souci:empty { display: none }
+.hp .souci { display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 4px 5px; margin-top: 2px }
+.hp .souci .cible { font-size: .68rem; font-weight: 600; line-height: 1.5;
+  color: var(--warn); background: rgba(255,159,10,.12);
+  border: 1px solid rgba(255,159,10,.30); border-radius: 99px;
+  padding: 0 .45rem; cursor: pointer; transition: background .15s ease }
+.hp .souci .cible:hover { background: rgba(255,159,10,.24) }
+
+/* Sur les paliers etroits la barre se centre : ses pastilles suivent. */
+@media (max-width: 1100px) { .hp .souci { justify-content: center } }
+
+/* La pastille d ATTENTION de la ligne d etat (01/09/2026).
+   ⚠️ Nom long et explicite : `att` est DEJA pris par `.majl li.att`, la liste des mises a jour. Elle ressemble a `.warn` mais ne peut pas l etre : `sante()` cherche
+   `.hp .line i.warn` pour declarer l etat CRITIQUE, et le fond virerait au
+   rouge des qu une simple carte passe a l ambre. Deux classes distinctes pour
+   deux significations distinctes, meme apparence. */
+.hp .line i.attention { background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(255,159,10,.16), 0 0 12px rgba(255,159,10,.45) }
+
+/* ---- 30. Selecteur du mode demonstration (01/09/2026) -------------------
+   ⚠️ En `position: fixed` dans `<body>`, hors de toute zone rendue : `fusionne`
+   reconstruit la barre toutes les deux secondes et un `<select>` place dedans
+   perdrait le focus a chaque rendu, en plein milieu d un choix.
+   ⚠️ Ces regles ne servent a rien en production, le selecteur n y etant jamais
+   construit. Elles pesent 700 octets et evitent d avoir deux feuilles de style
+   a maintenir. */
+#demo { position: fixed; left: 14px; bottom: 14px; z-index: 80; max-width: 250px;
+  display: flex; flex-direction: column; gap: 5px; padding: 9px 11px;
+  border-radius: 11px; color: var(--ink); background: rgba(18,19,22,.92);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 10px 26px rgba(0,0,0,.45);
+  backdrop-filter: blur(14px) saturate(160%) }
+#demo label { font-size: .6rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--mut) }
+#demo select { font: inherit; font-size: .78rem; color: var(--ink); cursor: pointer;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 7px; padding: .25rem .4rem }
+/* Sans couleur explicite, la liste deroulee s affiche en noir sur noir. */
+#demo select option { background: #16171a; color: var(--ink) }
+#demo p { margin: 0; font-size: .66rem; line-height: 1.4; color: var(--mut) }
+
+@media (max-width: 700px) { #demo { left: 8px; right: 8px; bottom: 8px; max-width: none } }
+
+/* ---- 31. Echelle verticale de la silhouette (02/09/2026) -----------------
+   ⚠️ EN SURIMPRESSION ET NON EN GOUTTIERE. Une gouttiere a etiquettes couterait
+   ~34 px sur une courbe qui n en fait que 256, et surtout il faudrait decaler
+   l echelle horizontale d autant : elle place ses reperes en pourcentage de sa
+   propre largeur, et mentirait des que le trace ne commencerait plus a zero.
+   ⚠️ Les reperes sont des `<span>` HTML et non du texte SVG : la courbe est en
+   `preserveAspectRatio="none"`, donc etiree, et le texte y serait deforme.
+   ⚠️ `.silh` REPREND LES REGLES DE FLEX que `.courbe` portait : la courbe
+   n est plus enfant direct de la colonne, c est l enveloppe qui l est. */
+.silh { position: relative; display: flex; margin-top: 11px }
+.silh .courbe { margin-top: 0 }
+.duo.tro .silh { flex: 1 1 auto }
+.duo.tro .silh .courbe { flex: 1 1 auto }
+
+.silh .vmax, .silh .vmin { position: absolute; left: 3px; pointer-events: none;
+  font-size: .52rem; line-height: 1; color: var(--mut);
+  /* Un liseré sombre detache le chiffre du remplissage colore, sans avoir a
+     poser un fond opaque qui masquerait le trace. */
+  text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg) }
+.silh .vmax { top: 1px }
+.silh .vmin { bottom: 1px }
+
+/* ---- 32. La colonne des ratios ne prend que sa largeur (02/09/2026) ------
+   Possible SEULEMENT depuis que la description est passee au survol. Avec
+   elle, la colonne reclamait 328 px pour 256 disponibles : lui donner « juste
+   ce qu il lui faut » l elargissait, et les deux colonnes finissaient par
+   s empiler faute de tenir sur une ligne. Sans elle, une ligne se contente de
+   125 px et le surplus revient au trace.
+   ⚠️ `min-width: 0` est indispensable : la regle generale `.duo > *` impose
+   190 px, et un enfant de flex refuse par defaut de passer sous la largeur de
+   son contenu. */
+.duo.tro > *:first-child { flex: 1 1 auto; min-width: 190px }
+.duo.tro > *:last-child  { flex: 0 1 auto; min-width: 0 }

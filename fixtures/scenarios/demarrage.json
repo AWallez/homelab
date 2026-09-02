@@ -1,0 +1,9 @@
+{ "_tronque": 9,
+  "nas": { "up": 0, "uptime": 4200, "run": 26, "all": 26 },
+  "updates": { "verifies": 0, "maj": "", "age": 0, "items": [] },
+  "backup": { "h": -1, "date": "" },
+  "umami": { "visitors": 0, "views": 0, "visits": 0, "serie": [0,0,0,0,0,0,0] },
+  "qbit": { "nb": 0, "pairs": 0, "dl": 0, "ul": 0, "tr": [] },
+  "cross": { "nb": 0, "match": 0, "suivis": 0, "run": 0, "actifs": 0, "purge": 0 },
+  "jellyfin": { "films": 0, "series": 0, "episodes": 0 },
+  "crm": { "tot": 0, "traites": 0, "age": 0 }, "leads": 0 }

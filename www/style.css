@@ -1,0 +1,1276 @@
+/* ===== Homelab — verre liquide ===== */
+:root{
+  --bg:#0a0a0b; --a:rgba(255,255,255,.085); --b:rgba(255,255,255,.035);
+  --in:rgba(255,255,255,.055); --edge:rgba(255,255,255,.16); --shine:rgba(255,255,255,.30);
+  --ink:#eef2f7; --mut:#8a94a6; --up:#34c759; --warn:#ff9f0a;
+  --r:14px; --rs:9px; --blur:blur(30px) saturate(185%);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.aurora::before{content:"";position:absolute;inset:-12%;filter:blur(40px);
+  background:
+    radial-gradient(58% 48% at 12% 0%,rgba(38,110,214,.70),transparent 72%),
+    radial-gradient(48% 42% at 90% 4%,rgba(126,64,190,.55),transparent 72%),
+    radial-gradient(64% 46% at 52% 104%,rgba(14,140,138,.50),transparent 72%);
+  animation:drift 46s ease-in-out infinite alternate}
+.aurora::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(135% 100% at 50% 32%,transparent 42%,rgba(3,5,9,.60) 100%)}
+@keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(3vw,2vw,0) scale(1.07)}}
+main{position:relative;z-index:1;max-width:75rem;margin-inline:auto;padding:1.75rem 1.25rem 4rem}
+@media(min-width:640px){main{padding-inline:1.5rem}}
+@media(min-width:1024px){main{padding-inline:2rem}}
+
+/* ---- Barre d'état ---- */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap;
+  padding:18px 24px;margin-bottom:70px;border-radius:var(--r);
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--edge);
+  box-shadow:0 12px 38px rgba(0,0,0,.45),inset 0 1px 0 var(--shine)}
+.clock b{display:block;font-size:2.6rem;font-weight:200;letter-spacing:-.045em;line-height:1}
+.clock span{display:block;margin-top:4px;font-size:.76rem;color:var(--mut)}
+.met{flex:1;display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center}
+.mi{display:flex;flex-direction:column;gap:5px;min-width:82px}
+.mi.na{min-width:auto}
+.mi b{font-size:.82rem;font-weight:600;letter-spacing:-.01em}
+.mi b small{font-weight:400;font-size:.62rem;color:var(--mut);margin-left:3px}
+.tr{height:3px;border-radius:99px;background:rgba(255,255,255,.13);overflow:hidden}
+.tr i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#5ac8fa,#34c759)}
+.tr i.w{background:linear-gradient(90deg,#ff9f0a,#ff453a)}
+.hp{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
+.hp .line{display:flex;align-items:center;gap:8px;font-size:.9rem;font-weight:600}
+.hp .line i{width:9px;height:9px;border-radius:50%;flex:none;background:var(--up);
+  box-shadow:0 0 0 3px rgba(52,199,89,.16),0 0 12px rgba(52,199,89,.8)}
+.hp .line i.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(255,159,10,.16),0 0 12px rgba(255,159,10,.8)}
+.hp em{font-style:normal;font-weight:400;font-size:.73rem;color:var(--mut)}
+
+/* ---- Raccourcis ---- */
+.shortcuts{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;max-width:760px;margin:0 auto 34px}
+.t{position:relative;width:76px;padding:0;border:0;background:none;cursor:pointer;font:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;color:var(--ink)}
+.t .i{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;overflow:hidden;
+  font-size:1rem;font-weight:700;letter-spacing:-.02em;
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--edge);box-shadow:0 8px 22px rgba(0,0,0,.34),inset 0 1px 0 var(--shine);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),border-color .25s,box-shadow .25s}
+.t:hover .i{transform:translateY(-3px);border-color:rgba(255,255,255,.34);
+  box-shadow:0 16px 36px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.46)}
+.t .i img{width:28px;height:28px;display:block}
+.t .i svg{width:22px;height:22px;display:block;color:var(--mut)}
+.t .l{font-size:.68rem;color:var(--mut);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t .e{position:absolute;top:-4px;right:2px;width:20px;height:20px;border-radius:50%;padding:0;
+  border:1px solid var(--edge);background:rgba(40,42,48,.94);color:var(--ink);
+  cursor:pointer;display:none;place-items:center}
+.t .e svg{width:11px;height:11px}
+.t:hover .e{display:grid}
+.t:focus-visible .i{outline:2px solid rgba(255,255,255,.65);outline-offset:3px}
+
+/* ---- Recherche ---- */
+.search{max-width:600px;margin:0 auto 70px;display:flex;align-items:center;gap:11px;
+  padding:.6rem 1.15rem;border-radius:99px;
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--edge);box-shadow:0 10px 30px rgba(0,0,0,.40),inset 0 1px 0 var(--shine);
+  transition:border-color .25s}
+.search:focus-within{border-color:rgba(255,255,255,.38)}
+.search svg{width:16px;height:16px;flex:none;color:var(--mut)}
+.search input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--ink);font:inherit;font-size:.9rem}
+.search input::placeholder{color:var(--mut)}
+
+/* ---- Filtres ---- */
+.filters{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-bottom:18px}
+.filters button{padding:.34rem .72rem;border-radius:99px;cursor:pointer;font:inherit;
+  font-size:.72rem;font-weight:500;color:var(--mut);
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);
+  transition:color .2s,background .2s,border-color .2s}
+.filters button:hover{color:var(--ink);border-color:rgba(255,255,255,.22)}
+.filters button.on{color:#fff;background:rgba(255,255,255,.16);
+  border-color:rgba(255,255,255,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.38)}
+
+/* ---- Titres de groupe ---- */
+h2{margin:44px 0 14px;font-size:.7rem;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:9px;opacity:.85}
+h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.13),transparent)}
+h2 svg{width:13px;height:13px;flex:none}
+.sec:first-child h2{margin-top:0}
+
+/* ---- Chaque ligne se remplit ; les largeurs suivent le contenu ---- */
+.grid{display:flex;flex-wrap:wrap;gap:13px}
+.card{flex:1 1 330px;display:flex;flex-direction:column;min-width:0}
+.card:has(.st:nth-child(4)){flex-basis:600px;flex-grow:2}
+.card:has(.st:nth-child(3)):not(:has(.st:nth-child(4))){flex-basis:430px}
+.card:not(:has(.stats)){flex-basis:250px}
+.card:not(:has(.stats)) .head{margin-block:auto}
+
+/* ---- Cartes ---- */
+.card{padding:15px 16px 14px;border-radius:var(--r);text-decoration:none;color:var(--ink);
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--edge);
+  box-shadow:0 10px 34px rgba(0,0,0,.42),inset 0 1px 0 var(--shine);
+  transition:transform .3s cubic-bezier(.2,.8,.2,1),border-color .3s,box-shadow .3s}
+a.card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.30);
+  box-shadow:0 20px 52px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.44)}
+.head{display:flex;align-items:center;gap:12px}
+.chip{width:36px;height:36px;flex:none;border-radius:9px;display:grid;place-items:center;
+  font-size:.78rem;font-weight:700;letter-spacing:-.02em;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28)}
+.txt{min-width:0}
+.head h3{margin:0;font-size:.94rem;font-weight:600;letter-spacing:-.01em}
+.head p{margin:2px 0 0;font-size:.73rem;color:var(--mut);line-height:1.3}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-left:auto;background:var(--up);
+  box-shadow:0 0 0 3px rgba(52,199,89,.16),0 0 12px rgba(52,199,89,.75)}
+
+/* ---- Mesures ---- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:7px;margin-top:13px;flex:1}
+.st{padding:9px 8px 8px;border-radius:var(--rs);text-align:center;min-width:0;
+  display:flex;flex-direction:column;justify-content:center;
+  background:var(--in);border:1px solid rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.13)}
+.st b{display:block;font-size:1.24rem;font-weight:500;letter-spacing:-.03em;line-height:1.1}
+.st span{display:block;margin-top:3px;font-size:.55rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mut);line-height:1.25;overflow-wrap:anywhere}
+.note{text-align:center;margin-top:11px;padding:9px 11px;border-radius:var(--rs);font-size:.74rem;color:var(--mut);
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+
+/* ---- Fenêtre d'édition d'un raccourci ---- */
+dialog.dlg{border:1px solid var(--edge);border-radius:var(--r);padding:20px;width:min(340px,92vw);
+  background:rgba(22,24,30,.94);backdrop-filter:var(--blur);color:var(--ink);
+  box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 var(--shine)}
+dialog.dlg::backdrop{background:rgba(0,0,0,.55)}
+.dlg h3{margin:0 0 14px;font-size:.9rem;font-weight:600}
+.dlg label{display:block;font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);margin:0 0 5px}
+.dlg input{width:100%;margin-bottom:13px;padding:.5rem .7rem;border-radius:9px;font:inherit;font-size:.84rem;
+  background:rgba(255,255,255,.06);border:1px solid var(--edge);color:var(--ink)}
+.dlg input:focus{outline:none;border-color:rgba(255,255,255,.38)}
+.dlg .row{display:flex;gap:8px;align-items:center;margin-top:4px}
+.dlg .sp{flex:1}
+.dlg button{padding:.44rem .9rem;border-radius:99px;font:inherit;font-size:.78rem;cursor:pointer;
+  background:rgba(255,255,255,.08);border:1px solid var(--edge);color:var(--ink)}
+.dlg button.pri{background:rgba(255,255,255,.20);border-color:rgba(255,255,255,.34);font-weight:600}
+.dlg button.danger{border-color:rgba(255,69,58,.45);color:#ff8f88}
+
+/* ---- Adaptation ---- */
+@media(max-width:820px){
+  .card:has(.st:nth-child(4)),.card:has(.st:nth-child(3)):not(:has(.st:nth-child(4)))
+    {flex-basis:330px;flex-grow:1}
+}
+@media(max-width:600px){
+  main{padding-block:1.15rem 2.75rem}
+  .bar{justify-content:flex-start;gap:16px;margin-bottom:44px}
+  .clock b{font-size:2.1rem}
+  .met{flex:1 1 100%;justify-content:flex-start;gap:18px}
+  .hp{align-items:flex-start;text-align:left;flex:1 1 100%}
+  .search{margin-bottom:44px;padding:.52rem 1rem}
+  .card,.card:not(:has(.stats)),.card:has(.st:nth-child(4)){flex-basis:100%}
+  .stats{grid-template-columns:repeat(auto-fit,minmax(58px,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+  .card,.t .i{transition:none}
+  a.card:hover{transform:none}
+  .aurora::before{animation:none}
+}
+
+/* ---- Logos, liens et pastille d'alerte ---- */
+.chip{overflow:hidden;text-decoration:none;color:var(--ink)}
+.chip img{width:24px;height:24px;display:block}
+a.chip:hover{border-color:rgba(255,255,255,.34)}
+.txt a{text-decoration:none;color:inherit}
+.txt a:hover h3{text-decoration:underline;text-underline-offset:3px}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(255,159,10,.16),0 0 12px rgba(255,159,10,.75)}
+.card.clic{cursor:pointer}
+.card.clic:hover{border-color:rgba(255,255,255,.30);transform:translateY(-3px)}
+.dlg .sub{margin:0 0 12px;font-size:.75rem;color:var(--mut)}
+.dlg .ul{margin:0 0 12px;padding-left:1.1rem;font-size:.8rem;line-height:1.7}
+.dlg code{background:rgba(255,255,255,.08);padding:.1rem .35rem;border-radius:5px;font-size:.72rem}
+
+/* ---- Logos, liens et pastille d'alerte ---- */
+.chip{overflow:hidden;text-decoration:none;color:var(--ink)}
+.chip img{width:24px;height:24px;display:block}
+a.chip:hover{border-color:rgba(255,255,255,.34)}
+.txt a{text-decoration:none;color:inherit}
+.txt a:hover h3{text-decoration:underline;text-underline-offset:3px}
+.dot.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(255,159,10,.16),0 0 12px rgba(255,159,10,.75)}
+.card.clic{cursor:pointer}
+.card.clic:hover{border-color:rgba(255,255,255,.30);transform:translateY(-3px)}
+.dlg .sub{margin:0 0 12px;font-size:.75rem;color:var(--mut)}
+.dlg .ul{margin:0 0 12px;padding-left:1.1rem;font-size:.8rem;line-height:1.7}
+.dlg code{background:rgba(255,255,255,.08);padding:.1rem .35rem;border-radius:5px;font-size:.72rem}
+
+/* ---- Adresses sous la description ---- */
+.adr{margin:3px 0 0 !important;font-size:.62rem !important;color:rgba(138,148,166,.75) !important;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---- Tableau des mises à jour ---- */
+.dlg{width:min(420px,94vw)}
+
+/* ---- Logos sans cadre ---- */
+.chip{width:40px;height:40px;background:none !important;border:0 !important;box-shadow:none !important}
+.chip img{width:34px;height:34px}
+/* le fond n'est conservé que pour les initiales, sans logo */
+.chip:not(:has(img)){background:rgba(255,255,255,.08) !important;
+  border:1px solid rgba(255,255,255,.12) !important;width:36px;height:36px}
+
+/* ---- Adresses à côté du titre ---- */
+.head h3{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.adr{font-size:.6rem !important;font-weight:400;color:rgba(138,148,166,.7) !important;
+  margin:0 !important;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- Bouton de mise à jour et son état ---- */
+.dlg button.go{border-color:rgba(255,159,10,.5);color:#ffc46b}
+.dlg button.go:hover{background:rgba(255,159,10,.16);border-color:rgba(255,159,10,.8)}
+.dlg button:disabled{opacity:.45;cursor:default}
+.etat{margin:0 0 10px;font-size:.75rem;color:var(--mut);min-height:1.1em}
+
+/* ---- Sélection et états du bouton de mise à jour ---- */
+.rq{font-size:.6rem;color:#ffc46b;border:1px solid rgba(255,159,10,.4);
+  border-radius:99px;padding:.05rem .35rem;margin-left:.35rem;white-space:nowrap}
+.dlg button.go.busy{padding-left:2.1rem;position:relative;color:#ffc46b}
+.dlg button.go.busy::before{content:"";position:absolute;left:.9rem;top:50%;margin-top:-6px;
+  width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,196,107,.28);
+  border-top-color:#ffc46b;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dlg button.go.ok{border-color:rgba(52,199,89,.55);color:#7ee39a;background:rgba(52,199,89,.14)}
+
+/* ---- Conteneurs déjà à jour : présents mais en retrait ---- */
+
+/* ---- Fenêtre des mises à jour : lisible sur petit écran ---- */
+.dlg{width:min(540px,94vw)}
+.sub2{margin:-6px 0 12px;font-size:.66rem;color:rgba(138,148,166,.65);line-height:1.35}
+@media(max-width:560px){
+  .rq{display:none}
+}
+
+/* ================= Refonte des tuiles (15/08/2026) ================= */
+:root{--sok:#34c759;--swn:#ffb340;--scr:#ff453a;--sbl:#4d97ee}
+
+/* ---- Bento : 4 colonnes, deux hauteurs (donnees = 2 rangees, lien = 1) ---- */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(100px,auto);
+  gap:13px;align-items:stretch}
+.card{grid-column:span 1;grid-row:span 2;min-width:0;max-width:none;flex-basis:auto}
+/* Les anciennes regles de largeur ne doivent PAS toucher a grid-column :
+   elles pesent 3 classes et battraient .card.c2 qui n en pese que 2. */
+.card:has(.st:nth-child(4)),
+.card:has(.st:nth-child(3)):not(:has(.st:nth-child(4))),
+.card:not(:has(.stats)){flex-basis:auto;max-width:none}
+.card.c2{grid-column:span 2}
+.card.c4{grid-column:span 4}
+.card.mini{grid-row:span 1}
+.card.viz .head{margin-block:0}
+
+/* ---- Le bloc widget, centre dans la tuile ---- */
+.vizb{flex:1;display:flex;flex-direction:column;justify-content:center;min-width:0;margin-top:14px}
+.vizb>*:first-child{margin-top:0}
+/* Grandissent : les widgets sans cadre, qui se relisent a toute taille. */
+.vizb>.batt,.vizb>.courbe,.vizb>.jauge,.vizb>.etatv,.vizb>.hero
+  {flex:1 1 auto;min-height:0}
+/* Ne grandissent pas : tout ce qui a un fond, gris ou vert, doit epouser son contenu. */
+.vizb>.calme,.vizb>.stats{flex:none;margin-top:auto}
+.vizb>.calme:last-child,.vizb>.stats:last-child{margin-bottom:auto}
+.vizb>.past,.vizb>.note{margin-top:auto}
+.vizb>.past{padding-top:14px}
+.vizb .past+.note{margin-top:10px}
+.stats{flex:none}
+.card:not(.viz) .stats{margin-block:auto}
+
+/* ---- Nombre en vedette : le libelle passe sous le nombre ---- */
+.hero{margin-top:13px;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;gap:6px;text-align:center}
+.hero b{font-size:2.7rem;font-weight:500;letter-spacing:-.045em;line-height:1}
+.hero span{font-size:.72rem;color:var(--mut);line-height:1.35}
+.hero.wn b{color:var(--swn)}
+.hero.cr b{color:var(--scr)}
+/* Carte a courbe : disposition d origine, sinon elle dicte la hauteur de la rangee. */
+.card:has(.courbe) .hero{flex:none;flex-direction:row;align-items:center;
+  text-align:left;gap:11px}
+.card:has(.courbe) .hero b{font-size:2.3rem}
+
+/* ---- Jauge de proportion ---- */
+.jauge{margin-top:13px;display:flex;flex-direction:column;justify-content:center}
+.jauge+.jauge{margin-top:11px}
+.jauge-t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+.jauge-t b{font-size:1.24rem;font-weight:500;letter-spacing:-.03em}
+.jauge-t span{font-size:.55rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);text-align:right}
+.jauge-b{height:7px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden}
+.jauge-b i{display:block;height:100%;border-radius:99px;background:var(--sbl)}
+
+/* ---- Etat de repos ---- */
+.calme{margin-top:13px;display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--rs);
+  font-size:.78rem;line-height:1.35;background:rgba(52,199,89,.10);
+  border:1px solid rgba(52,199,89,.30);color:#8ce8a4}
+.calme{justify-content:center;text-align:center}
+.calme b{color:#b9f2c8;font-weight:600}
+.calme .k{font-size:.95rem;line-height:1;flex:none}
+.calme.bl{background:rgba(77,151,238,.12);border-color:rgba(77,151,238,.34);color:#a6cdf7}
+.calme.bl b{color:#d6e8fc}
+
+/* ---- Pastilles ---- */
+.past{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;justify-content:center}
+.past span{font-size:.68rem;padding:3px 9px;border-radius:99px;color:var(--mut);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09)}
+.past span.ok{color:#8ce8a4;background:rgba(52,199,89,.11);border-color:rgba(52,199,89,.30)}
+.past span.wn{color:#ffd08a;background:rgba(255,179,64,.11);border-color:rgba(255,179,64,.30)}
+.past:has(span:nth-child(3)){gap:4px}
+.past:has(span:nth-child(3)) span{padding:3px 7px;font-size:.63rem;white-space:nowrap}
+
+/* ---- Bande de battements ---- */
+.batt{display:flex;gap:3px;align-items:center;min-height:18px;max-height:24px;margin-top:13px}
+
+/* ---- Courbe ---- */
+.courbe{display:block;width:100%;height:auto;min-height:56px;max-height:88px;margin-top:11px}
+
+/* ---- Etat du tunnel ---- */
+.etatv{margin-top:13px;display:flex;align-items:center;justify-content:center;gap:11px}
+.etatv .ep{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;
+  vertical-align:middle;background:var(--sok);box-shadow:0 0 0 3px rgba(52,199,89,.16)}
+.etatv .ep.ko{background:var(--scr);box-shadow:0 0 0 3px rgba(255,69,58,.18)}
+.etatv .vv{min-width:0;text-align:center}
+.etatv .vv b{display:block;font-size:1.02rem;font-weight:500;letter-spacing:-.01em;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.etatv .vv span{font-size:.7rem;color:var(--mut)}
+
+/* ---- Adaptation : 2 colonnes puis 1 ---- */
+@media(max-width:1080px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .card.c4{grid-column:span 2}
+}
+@media(max-width:640px){
+  .grid{grid-template-columns:1fr}
+  .card.c2,.card.c4{grid-column:span 1}
+}
+
+/* Barre du haut : le libelle passe sous la mesure et sous sa jauge. */
+.met .mi{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.met .mi b{display:block}
+.met .mi>small{font-size:.55rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mut);line-height:1.2}
+.met .mi{text-align:center}
+
+/* ---- Barre du haut : adaptation aux petites largeurs ---- */
+.bar{flex-wrap:wrap;gap:18px}
+.met{flex:1 1 380px;display:flex;flex-wrap:wrap;justify-content:center;
+  align-items:flex-start;gap:16px 22px;min-width:0}
+.met .mi{flex:0 1 auto;min-width:74px}
+@media(max-width:1100px){
+  .bar{justify-content:center}
+  .met{flex:1 1 100%;order:3}
+  .hp{order:2}
+}
+@media(max-width:600px){
+  .met{gap:14px 16px}
+  .met .mi{flex:1 1 84px}
+  .met .mi b{font-size:.95rem}
+  .met .mi>small{font-size:.5rem}
+}
+
+/* Horloge et etat restent aux deux extremites, et se rapprochent en retrecissant. */
+.bar{justify-content:space-between}
+.clock{min-width:0}
+@media(max-width:1100px){
+  .bar{justify-content:space-between}
+  .clock{order:1;flex:0 1 auto}
+  .hp{order:2;flex:0 1 auto;align-items:flex-end;text-align:right}
+  .met{order:3;flex:1 1 100%}
+}
+@media(max-width:600px){
+  .hp{flex:0 1 auto;align-items:flex-end;text-align:right}
+  .bar{justify-content:space-between}
+}
+
+/* Les mesures, une fois seules sur leur ligne, occupent toute la largeur. */
+@media(max-width:1100px){
+  .met{justify-content:space-between;gap:14px}
+}
+/* Tout en colonne : plus rien n est cale a gauche ni a droite. */
+@media(max-width:560px){
+  .bar{justify-content:center;text-align:center}
+  .clock{flex:1 1 100%;align-items:center;text-align:center}
+  .hp{flex:1 1 100%;align-items:center;text-align:center}
+  .hp .line{justify-content:center}
+  .met{justify-content:center}
+}
+
+/* Les trois blocs se partagent la largeur a parts egales, contenu centre. */
+.clock,.hp{flex:1 1 0;min-width:0;align-items:center;text-align:center}
+.hp .line{justify-content:center}
+@media(max-width:1100px){
+  .clock,.hp{flex:1 1 0;align-items:center;text-align:center}
+}
+@media(max-width:560px){
+  .clock,.hp{flex:1 1 100%}
+}
+
+/* Sur une seule ligne : date a gauche, etat a droite. */
+.clock{text-align:left;align-items:flex-start}
+.hp{text-align:right;align-items:flex-end}
+.hp .line{justify-content:flex-end}
+/* Des que les mesures passent a la ligne, tout se centre. */
+@media(max-width:1100px){
+  .clock,.hp{text-align:center;align-items:center}
+  .hp .line{justify-content:center}
+}
+
+/* Le panneau vert epouse son texte au lieu de s etirer sur toute la largeur. */
+.calme{align-self:center;width:fit-content;max-width:100%}
+
+/* ---- Courbes d historique et barres par conteneur ---- */
+.leg{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.leg span{display:flex;align-items:center;gap:6px;font-size:.6rem;color:var(--mut)}
+.leg i{width:10px;height:3px;border-radius:2px;display:block;flex:none}
+.bars{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+.br{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:baseline}
+.br span{font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.br b{font-size:.66rem;font-weight:500;color:var(--mut);font-variant-numeric:tabular-nums}
+.br i{grid-column:1/3;height:5px;border-radius:99px;background:var(--sbl);display:block;min-width:3px}
+
+/* ---- Graphique avec echelle, axe de temps et seuil ---- */
+.gr{display:block;width:100%;height:auto;margin-top:13px}
+.gr text{font-family:ui-monospace,Consolas,monospace;font-size:7px;fill:var(--mut)}
+
+/* ---- Fenetre large et defilante pour la liste des conteneurs ---- */
+.dlg.large{width:min(560px,94vw)}
+.dlg .scroll{max-height:58vh;overflow:auto;margin-top:4px}
+.dlg .scroll::-webkit-scrollbar{width:8px}
+.dlg .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+
+/* ---- Carte Statistiques : compacte, 7 barres pour 7 jours ---- */
+.stat7{display:flex;align-items:center;gap:18px;margin-top:14px}
+.s7n{display:flex;align-items:baseline;gap:9px;flex:none}
+.s7n b{font-size:2.1rem;font-weight:500;letter-spacing:-.04em;line-height:1}
+.s7n span{font-size:.66rem;color:var(--mut);line-height:1.3}
+.jours{flex:1;min-width:76px;display:flex;flex-direction:column;gap:4px}
+.jours .b{display:flex;align-items:flex-end;gap:3px;height:32px}
+.jours .b i{flex:1;border-radius:2px 2px 0 0;background:rgba(77,151,238,.4);min-height:2px}
+.jours .b i.now{background:var(--sbl)}
+.jours em{font-style:normal;font-size:.55rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--mut);text-align:right}
+
+/* Les barres occupent la hauteur libre, la note garde son ecart. */
+.vizb>.bars{flex:1 1 auto}
+.vizb>.bars+.note{margin-top:16px}
+.vizb>.stat7{margin-top:auto}
+
+/* ---- Statistiques : bloc centre, graphique contenu ---- */
+.stat7{justify-content:center;gap:24px}
+.s7n{align-items:center}
+.s7n b{font-size:2.4rem}
+.jours{flex:0 1 auto;width:180px;min-width:0;gap:6px}
+.jours .b{height:40px;gap:5px;padding-bottom:3px;border-bottom:1px solid rgba(255,255,255,.12)}
+.jours .b i{border-radius:3px 3px 0 0;background:rgba(77,151,238,.3);min-height:3px}
+.jours .b i.now{background:var(--sbl)}
+.jours em{text-align:center}
+
+/* Courbe miniature par conteneur, dans la fenetre */
+.sp{display:block;width:68px;height:18px}
+
+/* Courbe miniature par conteneur, dans la fenetre */
+.sp{display:block;width:68px;height:18px}
+
+/* ---- Fenetre des conteneurs : composition + regroupement par pile ---- */
+.compo{margin:16px 0 6px}
+.cbar{display:flex;height:10px;border-radius:99px;overflow:hidden;gap:2px}
+.cbar i{display:block;height:100%}
+.clg{display:flex;flex-wrap:wrap;gap:6px 15px;margin-top:10px}
+.clg span{display:flex;align-items:center;gap:6px;font-size:.66rem;color:var(--mut)}
+.clg i{width:9px;height:9px;border-radius:2px;display:block;flex:none}
+.clg b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.grp{margin-top:18px}
+.grp-h{display:flex;align-items:baseline;gap:9px;padding:0 2px 7px;border-bottom:1px solid var(--edge)}
+.grp-h i{width:9px;height:9px;border-radius:2px;flex:none}
+.grp-h b{font-size:.76rem;font-weight:600}
+.grp-h em{font-style:normal;font-size:.66rem;color:var(--mut);margin-left:auto;font-variant-numeric:tabular-nums}
+.ln{display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;align-items:baseline;padding:7px 2px}
+.ln+.ln{border-top:1px solid rgba(255,255,255,.045)}
+.ln .nm{min-width:0;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ln .nm s{text-decoration:none;color:var(--mut)}
+.ln .mm{font-size:.72rem;text-align:right;font-variant-numeric:tabular-nums}
+.ln .cp{font-size:.7rem;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums;min-width:44px}
+.ln .dv{font-size:.66rem;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums;min-width:46px}
+.ln .dv.wn{color:#ffd08a}
+.ln .dv.up{color:#8ce8a4}
+.ln .tr{grid-column:1/-1;height:4px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden}
+.ln .tr i{display:block;height:100%;border-radius:99px}
+.pied{display:flex;justify-content:space-between;align-items:center;margin-top:18px;
+  padding-top:13px;border-top:1px solid var(--edge);font-size:.68rem;color:var(--mut)}
+/* ================= Transitions douces (17/08/2026) =================
+   Le rendu est fusionné dans l'arbre existant (`fondre` dans app.js) : les
+   éléments survivent au rafraîchissement, donc ils peuvent enfin être animés.
+   Les `<i>` sont les remplissages : jauges, barres, piles, barre du haut. */
+#bar i, #groups i, #dlg i {
+  transition: width .5s cubic-bezier(.22,.61,.36,1), background-color .5s ease;
+}
+#groups circle, #groups rect, #groups line, #groups polyline, #groups path,
+#dlg circle, #dlg rect, #dlg polyline, #dlg path {
+  transition: stroke .4s ease, fill .4s ease;
+}
+@keyframes apparait { from { opacity: 0 } to { opacity: 1 } }
+@keyframes surligne { from { opacity: .35 } to { opacity: 1 } }
+.neuf { animation: apparait .28s ease-out both }
+.chg  { animation: surligne .3s ease-out }
+
+@media (prefers-reduced-motion: reduce) {
+  #bar i, #groups i, #dlg i, #groups path, #dlg path { transition: none }
+  .neuf, .chg { animation: none }
+}
+
+
+/* ================= Fenêtres modales — refonte (22/08/2026) =================
+   Trois défauts corrigés d'un coup : la fenêtre des mises à jour s'affichait
+   dans 340 px avec un tableau de cinq colonnes (barre horizontale, illisible),
+   aucune fenêtre n'avait de bouton de fermeture visible, et la barre de
+   défilement de la liste des conteneurs était collée au texte. */
+
+dialog.dlg{width:min(420px,94vw);max-width:94vw;max-height:88vh;max-height:88dvh;
+  overflow:hidden}
+dialog.dlg[open]{display:flex;flex-direction:column}
+dialog.dlg>form{display:flex;flex-direction:column;min-height:0;flex:1}
+/* La fenêtre des mises à jour se reconnaît à sa liste : pas de classe à poser
+   côté JS, donc rien à oublier au prochain appel. */
+dialog.dlg:has(.majl){width:min(560px,94vw)}
+.dlg.large{width:min(640px,94vw)}
+
+/* ---- Croix de fermeture ---- */
+.dlg-x{position:absolute;top:13px;right:13px;z-index:3;width:30px;height:30px;
+  display:grid;place-items:center;padding:0;cursor:pointer;border-radius:9px;
+  border:1px solid transparent;background:rgba(255,255,255,.05);color:var(--mut);
+  transition:background .18s ease,color .18s ease,border-color .18s ease}
+.dlg-x:hover{background:rgba(255,255,255,.12);color:var(--ink);border-color:var(--edge)}
+.dlg-x:focus-visible{outline:2px solid rgba(255,255,255,.5);outline-offset:2px}
+.dlg-x svg{width:15px;height:15px}
+.dlg h3{padding-right:40px}   /* la croix ne chevauche jamais le titre */
+
+/* ---- Zone défilante : la barre ne touche plus le contenu ---- */
+.dlg .scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;
+  padding-right:10px;scrollbar-gutter:stable;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+.dlg .scroll::-webkit-scrollbar{width:12px}
+.dlg .scroll::-webkit-scrollbar-track{background:transparent}
+/* La bordure transparente + le découpage sur la boîte de contenu créent la
+   respiration : le pouce fait 6 px de large dans une gouttière de 12 px. */
+.dlg .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.17);border-radius:99px;
+  border:3px solid transparent;background-clip:content-box}
+.dlg .scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.3);background-clip:content-box}
+
+/* ---- Liste des mises à jour ---- */
+.majh{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:.62rem;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--mut)}
+.majh:first-child{margin-top:4px}
+.majh b{font-weight:600;font-size:.62rem;padding:1px 7px;border-radius:99px;
+  background:rgba(255,255,255,.08);color:var(--ink)}
+.majh.discret{opacity:.6}
+.majl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.majl li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;
+  gap:11px;padding:9px 12px;border-radius:var(--rs);
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+.majl li.att{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+.majl.discret li{padding:6px 12px;background:transparent;border-color:transparent}
+.majl input[type=checkbox]{width:15px;height:15px;margin:0;accent-color:var(--sbl);cursor:pointer}
+.majl .pastille{width:5px;height:5px;border-radius:99px;background:var(--mut);opacity:.5;margin:0 5px}
+.majl label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0;min-width:0;
+  font-size:.8rem;text-transform:none;letter-spacing:0;color:var(--ink);cursor:pointer}
+.majl.discret label{color:var(--mut);font-size:.76rem;cursor:default}
+.majl .nm{overflow-wrap:anywhere}
+.majl .rq{font-size:.58rem;padding:1px 6px;border-radius:99px;white-space:nowrap;
+  background:rgba(214,138,38,.16);border:1px solid rgba(214,138,38,.3);color:#e0a458}
+.majl .vs{display:flex;align-items:center;gap:6px;flex:none;font-size:.7rem;
+  font-family:ui-monospace,Consolas,monospace;color:var(--mut)}
+.majl .vs s{text-decoration:none}
+.majl li.att .vs s{text-decoration:line-through;opacity:.6}
+.majv{padding:16px;text-align:center;font-size:.78rem;color:var(--mut);
+  border-radius:var(--rs);background:rgba(255,255,255,.03)}
+
+
+/* ---- Étroit : on empile plutôt que de rogner ---- */
+@media (max-width:520px){
+  dialog.dlg,dialog.dlg:has(.majl),.dlg.large{width:94vw;padding:16px}
+  .dlg-x{top:9px;right:9px}
+  .majl li{grid-template-columns:auto minmax(0,1fr);row-gap:4px}
+  .majl .vs{grid-column:2;justify-content:flex-start}
+  .dlg .scroll{padding-right:8px}
+}
+@media (prefers-reduced-motion:reduce){ .dlg-x{transition:none} }
+
+
+/* ---- Fenêtres modales : reprises du 22/08 (soir) ---- */
+
+/* Le <dialog> reçoit le focus à l'ouverture et le navigateur l'entoure d'un
+   contour clair, visible une fraction de seconde ou jusqu'au premier clic. */
+dialog.dlg:focus,dialog.dlg:focus-visible{outline:none}
+
+/* Le SVG inline s'asseyait sur la ligne de base du bouton : `place-items` ne
+   peut rien contre ça, il faut sortir le glyphe du flux de texte. */
+.dlg-x{line-height:0;font-size:0}
+.dlg-x svg{display:block;width:14px;height:14px}
+
+
+/* ---- Anneau de focus des zones défilantes (22/08/2026) ----
+   Chrome et Brave rendent les conteneurs à défilement focalisables au clavier :
+   à l'ouverture de la fenêtre, la liste attrapait le focus et se retrouvait
+   entourée d'un liseré clair, qui ne partait qu'au premier clic ailleurs. */
+.dlg .scroll:focus,.dlg .scroll:focus-visible{outline:none}
+.dlg :focus:not(:focus-visible){outline:none}
+
+/* ---- Croix de fermeture : reprise du 22/08 (soir) ----
+   Les regles `.dlg-x` (0,1,0) se faisaient ecraser par les styles de bouton
+   deja en place, plus specifiques : le bouton gardait leur remplissage et leur
+   largeur minimale, ce qui decalait le glyphe. On repart de zero avec un
+   selecteur qui pese plus lourd, et on neutralise tout ce qui peut deplacer le
+   contenu (remplissage, marge, largeur minimale, bordure, interligne). */
+dialog.dlg > button.dlg-x{
+  position:absolute;top:13px;right:13px;z-index:3;
+  box-sizing:border-box;width:30px;height:30px;
+  min-width:0;min-height:0;max-width:none;padding:0;margin:0;
+  display:flex;align-items:center;justify-content:center;
+  line-height:0;font-size:0;text-align:center;
+  border:1px solid transparent;border-radius:9px;
+  background:rgba(255,255,255,.05);color:var(--mut);cursor:pointer;
+  transition:background .18s ease,color .18s ease,border-color .18s ease;
+}
+dialog.dlg > button.dlg-x:hover{
+  background:rgba(255,255,255,.12);color:var(--ink);border-color:var(--edge);
+}
+dialog.dlg > button.dlg-x > svg{
+  display:block;flex:none;width:14px;height:14px;margin:0;
+}
+
+
+/* ---- Rangée d'action centrée (22/08/2026) ----
+   Le bouton « Fermer » a disparu au profit de la croix : le bouton de mise à
+   jour, resté seul, n'a plus de ressort pour l'équilibrer. */
+.dlg .row.centre{justify-content:center}
+.dlg .row.centre:empty{display:none;margin:0}
+
+
+/* ---- Bouton de mise à jour : état inactif sans ambiguïté (22/08/2026) ----
+   `:hover` continue de correspondre à un bouton désactivé : le survol repeignait
+   donc l'orange sur un bouton qui ne répond pas, et l'opacité à 45 % était le
+   seul indice de son état. L'état inactif quitte l'orange pour un gris franc et
+   ne réagit plus à rien. */
+.dlg button.go:disabled,
+.dlg button.go:disabled:hover,
+.dlg button.go:disabled:active,
+.dlg button.go:disabled:focus{
+  opacity:1;                    /* le gris parle de lui-même, pas besoin de délavé */
+  color:var(--mut);
+  background:rgba(255,255,255,.03);
+  border-color:rgba(255,255,255,.09);
+  box-shadow:none;
+  transform:none;
+  transition:none;
+  cursor:not-allowed;
+}
+
+
+/* ---- Positionnement modal restauré (22/08, soir) ----
+   `position:relative`, posé pour ancrer la croix, faisait retomber le dialogue
+   dans le flux du document : il s'affichait en haut de la page et l'ouverture
+   y renvoyait le défilement. Un dialogue modal est `position:fixed` centré par
+   ses marges automatiques ; la croix s'ancre très bien dessus, `fixed` étant
+   déjà un contexte de positionnement. */
+dialog.dlg[open]{position:fixed;inset:0;margin:auto}
+
+
+
+
+/* ---- Le défilement suit le curseur (22/08, soir) ----
+   C'est le comportement natif du navigateur : la molette agit sur ce qui est
+   sous la souris. La seule chose à corriger est le relais : sans `contain`, la
+   liste arrivée en butée passe la main à la page derrière, qui se met à défiler
+   alors que le curseur est sur la fenêtre. */
+.dlg .scroll{overscroll-behavior:contain}
+
+
+/* ---- Mode compact : les cartes réduites à leur en-tête (22/08/2026) ----
+   Le widget, les mesures et la note disparaissent ; la carte ne prend plus
+   qu'une rangée de la grille au lieu de deux. Rien n'est retiré du DOM, donc
+   le retour à l'affichage complet est instantané et sans redessin. */
+#groups.compact .vizb,
+#groups.compact .stats,
+#groups.compact .note{display:none}
+#groups.compact .card{grid-row:span 1}
+#groups.compact .card .head{margin-block:0}
+
+#compact{margin-left:auto;display:inline-flex;align-items:center;gap:7px}
+#compact svg{width:13px;height:13px;flex:none}
+
+/* ---- Mode compact : une seule grille de tuiles identiques (22/08/2026) ----
+   `display:contents` fait disparaître la boîte des sections et de leurs grilles
+   sans les retirer du DOM : les cartes deviennent enfants directs de #groups,
+   donc toutes rangées dans la même grille, quel que soit leur groupe.
+   Le filtrage par groupe continue de fonctionner : il pose `display:none` en
+   ligne sur la section, ce qui l'emporte sur la règle ci-dessous. */
+#groups.compact{display:grid;gap:11px;align-content:start;
+  grid-template-columns:repeat(auto-fill,minmax(178px,1fr))}
+#groups.compact .sec,
+#groups.compact .grid{display:contents}
+
+/* Toutes les tuiles au même gabarit : une colonne, une rangée, quel que soit
+   le `c2`/`c4` que la carte porte en affichage complet. */
+#groups.compact .card{grid-column:auto;grid-row:auto;position:relative;
+  padding:14px 10px;justify-content:center;align-items:center;min-width:0}
+
+/* Contenu centré, réduit au logo et au nom : la description et l'adresse
+   feraient varier la hauteur d'une tuile à l'autre. */
+#groups.compact .head{flex-direction:column;align-items:center;text-align:center;
+  gap:8px;margin:0;width:100%}
+#groups.compact .head .txt{width:100%;min-width:0}
+#groups.compact .head h3{font-size:.78rem;line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#groups.compact .head p{display:none}
+#groups.compact .chip img{width:26px;height:26px}
+
+/* La pastille d'état reste visible, dans un coin plutôt qu'en bout de ligne. */
+#groups.compact .dot{position:absolute;top:9px;right:9px}
+
+/* ---- Compact : titres de section et adresses conserves (22/08/2026) ----
+   Les sections etant en display:contents, leur titre devient enfant direct de
+   la grille : on lui fait occuper toute la largeur pour qu il coupe la grille
+   en bandeaux au lieu d occuper une cellule. La hauteur minimale evite que les
+   cartes sans adresse soient plus courtes que les autres. */
+#groups.compact .sec h2{grid-column:1/-1;margin:14px 0 0}
+#groups.compact .sec:first-child h2{margin-top:0}
+#groups.compact .adr{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#groups.compact .card{min-height:104px}
+
+/* ---- Compact : sections masquees, contenu centre (22/08/2026) ----
+   Les titres de section disparaissent : la grille redevient un bloc continu.
+   Le nom et l adresse sont centres sous le logo. */
+#groups.compact .sec h2{display:none}
+#groups.compact .head h3,
+#groups.compact .head .txt,
+#groups.compact .head .adr{text-align:center;width:100%}
+
+/* Le titre est un conteneur flex (nom + adresse empiles) : text-align ne
+   porte pas sur les elements flex, il faut les aligner explicitement. */
+#groups.compact .head h3{align-items:center;justify-content:center}
+
+/* ---- Compact : on ne garde que les cartes actionnables (22/08/2026) ----
+   Une carte est un <a> si elle mene quelque part, un <div class="clic"> si
+   elle ouvre une fenetre, et un <div> inerte sinon (Systeme, Memoire, Disques,
+   Sauvegarde, Cross-seed) : ces dernieres ne servent a rien sans leur widget. */
+#groups.compact div.card:not(.clic){display:none}
+
+/* ---- Compact : sous-titre de repli (22/08/2026) ----
+   Les cartes a fenetre (Mises a jour, Conteneurs) n ont ni port ni domaine,
+   donc pas de .adr : on affiche leur description a la place, mise en forme
+   comme une adresse pour que toutes les tuiles se ressemblent. */
+#groups.compact .card:not(:has(.adr)) .head p{display:block;margin:3px 0 0;
+  font-size:.62rem;color:rgba(138,148,166,.75);text-align:center;max-width:100%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- Compact : tuiles carrees, icones plus grandes (22/08/2026) ----
+   `aspect-ratio` ne peut fixer la hauteur que si la carte ne s etire pas sur
+   la rangee, d ou `align-items:start`. Colonnes resserrees pour que le carre
+   ne double pas la hauteur precedente. */
+#groups.compact{align-items:start;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+#groups.compact .card{aspect-ratio:1;min-height:0}
+#groups.compact .chip img{width:34px;height:34px}
+
+/* ---- Barre de filtres collante (22/08/2026) ----
+   Elle reste visible pendant le defilement des cartes. Le fond opaque et le
+   flou evitent que les cartes se lisent au travers en passant dessous. */
+#filters{position:sticky;top:0;z-index:30;padding-block:10px;
+  background:rgba(10,10,11,.86);backdrop-filter:var(--blur);
+  -webkit-backdrop-filter:var(--blur)}
+
+/* La teinte sombre tranchait avec l aurora : on ne garde que le flou, qui
+   suffit a detacher les boutons de ce qui defile dessous. */
+#filters{background:transparent;backdrop-filter:blur(16px) saturate(1.2);
+  -webkit-backdrop-filter:blur(16px) saturate(1.2)}
+
+/* Le flou ne porte plus sur toute la barre mais sur chaque bouton : entre eux,
+   la page reste visible telle quelle pendant le defilement. */
+#filters{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+#filters button{backdrop-filter:blur(24px) saturate(1.2);
+  -webkit-backdrop-filter:blur(24px) saturate(1.2)}
+
+/* Fond assombri sous les boutons inactifs : le flou seul laissait encore
+   passer les couleurs des cartes. Le bouton actif garde son fond clair, d ou
+   le :not(.on). */
+
+/* Les boutons rentrent un peu vers le centre plutot que de s aligner pile sur
+   le bord des cartes. */
+#filters{padding-inline:14px}
+
+/* ---- La barre redevient une navbar, mais flottante et arrondie ----
+   `top:10px` la decolle du haut de la fenetre pour qu elle flotte au lieu de
+   se coller au bord ; le fond et le flou reviennent sur la barre entiere. */
+#filters{top:10px;padding:10px 14px;border-radius:var(--r);
+  background:rgba(16,17,21,.72);border:1px solid var(--edge);
+  backdrop-filter:blur(20px) saturate(1.2);
+  -webkit-backdrop-filter:blur(20px) saturate(1.2);
+  box-shadow:0 10px 34px rgba(0,0,0,.42),inset 0 1px 0 var(--shine)}
+
+/* Pilule plutot que rayon de carte ; les boutons retrouvent leur fond
+   d origine, le fond de la barre suffit desormais a les detacher. */
+#filters{border-radius:999px}
+
+/* Plus de flou ni de pilule sur chaque bouton : la barre a deja son fond, des
+   pastilles dans une pastille faisaient redondant. Seul l onglet actif garde
+   son fond, il suffit a marquer la selection. */
+#filters button{backdrop-filter:none;-webkit-backdrop-filter:none}
+#filters button:not(.on){background:transparent;border-color:transparent;box-shadow:none}
+
+/* ---- Barre de filtres : meme habillage que la barre du haut ----
+   Memes variables de theme (--a/--b, --edge, --shine, --blur) et meme ombre
+   que `.bar`, en gardant la forme de pilule et le comportement collant. */
+#filters{padding:10px 18px;
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--edge);
+  box-shadow:0 12px 38px rgba(0,0,0,.45),inset 0 1px 0 var(--shine)}
+
+/* Meme rayon que la barre du haut, et barre rentree de 14 px de chaque cote
+   pour qu elle ne s aligne pas exactement sur le bord des cartes. */
+#filters{border-radius:var(--r);margin-inline:14px}
+
+/* ---- Compact : tuiles au plus petit, grille centree (22/08/2026) ----
+   Colonnes de largeur FIXE (et non 1fr) : sans quoi elles s etirent pour
+   remplir la ligne et le centrage n a aucun effet. `auto-fit` en pose autant
+   que la largeur le permet, `justify-content` centre le tout. */
+#groups.compact{grid-template-columns:repeat(auto-fit,124px);justify-content:center}
+#groups.compact .card{padding:10px 8px}
+
+/* ---- Compact : passage en flex pour centrer AUSSI la derniere ligne ----
+   Grid centre la grille entiere mais aligne les colonnes : une derniere ligne
+   incomplete reste callee a gauche. Flex centre chaque ligne separement. */
+#groups.compact{display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start}
+#groups.compact .card{flex:0 0 124px;width:124px}
+
+/* ---- Barre de filtres : navbar responsive à menu déroulant (22/08/2026) ----
+   Au-dessus de 820 px, tous les onglets sont visibles et le bouton de menu est
+   masqué. En dessous, les onglets se replient : seul le bouton de menu reste,
+   et un clic déroule la liste dans la barre elle-même, qui grandit vers le bas.
+   Un clic n'importe où ailleurs, ou le choix d'un groupe, la referme. */
+#menu{display:none;flex:0 0 auto}
+#menu svg{width:15px;height:15px;display:block}
+
+@media(max-width:820px){
+  #filters{flex-wrap:wrap;row-gap:8px}
+  #menu{display:inline-flex;align-items:center;justify-content:center}
+  /* Les onglets disparaissent, sauf le menu et le repli qui restent en ligne. */
+  #filters button:not(#menu):not(#compact){display:none}
+  #filters.ouvert button:not(#menu):not(#compact){display:block;flex:1 0 100%;text-align:left}
+  #compact{margin-left:auto}
+}
+
+/* ---- Menu deroulant : habillage (22/08/2026) ----
+   Le bouton porte le nom du groupe filtre, son icone pivote a l ouverture et
+   les entrees se deplient en cascade. Tout est borne au petit format. */
+@keyframes deroule{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+@media(max-width:820px){
+  #menu{gap:9px}
+  #menu svg{transition:transform .24s cubic-bezier(.2,.8,.2,1)}
+  #filters.ouvert #menu svg{transform:rotate(90deg)}
+  #filters.ouvert{padding-bottom:9px;row-gap:5px}
+  #filters.ouvert button:not(#menu):not(#compact){display:flex;align-items:center;
+    justify-content:flex-start;flex:1 0 100%;text-align:left;padding:.6rem .9rem;
+    border-radius:11px;animation:deroule .24s cubic-bezier(.2,.8,.2,1) both}
+  #filters.ouvert button:nth-of-type(3){animation-delay:.03s}
+  #filters.ouvert button:nth-of-type(4){animation-delay:.06s}
+  #filters.ouvert button:nth-of-type(5){animation-delay:.09s}
+  #filters.ouvert button:nth-of-type(6){animation-delay:.12s}
+  #filters.ouvert button:nth-of-type(7){animation-delay:.15s}
+  #filters.ouvert button.on:not(#menu):not(#compact){font-weight:600}
+}
+@media(prefers-reduced-motion:reduce){
+  #menu svg{transition:none}
+  #filters.ouvert button:not(#menu):not(#compact){animation:none}
+}
+
+/* ---- Menu deroulant : reprise visuelle (22/08/2026) ----
+   Le chevron pivote de 180 deg (le hamburger tourne donnait trois barres
+   verticales). « Compact » remonte sur la ligne de la barre grace a `order`,
+   alors qu il est apres les onglets dans le DOM. Entrees resserrees, avec un
+   peu d air entre la barre et la premiere. */
+@media(max-width:820px){
+  #compact{order:1;margin-left:auto}
+  #filters button:not(#menu):not(#compact){order:2}
+  #menu{margin-right:auto}
+  #filters.ouvert #menu svg{transform:rotate(180deg)}
+  #filters.ouvert button:not(#menu):not(#compact){padding:.5rem .85rem;border-radius:10px}
+  #filters.ouvert button:nth-of-type(2){margin-top:9px}
+  #filters.ouvert{row-gap:3px;padding-bottom:8px}
+}
+
+/* ---- Menu : panneau flottant sous la barre (22/08/2026) ----
+   `display:contents` au-dessus du seuil : le conteneur est transparent pour la
+   mise en page, les onglets restent des enfants directs du flex de la barre.
+   En dessous, il devient une vraie boite positionnee sous la barre, qui se
+   revele par opacite et translation plutot que de pousser le contenu. */
+.panneau{display:contents}
+@media(max-width:820px){
+  .panneau{display:block;position:absolute;top:calc(100% + 10px);left:0;right:0;
+    padding:8px;border-radius:var(--r);border:1px solid var(--edge);
+    background:linear-gradient(180deg,var(--a),var(--b));
+    backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+    box-shadow:0 18px 46px rgba(0,0,0,.5),inset 0 1px 0 var(--shine);
+    opacity:0;visibility:hidden;transform:translateY(-8px);transform-origin:top center;
+    transition:opacity .2s ease,transform .2s cubic-bezier(.2,.8,.2,1),visibility .2s}
+  #filters.ouvert .panneau{opacity:1;visibility:visible;transform:none}
+  #filters .panneau button:not(#menu){display:flex;width:100%;margin:0;
+    justify-content:flex-start;text-align:left;padding:.55rem .85rem;border-radius:10px}
+  #filters .panneau button + button{margin-top:3px}
+  #filters.ouvert{padding-bottom:10px;row-gap:0}
+}
+
+/* ---- Menu flottant : hauteur de barre figee et fond lisible (22/08/2026) ----
+   Ouvert ou ferme, la barre garde exactement le meme gabarit : le panneau est
+   hors flux, rien ne doit donc bouger. Le fond passe d un degrade translucide
+   a une teinte franche : au-dessus des cartes, le verre seul rendait le menu
+   illisible. */
+@media(max-width:820px){
+  #filters.ouvert{padding:10px 18px;row-gap:8px}
+  #filters .panneau{position:absolute;
+    background:rgba(17,18,23,.96);
+    backdrop-filter:blur(22px) saturate(1.15);
+    -webkit-backdrop-filter:blur(22px) saturate(1.15);
+    box-shadow:0 22px 54px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.06)}
+  #filters .panneau button:nth-of-type(2){margin-top:0}
+}
+
+/* Fond du menu : voile sombre leger, le flou fait le reste. */
+@media(max-width:820px){
+  #filters .panneau{background:rgba(0,0,0,.34);
+    backdrop-filter:blur(26px) saturate(1.25);
+    -webkit-backdrop-filter:blur(26px) saturate(1.25)}
+}
+
+/* ---- Menu : flou fonctionnel et barre de hauteur constante (22/08/2026) ----
+   Le verre de la barre passe sur un pseudo-element : porte par #filters, son
+   backdrop-filter isolait ses descendants, si bien que le panneau ne floutait
+   rien. Et le padding de .ouvert doit etre IDENTIQUE a celui de la barre :
+   quatre pixels de moins suffisaient a faire passer « Compact » a la ligne. */
+#filters{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+#filters::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;
+  background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+@media(max-width:820px){
+  #filters.ouvert{padding:10px 14px}
+}
+
+/* La barre ne passe plus jamais a la ligne : seuls le bouton de menu et
+   « Compact » sont dans son flux, sa hauteur est donc constante, ouverte ou
+   fermee. Et le panneau ne garde que le flou, sans voile sombre. */
+@media(max-width:820px){
+  #filters{flex-wrap:nowrap}
+  #filters .panneau{background:transparent}
+}
+
+/* Barre et panneau au meme regime : pas de fond, uniquement du flou. */
+#filters::before{background:transparent;
+  backdrop-filter:blur(26px) saturate(1.25);
+  -webkit-backdrop-filter:blur(26px) saturate(1.25)}
+
+/* Les onglets ayant demenage dans le panneau, `button:nth-of-type(2)` ne
+   designe plus le premier onglet mais « Compact » : il recevait 9 px de marge
+   a chaque ouverture, ce qui rehaussait la barre. Les enfants directs de la
+   barre ne portent aucune marge. */
+#filters.ouvert > button{margin-top:0}
+
+/* Les deux boutons de la barre (menu et Compact) sont figes a la meme
+   hauteur : le bouton de menu mesurait 37 px contre 28 px pour Compact, et la
+   barre grandissait a l ouverture pour le contenir. Hauteur constante par
+   construction, quelle que soit la regle qui passe derriere. */
+@media(max-width:820px){
+  #filters > button{height:34px;padding-block:0;
+    display:inline-flex;align-items:center;justify-content:center}
+}
+
+/* Les 9 px fantomes : `#filters.ouvert button:nth-of-type(2)` visait le premier
+   onglet a l epoque ou les onglets etaient dans la barre. Depuis le passage au
+   panneau, ce selecteur designe « Compact ». Ma correction precedente
+   (`.ouvert > button`) pesait une classe de moins et se faisait battre : on
+   vise donc les deux boutons par leur identifiant. */
+#filters.ouvert #menu,#filters.ouvert #compact{margin-top:0}
+
+/* Les 9 px fantomes : `#filters.ouvert button:nth-of-type(2)` visait le premier
+   onglet du temps ou les onglets etaient dans la barre ; depuis le panneau, ce
+   selecteur designe « Compact », qui recevait donc 9 px de marge a chaque
+   ouverture. Ma correction precedente pesait une classe de moins et se faisait
+   battre : on vise les deux boutons par identifiant. */
+#filters.ouvert #menu,#filters.ouvert #compact{margin-top:0}
+
+/* Le `100%` de `calc` se refere a la boite de CONTENU : bordures et
+   rembourrage exclus, le panneau se retrouvait colle a la barre (1 px). */
+@media(max-width:820px){
+  #filters .panneau{top:calc(100% + 19px)}
+}
+
+/* Le rembourrage doit etre IDENTIQUE dans les deux etats : a 14 px contre
+   18 px, les deux boutons glissaient de 4 px vers les bords a chaque
+   ouverture. (Reste de mes essais sur la hauteur.) */
+@media(max-width:820px){
+  #filters.ouvert{padding:10px 18px}
+}
+
+/* ---- Menu deroulant : entree active masquee, contenu centre (22/08/2026) ----
+   Le groupe courant est deja annonce sur le bouton, inutile de le reproposer.
+   ⚠️ Ces regles doivent reprendre le gabarit `:not(#menu):not(#compact)` : dans
+   le calcul de specificite, `:not()` compte comme son argument, donc la regle
+   d origine pese TROIS identifiants et bat tout selecteur plus simple. */
+@media(max-width:820px){
+  #filters.ouvert .panneau button.on:not(#menu):not(#compact){display:none}
+  #filters.ouvert .panneau button:not(#menu):not(#compact){justify-content:center;text-align:center}
+}
+
+/* ---- Barre et panneau : habillage de la barre du haut (22/08/2026) ----
+   Meme voile clair et meme flou (--blur du theme) que `.bar`, pour que les
+   trois surfaces vitrees de la page soient identiques. */
+#filters::before{background:linear-gradient(180deg,var(--a),var(--b));
+  backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+@media(max-width:820px){
+  #filters .panneau{background:linear-gradient(180deg,var(--a),var(--b));
+    backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+    border:1px solid var(--edge);
+    box-shadow:0 18px 46px rgba(0,0,0,.5),inset 0 1px 0 var(--shine)}
+}
+
+/* Barre alignee sur la barre du haut et sur les cartes : le retrait de 14 px
+   de chaque cote est supprime. */
+#filters{margin-inline:0}
+
+/* Le relief manquait : le reflet `inset 0 1px 0` etait peint sur #filters, puis
+   RECOUVERT par le pseudo-element qui porte le degrade (un descendant en
+   z-index negatif passe apres l ombre interne dans l ordre de peinture). Il
+   doit donc etre porte par le pseudo-element lui-meme. */
+#filters::before{box-shadow:inset 0 1px 0 var(--shine)}
+
+/* ---- Menu deroulant : finitions (22/08/2026) ----
+   Le panneau s ouvre depuis le coin du bouton qui l a declenche (origine en
+   haut a gauche, leger agrandissement) plutot que de tomber tout droit. Les
+   entrees respirent un peu plus et reagissent au survol : sans retour visuel,
+   rien n indiquait qu elles etaient cliquables. */
+@media(max-width:820px){
+  #filters .panneau{padding:9px;border-radius:16px;
+    transform-origin:top left;transform:translateY(-10px) scale(.96)}
+  #filters.ouvert .panneau{transform:none}
+  #filters.ouvert .panneau button:not(#menu):not(#compact){
+    padding:.62rem .9rem;border-radius:11px;
+    transition:background .16s ease,color .16s ease}
+  #filters.ouvert .panneau button:not(#menu):not(#compact):hover{
+    background:rgba(255,255,255,.09);color:var(--ink)}
+  #filters.ouvert .panneau button:not(#menu):not(#compact):active{
+    background:rgba(255,255,255,.14)}
+}
+
+/* Le bouton Compact n est pas un onglet : il ne doit pas porter le meme fond
+   plein que le groupe selectionne. Son etat se lit a son icone (quatre tuiles
+   quand les cartes sont repliees, des lignes sinon) et a une teinte d accent.
+   Selecteur a deux identifiants pour battre `#filters button:not(.on)`. */
+#filters #compact.actif{color:var(--sbl);border-color:rgba(77,151,238,.45);
+  background:rgba(77,151,238,.1)}
+
+/* ---- Bouton Compact : soulignement plutot que fond plein (22/08/2026) ----
+   Ce n est pas un onglet mais une bascule : il ne doit pas porter le meme fond
+   que le groupe selectionne. Le trait se deploie depuis le centre par un
+   scaleX, ce qui evite de faire varier la boite du bouton. */
+#filters #compact{position:relative}
+#filters #compact.actif{background:transparent;border-color:transparent;color:var(--ink)}
+#filters #compact::after{content:"";position:absolute;left:14px;right:14px;bottom:6px;
+  height:2px;border-radius:2px;background:var(--sbl);
+  transform:scaleX(0);transform-origin:center;
+  transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+#filters #compact.actif::after{transform:scaleX(1)}
+
+/* Trait de la couleur du texte (`currentColor`, il suit donc les etats) et sur
+   toute la largeur du bouton. */
+#filters #compact::after{left:0;right:0;background:currentColor}
+
+/* Trait affine, descendu pour degager le libelle, et resserre sur le contenu :
+   74 px pour 69 px de contenu, soit 2,5 px de debord de chaque cote. */
+#filters #compact::after{left:8px;right:8px;bottom:3px;height:1.5px}
+
+/* Soulignement retire : l etat actif se lit desormais uniquement a l icone,
+   qui passe des lignes aux quatre tuiles. */
+#filters #compact::after{content:none}
+
+/* Etat actif : teinte d accent sur le libelle, et sur l icone par currentColor.
+   ⚠️ Doit venir APRES la regle du soulignement (ligne ~1170) qui fixait
+   `color:var(--ink)` et annulait toute tentative de coloration. */
+#filters #compact.actif{color:var(--sbl)}
+
+/* ---- Compact : tuiles au plus juste, noms sur plusieurs lignes (22/08/2026) ----
+   Le nom passe a la ligne au lieu d etre tronque ; l adresse, elle, reste sur
+   une ligne (« demandes.example.com » prenait trois lignes et faisait
+   deborder la tuile). Le nowrap doit etre REPOSE sur .adr : elle est enfant du
+   titre et heritait sinon du white-space:normal. */
+#groups.compact .card{flex:0 0 104px;width:104px}
+#groups.compact .head h3{white-space:normal;overflow-wrap:anywhere;
+  line-height:1.2;font-size:.72rem}
+#groups.compact .head .adr{white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:100%}
+
+/* ---- Compact : nom coupe a deux lignes (22/08/2026) ----
+   Le nom est desormais enveloppe dans un span : il partage son h3 avec
+   l adresse, et un line-clamp pose sur le titre aurait compte la ligne de
+   l adresse dans les deux lignes autorisees. */
+#groups.compact .head h3 .nom{display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+
+/* ---- Adresse en deux parties (22/08/2026) ----
+   Domaine et port sont desormais deux spans distincts. En affichage normal ils
+   restent sur une ligne, separes par un point median pose en CSS (et non plus
+   dans le texte). En compact, chacun prend sa ligne, sans separateur.
+   ⚠️ L ordre change : le domaine passe devant le port. */
+.adr .dom + .port::before{content:"·";margin:0 .4em;opacity:.55}
+#groups.compact .adr .dom,#groups.compact .adr .port{display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#groups.compact .adr .dom + .port::before{content:none}
+
+/* Le port sur sa propre ligne ajoute 9 px : tuiles a 112 px et rembourrage
+   resserre pour absorber la ligne supplementaire (5 px de marge restante). */
+#groups.compact .card{flex:0 0 112px;width:112px;padding:8px 7px}
+#groups.compact .head{gap:6px}
+
+/* ---- Compact : tuiles resserrees a 104 px (22/08/2026) ----
+   Le port sur sa propre ligne coute 9 px : on les regagne sur le rembourrage,
+   les interlignes et la taille de l adresse. ⚠️ Le `!important` est necessaire :
+   `.adr` porte deja `font-size:.62rem !important` dans la feuille.
+   `overflow:hidden` sert de filet — il ne reste qu un pixel de marge. */
+#groups.compact .card{flex:0 0 104px;width:104px;padding:7px 6px;overflow:hidden}
+#groups.compact .head{gap:5px}
+#groups.compact .head h3{font-size:.7rem;line-height:1.15}
+#groups.compact .head .adr{font-size:.57rem !important;line-height:1.2 !important}
+#groups.compact .adr .dom,#groups.compact .adr .port{line-height:1.25}
+
+/* ---- Compact : hauteur libre plutot que carre strict (22/08/2026) ----
+   Le domaine et le port passent a la ligne au lieu d etre tronques, et la tuile
+   grandit d autant. `align-items:stretch` garde les tuiles d une meme rangee a
+   la meme hauteur ; `min-height` evite les tuiles ecrasees quand il n y a ni
+   domaine ni port. */
+#groups.compact{align-items:stretch}
+#groups.compact .card{aspect-ratio:auto;height:auto;min-height:104px;overflow:visible}
+#groups.compact .adr .dom,#groups.compact .adr .port{white-space:normal;
+  overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+
+/* Nom affiche en entier : la coupure a deux lignes n a plus lieu d etre
+   maintenant que la tuile prend la hauteur qu il lui faut. */
+#groups.compact .head h3 .nom{display:block;-webkit-line-clamp:none;
+  overflow:visible;overflow-wrap:anywhere}
+
+/* ---- Onglet actif : surbrillance et non bouton (22/08/2026) ----
+   Meme logique que pour « Compact » : la selection se lit au texte (blanc et
+   plus gras contre gris) plutot qu a un fond plein. Un identifiant suffit a
+   battre `.filters button.on` de la feuille d origine. */
+#filters button.on{background:transparent;border-color:transparent;
+  box-shadow:none;color:#fff;font-weight:650}
+
+/* ---- Barre du haut : compacte sur petit ecran (22/08/2026) ----
+   Elle occupait un tiers de la hauteur sur mobile (281 px sur 844). Le
+   rembourrage, l heure, les interlignes et les barres de jauge sont resserres,
+   et les cinq mesures se repartissent sur deux rangees equilibrees : 193 px,
+   soit 23 % de l ecran, sans rien masquer. */
+@media(max-width:600px){
+  .bar{padding:12px 14px;gap:9px;margin-bottom:38px}
+  .clock b{font-size:1.6rem;line-height:.95}
+  .clock span{font-size:.62rem;margin-top:2px}
+  .hp{font-size:.72rem}
+  .met{gap:7px 8px;order:3;flex:1 1 100%}
+  .met .mi{flex:1 1 27%;min-width:0;gap:3px}
+  .met .mi.na{flex:1 1 18%}
+  .met .mi b{font-size:.74rem}
+  .met .mi small{font-size:.5rem;letter-spacing:.06em}
+  .met .mi .tr{height:3px}
+}
+
+/* ---- Barre du haut : heure et etat cote a cote sur mobile (22/08/2026) ----
+   Les trois blocs avaient `flex:1 1 100%` sous 600 px, donc une rangee chacun.
+   L heure et l etat reprennent leur largeur naturelle et partagent la premiere
+   ligne ; les mesures gardent la leur. Le point de separation passe en CSS :
+   affiche en grand format, remplace par un retour a la ligne en petit.
+   Resultat : 145 px au lieu de 281 sur un ecran de 844 px. */
+.hp em span + span::before{content:"·";margin:0 .35em;opacity:.6}
+@media(max-width:600px){
+  .bar{justify-content:space-between;align-items:flex-start}
+  .clock{flex:0 1 auto;order:1}
+  .hp{flex:0 1 auto;order:2;text-align:right;align-items:flex-end}
+  .met{flex:1 1 100%;order:3}
+  .hp em span{display:block;line-height:1.35}
+  .hp em span + span::before{content:none}
+}
+
+/* ---- Etat : une seule ligne, repli naturel, bloc centre (22/08/2026) ----
+   Le retour a la ligne force est annule : le texte reste sur une ligne avec son
+   point median et ne se replie que si la largeur l impose. Le bloc est aligne
+   sur le milieu de l heure plutot que sur son sommet. */
+@media(max-width:600px){
+  .hp em span{display:inline;line-height:1.35}
+  .hp em span + span::before{content:"·";margin:0 .35em;opacity:.6}
+  .hp{align-self:center}
+}
+
+/* ---- Etat : deux paliers pour rester le plus longtemps cote a cote ----
+   Sous 380 px, « conteneurs » et « MAJ en attente » se replient l un sous
+   l autre : le bloc passe de 172 a 97 px de large, ce qui lui permet de rester
+   a cote de l heure jusque vers 280 px au lieu de 360.
+   (Le centrage a ete deplace a 380 px pour accompagner le repli, voir plus bas.)
+   groupe : quand la place finit par manquer et que l etat passe sous l heure,
+   les deux restent centres au lieu de se coller aux bords. */
+@media(max-width:380px){
+  .hp em span{display:block;line-height:1.35}
+  .hp em span + span::before{content:none}
+}
+
+/* ---- Mesures : les trois unites se replient ensemble (22/08/2026) ----
+   « cœurs » passait seul a la ligne parce que sa valeur est plus longue que
+   « Go » et « To », ce qui desalignait les trois colonnes. L unite est
+   desormais dans un span : sous 430 px, les trois passent a la ligne en meme
+   temps. Seuil calibre : le texte demande 107 px pour une colonne de 101 a
+   390 px de fenetre, le repli naturel surviendrait vers 413 px. */
+@media(max-width:430px){
+  .met .mi b .u{display:block}
+}
+
+/* Le decollement des extremites accompagne le repli, au meme seuil : des que
+   « MAJ en attente » passe sous « conteneurs », les deux blocs se centrent en
+   groupe au lieu de rester colles aux bords. */
+@media(max-width:380px){
+  .bar{justify-content:center;text-align:center}
+  .clock,.hp{flex:0 1 auto;align-items:center;text-align:center}
+  .hp .line{justify-content:center}
+  .met{justify-content:center}
+}
+
+/* La valeur ne se coupe jamais en deux : avec l unite qui passe dessous, le
+   bloc fait donc au maximum deux lignes, quelle que soit la largeur. Sans ce
+   nowrap, « 2,8 / 12 » pouvait se scinder et ajouter une troisieme ligne. */
+.met .mi b{white-space:nowrap}
+
+
+/* ---- WireGuard : liste d'appareils (23/08/2026) ----
+   Remplace les tuiles `.empl`, dont la grille tombait a une colonne sous 240 px
+   et faisait grandir la carte de moitie. En liste, chaque appareil tient sur une
+   ligne : le nom se tronque, l'etat reste a droite, la hauteur ne bouge plus. */
+
+/* Au-dela de quatre ou cinq appareils, la liste defile dans la carte plutot
+   que de l etirer : a dix appareils elle mesurait 487 px et desequilibrait
+   toute la section. `overscroll-behavior` evite que la page defile quand la
+   liste arrive en butee. */
+
+
+/* ---- WireGuard : tuiles d'appareils (23/08/2026) ----
+   Reprise des tuiles `.empl`, avec une grille recalibree : `minmax(68px,1fr)`
+   au lieu de 84 px, pour ne jamais descendre sous deux colonnes dans une carte
+   etroite. Dix appareils tiennent alors en 116 px sur une carte large, contre
+   330 px si on les empile en lignes. */
+.wgg{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));
+  gap:6px;margin-top:12px}
+.wgt{padding:8px 5px;border-radius:var(--rs);text-align:center;min-width:0;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+.wgt i{display:block;width:7px;height:7px;border-radius:50%;margin:0 auto 6px;
+  background:rgba(255,255,255,.2)}
+.wgt.on{background:rgba(52,199,89,.10);border-color:rgba(52,199,89,.30)}
+.wgt.on i{background:var(--sok);box-shadow:0 0 0 3px rgba(52,199,89,.16)}
+.wgt b{display:block;font-weight:500;font-size:.6rem;letter-spacing:.03em;
+  line-height:1.25;color:var(--mut);overflow-wrap:anywhere}
+
+/* Tuiles centrees plutot qu etirees : a 172 px chacune sur une carte large,
+   elles occupaient toute la largeur et le bloc restait colle en haut. Largeur
+   bornee a 104 px, colonnes centrees, et centrage vertical dans la carte. */
+.vizb>.wgg{margin-block:auto;justify-content:center;
+  grid-template-columns:repeat(auto-fit,minmax(68px,104px))}

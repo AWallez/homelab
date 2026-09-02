@@ -1,0 +1,1 @@
+{"ts":1788291180,"d":[{"n":"nvme0","modele":"SSD systeme 128 Go","go":128,"ok":true,"temp":39,"usure":2,"spare":100,"heures":6180,"cycles":41,"brutaux":3,"erreurs":0,"ecrit":1.62},{"n":"nvme1","modele":"SSD donnees 8 To","go":8001,"ok":true,"temp":46,"usure":1,"spare":100,"heures":6180,"cycles":39,"brutaux":2,"erreurs":0,"ecrit":26.4}]}

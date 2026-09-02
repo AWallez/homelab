@@ -1,0 +1,14 @@
+# Identite des SSD NVMe : slot=numero de serie.
+#
+# ⚠️ EXEMPLE. Le vrai fichier se nomme `nvme-serie.conf` et `nvme-slots.sh` le
+# cree tout seul au premier passage, en y inscrivant les series des disques
+# reellement presents. Ne pas recopier celui-ci tel quel.
+#
+# ⚠️ NE PAS REORDONNER les lignes : le slot donne la colonne de l historique.
+# Intervertir revient a echanger deux courbes de temperature au milieu de leur
+# serie, ce qui est exactement le defaut que ce fichier existe pour empecher.
+#
+# 0 = disque systeme
+# 1 = disque de donnees
+0=SERIE-DU-DISQUE-SYSTEME
+1=SERIE-DU-DISQUE-DE-DONNEES

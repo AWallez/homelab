@@ -1,0 +1,3 @@
+{ "prowlarr": { "sante": 2, "msg": "Deux indexeurs ne repondent plus",
+                "ix": [ { "n": "Orion", "g": 214 }, { "n": "Vega", "g": 0 }, { "n": "Altair", "g": 0 } ] },
+  "cross": { "idx": 1, "idxtot": 3 } }

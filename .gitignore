@@ -1,0 +1,39 @@
+# ---- systeme et editeurs -------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# ---- dependances, si un outil en introduit un jour -----------------------
+node_modules/
+
+# ⚠️ CACHE DE FAVICONS. Regenere sur le NAS par `favicons.py`, il contient les
+# adresses des raccourcis PERSONNELS de l installation : navigateur, boite
+# mail, box de l operateur. Il a deja fallu le retirer une fois du depot, il
+# ne doit jamais y revenir.
+www/icons/sites/
+
+# ⚠️ SAUVEGARDES DES SCRIPTS DE CORRECTIF. Leur accumulation dans `www/` avait
+# fini par y laisser 96 fichiers et pres de 8 Mo, servis par nginx au passage.
+*.avant-*
+*.bak
+*.bak.*
+*.precedent
+*.tmp
+
+# ---- artefacts du deploiement --------------------------------------------
+outils/.installe.tmp
+
+# ---- CE QUI EST VOLONTAIREMENT SUIVI, malgre les apparences --------------
+#
+# www/*.json         Les fixtures generees. GitHub Pages sert le depot TEL QUEL,
+#                    sans etape de construction : elles doivent donc y figurer.
+#                    Les regenerer produit un diff, c est normal et sans
+#                    gravite, les horodatages etant recales a l affichage.
+#
+# www/services.js    La configuration ANONYMISEE, celle du depot. La vraie vit
+#                    sur le NAS et n est jamais deployee depuis ici : c est
+#                    pourquoi ce fichier est absent de la liste blanche de
+#                    `outils/deploie.js`.
