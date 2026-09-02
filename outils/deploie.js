@@ -6,19 +6,17 @@
  * ⚠️ LISTE BLANCHE, PAS LISTE D EXCLUSIONS. `www/` contient a la fois le front
  * et les fixtures generees, et ces dernieres portent EXACTEMENT les noms des
  * fichiers que les collecteurs ecrivent en production : `data.json`,
- * `history.json`, `live.json`… Une synchronisation qui se contenterait
- * d exclure ce qu elle connait laisserait passer la fixture ajoutee six mois
- * plus tard, et remplacerait de vraies mesures par des donnees inventees.
- * Ici, ce qui n est pas nomme ne part pas.
+ * `history.json`, `live.json`… Un script qui se contenterait d exclure ce qu il
+ * connait laisserait passer la fixture ajoutee six mois plus tard et
+ * remplacerait de vraies mesures par des donnees inventees. Ici, ce qui n est
+ * pas nomme ne part pas.
  *
  * ⚠️ `fixtures/scenarios.json` NE DOIT JAMAIS ARRIVER SUR LE NAS : sa seule
- * presence active le mode demonstration. Le script d installation le verifie
- * une seconde fois, cote NAS, avant de bouger quoi que ce soit.
+ * presence active le mode demonstration. Verifie une seconde fois cote NAS,
+ * avant que quoi que ce soit ne bouge.
  *
  * ⚠️ LE SCRIPT N INSTALLE PAS LUI-MEME. `www/` appartient a root : il depose
- * dans /tmp et rend une commande `sudo` a lancer. C est aussi la convention de
- * travail retenue avec Alexis — les lectures sont directes, les ecritures lui
- * reviennent.
+ * dans /tmp et rend une commande `sudo` a lancer.
  */
 
 "use strict";

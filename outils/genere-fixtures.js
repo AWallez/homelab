@@ -2,21 +2,19 @@
  *
  *   node outils/genere-fixtures.js
  *
- * POURQUOI UN GENERATEUR ET NON DES FICHIERS ECRITS A LA MAIN. Il faut 1440
+ * POURQUOI UN GENERATEUR ET NON DES FICHIERS ECRITS A LA MAIN : il faut 1440
  * points a la minute, 145 au pas de dix minutes et 169 a l heure, sur vingt-
- * quatre colonnes. Ecrits a la main ils seraient plats, et une courbe plate
- * fait passer tout le tableau de bord pour une maquette morte. Ecrits par un
- * generateur, ils ont un rythme jour/nuit, du bruit, et de vrais incidents.
+ * quatre colonnes. Ecrits a la main ils seraient plats, et une courbe plate fait
+ * passer tout le tableau de bord pour une maquette morte.
  *
  * ⚠️ TIRAGE DETERMINISTE. La meme graine rend exactement les memes courbes :
- * regenerer ne fait pas bouger la demonstration, les captures d ecran restent
- * valables, et une difference dans un fichier signale un vrai changement de
- * code plutot qu un caprice du hasard.
+ * regenerer ne fait pas bouger la demonstration, les captures restent valables,
+ * et une difference dans un fichier signale un vrai changement de code.
  *
  * ⚠️ LES HORODATAGES SONT ABSOLUS ICI, et c est assume : la page les REBASE a
- * l affichage en mode demonstration, en decalant toute la serie pour que son
- * dernier point tombe sur maintenant. Sans ca, une demo publiee en mars
- * afficherait des courbes vieilles de six mois avec une echelle horaire fausse.
+ * l affichage, en decalant toute la serie pour que son dernier point tombe sur
+ * maintenant. Sans ca, une demo publiee en mars afficherait six mois plus tard
+ * des courbes vieilles d autant, avec une echelle horaire fausse.
  */
 
 "use strict";
