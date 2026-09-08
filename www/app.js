@@ -1389,6 +1389,93 @@ addEventListener("click", (e) => {
 });
 
 
+/* ============ ALLUMER ET ETEINDRE LE POSTE ============
+   Meme mecanique que le bouton des mises a jour : la page DEPOSE une demande,
+   un veilleur du NAS la consomme. Elle n execute rien elle-meme.
+
+   ⚠️ PAR DELEGATION, et c est impose par `fusionne` : les boutons vivent dans
+   une carte redessinee toutes les deux secondes, un gestionnaire pose dessus
+   serait detruit au rendu suivant. Le bouton des mises a jour, lui, peut se
+   permettre un `onclick` direct parce qu il vit dans une fenetre modale, hors
+   de l arbre rendu.
+
+   ⚠️ Le retour d etat ne vient PAS de la reponse HTTP, qui ne dit que « fichier
+   ecrit ». La preuve qu une action a abouti est que la sonde change d avis, ce
+   qui prend une dizaine de secondes pour un demarrage. D ou le message d attente
+   et le desarmement temporaire des deux boutons. */
+/* ⚠️ L ATTENTE VIT HORS DE LA CARTE, et elle n a pas le choix. `fusionne`
+   reconstruit les boutons a chaque rendu depuis `d.pc` : desactiver le bouton
+   clique ne tenait pas deux secondes, le rendu suivant le recreait actif. C est
+   donc la fonction de rendu qui doit connaitre l attente, et elle la lit ici.
+   Meme raison pour l ancienne note ajoutee sous les boutons : elle faisait
+   passer `.pcb` de deux enfants a trois, ce que `fusionne` remplace en bloc.
+   L etat se dit maintenant dans le LIBELLE des boutons, dont le nombre ne
+   bouge jamais. */
+let pcAttente = null;   /* { action, depuis } */
+
+/* ⚠️ SIMULATION, MODE DEMONSTRATION SEULEMENT. Une demonstration statique n a
+   aucun veilleur derriere elle : la demande n est jamais consommee, l etat ne
+   change jamais, et l attente tournerait jusqu a son plafond de quatre minutes.
+   On fait donc repondre la machine, ce qui montre la fonction au lieu de la
+   laisser paraitre cassee. Reste `null` en production. */
+let pcDemo = null;
+
+/* ⚠️ UNE ATTENTE PREND FIN QUAND LA SONDE CONFIRME, pas apres un delai devine.
+   Un demarrage prend une trentaine de secondes, une extinction vingt de plus,
+   et le collecteur ne repasse que deux fois par minute : tout delai fixe serait
+   soit trop court, soit une immobilisation gratuite.
+   ⚠️ Un plafond reste indispensable. Si l action echoue — paquet perdu, poste
+   debranche — rien ne viendra jamais confirmer, et les deux boutons resteraient
+   gris pour toujours. Quatre minutes couvrent largement un demarrage complet. */
+const pcEnCours = (p) => {
+  if (!pcAttente) return null;
+  const confirme = pcAttente.action === "on" ? p.on === true : p.on === false;
+  if (confirme || Date.now() - pcAttente.depuis > 240000) { pcAttente = null; return null; }
+  return pcAttente.action;
+};
+
+/* ============ ALLUMER ET ETEINDRE LE POSTE ============
+   Meme mecanique que le bouton des mises a jour : la page DEPOSE une demande,
+   un veilleur du NAS la consomme. Elle n execute rien elle-meme.
+
+   ⚠️ PAR DELEGATION, et c est impose par `fusionne` : les boutons vivent dans
+   une carte redessinee toutes les deux secondes, un gestionnaire pose dessus
+   serait detruit au rendu suivant. Le bouton des mises a jour, lui, peut se
+   permettre un `onclick` direct parce qu il vit dans une fenetre modale, hors
+   de l arbre rendu. */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-pc]");
+  if (!b || b.disabled || pcAttente) return;
+  e.preventDefault();
+  const action = b.dataset.pc;
+  if (action === "off" && !confirm("Éteindre le poste ?")) return;
+
+  pcAttente = { action, depuis: Date.now() };
+  refresh();                       /* pour que le libelle change tout de suite */
+
+  if (DEMO) {
+    /* Le delai n est pas cosmetique : sans lui le bouton changerait d etat
+       dans la meme image que le clic, et on ne verrait jamais l attente que
+       cette carte sert justement a montrer. */
+    setTimeout(() => {
+      pcDemo = { on: action === "on", vu: Math.floor(Date.now() / 1000) };
+      refresh();
+    }, 2600);
+    return;
+  }
+
+  /* ⚠️ `fetch` NE LEVE PAS SUR UN CODE HTTP D ERREUR. Il ne rejette que sur
+     une panne reseau : un 405 ou un 403 se resout normalement, le `catch`
+     n aurait jamais servi, et le bouton aurait tourne jusqu au plafond de
+     quatre minutes. C est exactement ce qui arrivait sur la demonstration. */
+  try {
+    const r = await fetch("data/pc.json", { method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, at: Date.now() }) });
+    if (!r.ok) { pcAttente = null; refresh(); }
+  } catch { pcAttente = null; refresh(); }
+});
+
 /* ============ MODE DEMONSTRATION ============
    Les memes fichiers que le NAS, remplis de donnees inventees. Par-dessus, un
    CALQUE ecrase quelques champs pour montrer un etat degrade sans maintenir une
@@ -1493,7 +1580,15 @@ function tronque(d) {
   return d;
 }
 
-const demo = (d) => DEMO ? rebase(tronque(horodate(DEMO_CALQUE ? fusion(d, DEMO_CALQUE) : d))) : d;
+/* ⚠️ `pcDemo` s applique APRES le calque, et c est indispensable : le calque
+   d un scenario porte lui aussi un `pc`, et il ecraserait la simulation a
+   chaque rendu. Ce qu on vient de demander doit primer sur le scenario. */
+const demo = (d) => {
+  if (!DEMO) return d;
+  const o = rebase(tronque(horodate(DEMO_CALQUE ? fusion(d, DEMO_CALQUE) : d)));
+  if (pcDemo) o.pc = { ...(o.pc || {}), ...pcDemo };
+  return o;
+};
 
 async function demoCharge(id) {
   const e = DEMO.liste.find(x => x.id === id)

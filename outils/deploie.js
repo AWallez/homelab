@@ -99,7 +99,13 @@ console.log("  " + fichiers.length + " fichiers dans la liste blanche\n");
 
 let distant = {};
 try {
-  const sortie = ssh("cd " + CIBLE + " && md5sum " + fichiers.map(f => "'" + f + "'").join(" ") + " 2>/dev/null");
+  /* ⚠️ `|| true` EST INDISPENSABLE. `md5sum` rend un code 1 des qu UN SEUL
+     fichier de la liste manque, ce qui est le cas NORMAL au premier deploiement
+     d une icone ou d un fichier neuf. Sans lui, `execFileSync` leve et le
+     `catch` plus bas annonce « NAS injoignable, coffre Bitwarden verrouille ? » :
+     un diagnostic qui envoie chercher a l oppose du vrai probleme. La sortie
+     standard porte deja les empreintes des fichiers presents, seul ce qu on lit. */
+  const sortie = ssh("cd " + CIBLE + " && md5sum " + fichiers.map(f => "'" + f + "'").join(" ") + " 2>/dev/null || true");
   for (const l of sortie.split("\n")) {
     const m = /^([0-9a-f]{32})\s+(.+)$/.exec(l.trim());
     if (m) distant[m[2]] = m[1];

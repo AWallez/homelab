@@ -22,5 +22,12 @@ services:
       - "4173:80"
     volumes:
       - ./www:/usr/share/nginx/html:ro
+      # ⚠️ SEUL `data/` est inscriptible, et c est deliberement plus etroit que
+      # le NAS, qui monte tout `www/` en lecture-ecriture. La page n ecrit que
+      # deux fichiers, tous deux ici ; le reste n a aucune raison de l etre, et
+      # une demonstration publique ne doit pas pouvoir se faire reecrire ses
+      # fixtures par un PUT. nginx refuse deja les autres chemins, ceci est la
+      # seconde barriere.
+      - ./www/data:/usr/share/nginx/html/data
       - ./outils/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
