@@ -37,3 +37,11 @@ outils/.installe.tmp
 #                    sur le NAS et n est jamais deployee depuis ici : c est
 #                    pourquoi ce fichier est absent de la liste blanche de
 #                    `outils/deploie.js`.
+
+# Demandes deposees par la page, consommees puis effacees par les veilleurs du
+# NAS. Ce sont des artefacts d execution, pas des sources : `shortcuts.json`
+# reste suivi parce qu il porte, lui, les raccourcis par defaut.
+www/data/trigger.json
+www/data/pc.json
+www/data/maj-status.json
+www/data/pc-status.json

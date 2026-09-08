@@ -1278,3 +1278,47 @@ dialog.dlg::after {
    son contenu. */
 .duo.tro > *:first-child { flex: 1 1 auto; min-width: 190px }
 .duo.tro > *:last-child  { flex: 0 1 auto; min-width: 0 }
+
+/* ---- 33. Boutons du poste de travail ------------------------------------
+   ⚠️ `margin-top: auto` est DEJA reclame par `.note` dans une carte : deux
+   blocs qui se disputent l espace libre creuseraient un trou au milieu. Les
+   boutons prennent donc une marge fixe.
+   ⚠️ `pointer-events` sur le bouton desactive : sans lui, le curseur reste une
+   main sur un bouton qui ne fait rien, ce qui se lit comme une panne. */
+/* ⚠️ LARGEUR BORNEE. La carte occupe la rangee entiere, 1136 px : sans ce
+   plafond, deux boutons en `flex: 1 1 0` feraient 555 px chacun et se liraient
+   comme des bandeaux, pas comme des boutons. */
+/* ⚠️ UNE LARGEUR, PAS UN PLAFOND. `.pcb` est un enfant de colonne flex :
+   avec `max-width` et `margin: auto`, il retrecit a son CONTENU et les boutons
+   tombaient a 60 px. `min()` impose la largeur tout en cedant sur une carte
+   etroite. */
+.pcb { display: flex; gap: 8px; margin: 12px auto 2px; width: min(340px, 100%) }
+.pcb button { flex: 1 1 0; font: inherit; font-size: .74rem; font-weight: 600;
+  color: var(--ink); cursor: pointer; padding: .42rem .5rem; border-radius: 9px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
+  transition: background .15s, border-color .15s }
+.pcb button:hover:not(:disabled) { background: rgba(255,255,255,.13);
+  border-color: rgba(255,255,255,.28) }
+.pcb button[data-pc="on"]:hover:not(:disabled) { border-color: var(--sok) }
+.pcb button[data-pc="off"]:hover:not(:disabled) { border-color: var(--swn) }
+.pcb button:disabled { opacity: .38; cursor: default; pointer-events: none }
+
+/* Le bouton en attente reste LISIBLE la ou les autres s effacent : c est lui
+   qui porte l information. Le rond qui tourne dit que ca travaille, la ou un
+   simple grisage se lit comme une panne.
+   ⚠️ Le libelle change aussi, et c est le vrai signal. L animation seule ne
+   dirait pas CE QU ON ATTEND, et un utilisateur qui revient sur la page dix
+   secondes plus tard doit pouvoir le lire. */
+.pcb button.att { opacity: .92; border-color: rgba(255,255,255,.3);
+  background: rgba(255,255,255,.11); display: flex; align-items: center;
+  justify-content: center; gap: 7px; font-size: .7rem }
+.pcb button.att::before { content: ""; width: 11px; height: 11px; flex: none;
+  border-radius: 50%; border: 1.5px solid rgba(255,255,255,.28);
+  border-top-color: var(--ink); animation: pctourne .7s linear infinite }
+@keyframes pctourne { to { transform: rotate(360deg) } }
+
+/* ⚠️ Respecte le reglage systeme : sous « animations reduites », le rond se
+   fige au lieu de tourner. Le libelle, lui, suffit a dire l attente. */
+@media (prefers-reduced-motion: reduce) { .pcb button.att::before { animation: none } }
+.pcn { flex: 1 1 100%; font-size: .66rem; color: var(--mut); text-align: center;
+  margin-top: 2px }

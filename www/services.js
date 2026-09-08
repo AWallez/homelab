@@ -677,6 +677,50 @@ GROUPS.push(
             + past([[d.wg.c > 0 ? d.wg.c + " connecté" + (d.wg.c > 1 ? "s" : "") : "Aucune connexion",
                      d.wg.c > 0 ? "ok" : ""],
                     [d.wg.t + " enregistré" + (d.wg.t > 1 ? "s" : "")]]) },
+    /* Le poste de travail, allumable et extinguible a distance depuis la page.
+
+       ⚠️ TROIS ETATS, PAS DEUX. « Eteint » et « injoignable » se ressemblent vus
+       du NAS — dans les deux cas la sonde ne repond pas — mais n appellent pas
+       la meme reaction : le premier se reveille d un clic, le second veut qu on
+       aille voir le cable. On les separe sur la DERNIERE VUE, que le collecteur
+       persiste : au-dela de 24 h sans reponse, la machine n est plus consideree
+       comme simplement eteinte, et la carte passe en alerte.
+
+       ⚠️ La sonde teste le PORT 22, deja ouvert par le service SSH du poste, et
+       non l ICMP que Windows bloque par defaut : un ping sans reponse aurait
+       fait passer un PC allume pour eteint.
+
+       ⚠️ LES BOUTONS NE FONT QU UNE CHOSE : deposer une demande. C est un
+       veilleur du NAS qui l execute, apres l avoir validee contre une liste
+       fixe. La page n a jamais le droit de lancer une commande.
+
+       ⚠️ PLACEE AVANT LES DEUX CARTES-LIENS, et c est ce qui referme le bloc.
+       La grille est un bento : une carte de donnees occupe DEUX rangees de
+       100 px, une carte-lien une seule. Posee apres elles, cette carte ouvrait
+       une rangee a elle seule et laissait la moitie droite vide ; posee avant,
+       le placement automatique empile Vaultwarden et Dockge a sa droite. L ordre
+       de cette liste est donc signifiant ici. */
+    { n: "PC fixe", d: "Poste de travail", ic: "pc", w: 2,
+      r: d => {
+        const p = d.pc || {};
+        const att = pcEnCours(p);          /* action en attente, ou null */
+        const age = p.vu ? Math.max(0, Math.floor(Date.now() / 1000) - p.vu) : null;
+        const perdu = !p.on && (age === null || age > 86400);
+        return (p.on ? calme("<b>Allumé</b> — le poste répond")
+                     : perdu ? hero("Injoignable", "hors du réseau", "wn")
+                             : calme("<b>Éteint</b> — prêt à être réveillé"))
+          + `<div class="pcb">
+               <button data-pc="on" class="${att === "on" ? "att" : ""}"${att || p.on ? " disabled" : ""}>${
+                 att === "on" ? "Réveil en cours" : "Allumer"}</button>
+               <button data-pc="off" class="${att === "off" ? "att" : ""}"${att || !p.on ? " disabled" : ""}>${
+                 att === "off" ? "Extinction en cours" : "Éteindre"}</button>
+             </div>`
+          + past([[age === null ? "jamais vu"
+                   : p.on ? "en ligne" : "vu il y a " + duree(Math.floor(age / 60)),
+                   p.on ? "ok" : perdu ? "wn" : ""]]);
+      },
+      warn: d => { const p = d.pc || {};
+        return !p.on && (!p.vu || Math.floor(Date.now() / 1000) - p.vu > 86400); } },
     { n: "Vaultwarden", d: "Coffre-fort de mots de passe",
       x: "https://coffre.example.com", ic: "vaultwarden", mini: 1, w: 2 },
     { n: "Dockge", d: "Gestion des stacks Docker", u: go(5001), ic: "dockge", mini: 1, w: 2 },
