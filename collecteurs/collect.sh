@@ -251,10 +251,15 @@ BZE=$(g "http://$IP:6767/api/episodes/wanted?apikey=$HOMEPAGE_VAR_BAZARR_KEY" | 
 BZM=$(g "http://$IP:6767/api/movies/wanted?apikey=$HOMEPAGE_VAR_BAZARR_KEY" | jq -r '.total // 0')
 
 # --- Jellyfin ---
-JC=$(g "http://$IP:8096/Items/Counts?api_key=$HOMEPAGE_VAR_JELLYFIN_KEY")
+# ⚠️ JELLYFIN 12 A SUPPRIMÉ L'AUTHENTIFICATION PAR PARAMÈTRE D'URL. Mesuré le
+# 09/09/2026 sur la 12.0.0 : `?api_key=` renvoie 401, et l'en-tête `X-Emby-Token`
+# aussi. Seul `Authorization: MediaBrowser Token="..."` répond encore 200.
+# Déclaré une fois ici plutôt que répété : une seule ligne à changer si ça rebouge.
+JH="Authorization: MediaBrowser Token=\"$HOMEPAGE_VAR_JELLYFIN_KEY\""
+JC=$(g -H "$JH" "http://$IP:8096/Items/Counts")
 JM=$(echo "$JC" | jq -r '.MovieCount // 0'); JS=$(echo "$JC" | jq -r '.SeriesCount // 0')
 JE=$(echo "$JC" | jq -r '.EpisodeCount // 0')
-JNOW=$(g "http://$IP:8096/Sessions?api_key=$HOMEPAGE_VAR_JELLYFIN_KEY" \
+JNOW=$(g -H "$JH" "http://$IP:8096/Sessions" \
   | jq -r '[.[] | select(.NowPlayingItem) | "\(.UserName) — \(.NowPlayingItem.Name)"] | join(" · ")')
 
 # --- Seerr ---

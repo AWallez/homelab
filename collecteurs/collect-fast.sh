@@ -39,7 +39,7 @@ tick(){
     case "$QDL" in ''|*[!0-9]*) QDL=0;; esac
     case "$QUL" in ''|*[!0-9]*) QUL=0;; esac
 
-    JNOW=$(curl -s --max-time 5 "http://$IP:8096/Sessions?api_key=$HOMEPAGE_VAR_JELLYFIN_KEY" \
+    JNOW=$(curl -s --max-time 5 -H "Authorization: MediaBrowser Token=\"$HOMEPAGE_VAR_JELLYFIN_KEY\"" "http://$IP:8096/Sessions" \
       | jq -r '[.[]? | select(.NowPlayingItem) | "\(.UserName) — \(.NowPlayingItem.Name)"] | join(" · ")' 2>/dev/null)
   fi
 
