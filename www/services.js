@@ -96,7 +96,7 @@ const GROUPS = [
                        [d.jellyfin.episodes, "épisodes"]])
               + `<div class="note">Aucune lecture en cours</div>` },
     { n: "Seerr", d: "Demandes de la famille", u: go(5055),
-      x: "https://demandes.example.com", ic: "jellyseerr", w: 2,
+      x: "https://demandes.example.com", ic: "seerr", w: 2,
       r: d => (d.seerr.pending > 0
             ? hero(d.seerr.pending, "demandes<br>en attente", "wn")
             : calme("<b>Aucune demande en attente</b>"))
