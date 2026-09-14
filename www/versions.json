@@ -1,0 +1,32 @@
+{
+  "maj": "14/03 15:20",
+  "total": 26,
+  "items": [
+    {"n":"arr-soustitres","v":"v1.6.0-ls354","d":"14/03","ts":1789390000,"u":"https://github.com/morpheus65535/bazarr/releases/tag/v1.6.0","h":false},
+    {"n":"arr-indexeurs","v":"2.5.2.5491-ls159","d":"14/03","ts":1789389000,"u":"https://github.com/Prowlarr/Prowlarr/releases/tag/v2.5.2.5491","h":false},
+    {"n":"arr-films","v":"6.3.0.10514-ls316","d":"14/03","ts":1789388000,"u":"https://github.com/Radarr/Radarr/releases/tag/v6.3.0.10514","h":false},
+    {"n":"arr-series","v":"4.0.19.2979-ls324","d":"14/03","ts":1789387000,"u":"https://github.com/Sonarr/Sonarr/releases/tag/v4.0.19.2979","h":false},
+    {"n":"supervision","v":"a99bbdba82f5","d":"12/03","ts":1789210000,"u":"https://github.com/louislam/uptime-kuma/releases","h":true},
+    {"n":"arr-client","v":"5.2.3_v2.0.14-ls475","d":"08/03","ts":1788860000,"u":"https://github.com/qbittorrent/qBittorrent/releases","h":false},
+    {"n":"serveur-media","v":"10.9.11","d":"08/03","ts":1788859000,"u":"https://github.com/jellyfin/jellyfin/releases/tag/v10.9.11","h":false},
+    {"n":"tableaux","v":"1b595815db66","d":"03/03","ts":1788430000,"u":"","h":true},
+    {"n":"portfolio-web","v":"17f13eb2d457","d":"02/03","ts":1788350000,"u":"","h":true},
+    {"n":"portfolio-api","v":"77aa5b71284a","d":"02/03","ts":1788349000,"u":"","h":true},
+    {"n":"arr-tunnel","v":"v3.41.3","d":"28/02","ts":1788000000,"u":"https://github.com/qdm12/gluetun/releases/tag/v3.41.3","h":false},
+    {"n":"portfolio-notifs","v":"f22fb212dc2e","d":"28/02","ts":1787990000,"u":"https://github.com/binwiederhier/ntfy/releases","h":true},
+    {"n":"arr-resolveur","v":"v3.5.0","d":"28/02","ts":1787980000,"u":"https://github.com/FlareSolverr/FlareSolverr/releases/tag/v3.5.0","h":false},
+    {"n":"umami","v":"4de1f12b23e1","d":"26/02","ts":1787810000,"u":"","h":true},
+    {"n":"coffre-fort","v":"1.32.7","d":"26/02","ts":1787800000,"u":"https://github.com/dani-garcia/vaultwarden/releases","h":false},
+    {"n":"dns-filtrant","v":"v0.107.6","d":"19/02","ts":1787200000,"u":"https://github.com/AdguardTeam/AdGuardHome/releases/tag/v0.107.6","h":false},
+    {"n":"umami-base","v":"1bea307dfb3e","d":"17/02","ts":1787030000,"u":"","h":true},
+    {"n":"portfolio-base","v":"1bea307dfb3e","d":"15/02","ts":1786860000,"u":"","h":true},
+    {"n":"vpn-acces","v":"v15.4.0","d":"14/02","ts":1786770000,"u":"https://github.com/wg-easy/wg-easy/releases/tag/v15.4.0","h":false},
+    {"n":"veille-images","v":"4.33.0","d":"14/02","ts":1786760000,"u":"https://github.com/crazy-max/diun/releases/tag/v4.33.0","h":false},
+    {"n":"portfolio-proxy","v":"v2.11.4","d":"14/02","ts":1786750000,"u":"https://github.com/caddyserver/caddy/releases/tag/v2.11.4","h":false},
+    {"n":"arr-croisement","v":"version-6.13.7","d":"13/02","ts":1786680000,"u":"https://github.com/cross-seed/cross-seed/releases","h":false},
+    {"n":"portfolio-admin","v":"ce33803939e4","d":"09/02","ts":1786340000,"u":"","h":true},
+    {"n":"arr-demandes","v":"v3.4.1","d":"31/01","ts":1785560000,"u":"https://github.com/seerr-team/seerr/releases/tag/v3.4.1","h":false},
+    {"n":"sauvegarde","v":"e85d511b2a8b","d":"05/01","ts":1783300000,"u":"https://github.com/louislam/dockge/releases","h":true},
+    {"n":"jeux-serveur","v":"11c80bbe604d","d":"25/12","ts":1782300000,"u":"","h":true}
+  ]
+}

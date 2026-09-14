@@ -851,7 +851,8 @@ dialog.dlg::after {
    qu aucune largeur, meme en `!important`, ne corrigeait.
    💡 Devant une boite qui refuse sa largeur, la mesurer HORS de son conteneur :
    ici elle faisait 18 px, ce qui innocentait la grille. */
-.majl input[type=checkbox] {
+.majl input[type=checkbox],
+.hist input[type=checkbox] {
   appearance: none;
   -webkit-appearance: none;
   box-sizing: border-box;
@@ -867,12 +868,14 @@ dialog.dlg::after {
   cursor: pointer;
   transition: background-color .15s, border-color .15s;
 }
-.majl input[type=checkbox]:checked {
+.majl input[type=checkbox]:checked,
+.hist input[type=checkbox]:checked {
   background-color: var(--sbl);
   border-color: var(--sbl);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.4L4.6 9 10 3.2' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-.majl input[type=checkbox]:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px }
+.majl input[type=checkbox]:focus-visible,
+.hist input[type=checkbox]:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px }
 
 /* La case court sur les DEUX rangees de la ligne, pour etre centree sur toute sa
    hauteur plutot que collee au nom.
@@ -881,22 +884,27 @@ dialog.dlg::after {
    retombe sur la ligne 1 — l element ne s etend pas d un pouce. La propriete
    calculee affiche pourtant fidelement « 1 / -1 », ce qui ne laisse rien voir du
    probleme. */
-.majl li.att input[type=checkbox] { grid-row: 1 / span 2; align-self: center }
+.majl li.att input[type=checkbox],
+.hist li.att input[type=checkbox] { grid-row: 1 / span 2; align-self: center }
 
-.majl li.att {
+.majl li.att,
+.hist li.att {
   position: relative;
   cursor: pointer;
   transition: background-color .15s, border-color .15s;
 }
 /* Étend la zone d'activation du label à toute la ligne. */
-.majl li.att label::before { content: ""; position: absolute; inset: 0; border-radius: 9px }
+.majl li.att label::before,
+.hist li.att label::before { content: ""; position: absolute; inset: 0; border-radius: 9px }
 /* ⚠️ Sans ceci, le clic sur le numéro de version ne sélectionnait pas. La
    ligne de version est un frère du label, et elle capte le clic avant la
    surcouche. Elle n'a rien d'interactif : on la rend transparente aux clics
    plutôt que de se battre avec l'ordre de peinture. */
 .majl li.att .vs { pointer-events: none }
-.majl li.att:hover { background: rgba(255,255,255,.10) }
-.majl li.att:has(:checked) {
+.majl li.att:hover,
+.hist li.att:hover { background: rgba(255,255,255,.10) }
+.majl li.att:has(:checked),
+.hist li.att:has(:checked) {
   background: rgba(77,151,238,.14);
   border-color: rgba(77,151,238,.42);
 }
@@ -904,6 +912,83 @@ dialog.dlg::after {
 /* Le compteur des lignes en attente prend l'ambre du reste de la page ;
    celui des lignes à jour reste neutre. */
 .majh:not(.discret) b { background: rgba(255,179,64,.16); color: #ffd08a }
+
+
+/* ---- 17b. Inventaire des versions installées ------------------------------
+   Liste distincte de `.majl` et volontairement NON réutilisée d'elle : `.majl`
+   porte le curseur, le survol et le `:has(:checked)` de la sélection. Les
+   reprendre ici ferait passer pour cliquables des lignes qui ne le sont pas.
+
+   ⚠️ UNE SEULE RANGÉE, contrairement au point 16. Là-bas il fallait loger une
+   TRANSITION (« …ls322 → …ls324 », environ 250 px) ; ici il n'y a qu'un
+   numéro. Avec 27 conteneurs, la disposition sur deux rangées ajoutait plus de
+   400 px de défilement pour rien.
+   ⚠️ Le repli sur deux rangées revient sous 600 px, où les quatre colonnes ne
+   tiennent plus : la version passe alors sous le nom. */
+.hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px }
+.hist li {
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr) auto auto;
+  column-gap: 10px;
+  row-gap: 3px;
+  align-items: center;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+.hist li:not(.att):hover { background: rgba(255,255,255,.06) }
+
+/* ⚠️ TOUTES LES LIGNES TIENNENT SUR UNE RANGÉE, actionnables comprises.
+   Le commentaire du point 16 annonçait 250 px pour une transition de versions,
+   ce qui avait justifié un repli sur deux rangées. Mesure réelle du 14/09 sur
+   « v3.5.0 → v3.5.2 » : 79,5 px. Le repli n'apportait rien et coûtait 36 px de
+   hauteur par ligne, en poussant le lien « notes » sous la case à cocher.
+   Si une transition devenait vraiment longue, c'est le NOM qui se réduit, ce
+   qui est le bon arbitrage : on lit une version en entier, pas un nom. */
+.hist li.att { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.1) }
+.hist li.att .hv s { text-decoration: line-through; opacity: .6 }
+.hist li.att .hv i { opacity: .55; margin: 0 2px }
+.hist .hd { font-size: .68rem; opacity: .5; font-variant-numeric: tabular-nums; white-space: nowrap }
+
+/* ⚠️ `style.css` impose `text-transform: uppercase` à TOUT `label` de fenêtre
+   (règle `.dlg label`), ce que `.majl label` annulait. Le nom du conteneur étant
+   désormais le label lui-même, il faut refaire cette annulation ici, sans quoi
+   toute la liste s'affiche en capitales. */
+.hist .hn {
+  font-size: .8rem; margin: 0;
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-transform: none; letter-spacing: 0; color: var(--ink);
+}
+/* La surcouche de clic est un `::before` absolu porté par le label : le masquer
+   au débordement l'amputerait de toute la largeur de la ligne. */
+.hist li.att .hn { cursor: pointer; overflow: visible }
+.hist .hv { font-size: .68rem; opacity: .72; white-space: nowrap; justify-self: end }
+/* ⚠️ Sans ceci, le clic sur le numéro de version ne sélectionnait pas la ligne :
+   il est frère du label et capte le clic avant la surcouche de `::before`. */
+.hist li.att .hv { pointer-events: none }
+/* Une empreinte d'image à la place d'une version : c'est une donnée technique,
+   pas un numéro qu'on lit. Le chiffre monospace la distingue au premier coup
+   d'œil d'une vraie version. */
+.hist .hv.brut { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .62rem; opacity: .45 }
+
+/* Le lien vers les notes de version, discret au repos : il ne doit pas
+   concurrencer le nom du conteneur, qui reste l'information principale. */
+.hist .hl { font-size: .68rem; text-decoration: none; white-space: nowrap; color: var(--sbl); opacity: .75 }
+.hist .hl:hover { opacity: 1; text-decoration: underline }
+.hist .hl:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px; border-radius: 4px }
+/* Images maison : aucune étiquette OCI, donc aucune note à pointer. */
+.hist .hl.vide { color: inherit; opacity: .3 }
+
+/* La légende de la section, plus discrète que `.sub2` qui sert aux titres. */
+.sub3 { margin: -2px 0 8px; font-size: .68rem; opacity: .45 }
+
+@media (max-width: 600px) {
+  /* Quatre colonnes ne tiennent plus : la version passe sous le nom pour TOUTES
+     les lignes, actionnables comprises. */
+  .hist li { grid-template-columns: 18px auto minmax(0, 1fr) auto }
+  .hist .hv { grid-column: 3 / -1; justify-self: start; white-space: normal; word-break: break-all }
+}
 
 /* ---- 18. Ratios par tracker ---------------------------------------------
    ⚠️ AUCUNE BARRE : une barre a besoin d une reference, or les trois ratios

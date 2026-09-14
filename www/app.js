@@ -708,55 +708,101 @@ async function getUpd() {
   try { return await (await fetch("updates.json?" + Date.now())).json(); }
   catch { return DATA.updates || {}; }
 }
+
+/* ⚠️ INVENTAIRE DE TOUS LES CONTENEURS, ecrit par `versions.sh`, trie du plus
+   recemment mis a jour au plus ancien.
+
+   Ce n est PAS un journal d evenements. `maj-history.json` dit « le 14/09,
+   sonarr est passe de ls322 a ls324 » ; celui-ci dit « sonarr est en ls324,
+   recree le 14/09 ». Trie par date decroissante il repond aux deux questions a
+   la fois, ce qui evite d avoir deux listes a lire dans la meme fenetre.
+
+   Le fichier peut ne pas exister — installation neuve, collecteur pas encore
+   passe — et c est un cas NORMAL : on renvoie une liste vide plutot que de
+   laisser l absence casser l ouverture de la fenetre. */
+async function getVersions() {
+  try { return await (await fetch("versions.json?" + Date.now())).json(); }
+  catch { return { items: [] }; }
+}
 async function majState() {
   try { return await (await fetch("data/maj-status.json?" + Date.now())).text(); }
   catch { return ""; }
 }
 
-/* ⚠️ COLONNE DES VERSIONS. `x.v` est la version installee, `x.nv` la cible,
-   toutes deux lues dans `org.opencontainers.image.version` — la premiere sur le
-   conteneur qui tourne, la seconde sur l image que Watchtower a deja telechargee.
+/* ⚠️ UNE SEULE LISTE, FUSION DE DEUX SOURCES. Il y en avait trois auparavant,
+   et les 13 conteneurs a mise a jour manuelle apparaissaient DEUX FOIS : dans
+   « Deja a jour » puis dans « Versions installees ». Pire, les deux sections se
+   contredisaient — `umami` affichait « ? » dans l une et son empreinte d image
+   dans l autre — parce que deux collecteurs repondaient a la meme question.
 
-   `x.nv` est VIDE quand elle n apporterait rien : cinq conteneurs n ont aucune
-   etiquette de version, et celle d arr-gluetun vaut litteralement « latest ». La
-   ligne n affiche alors que la version installee, barree par le CSS, ce qui
-   suffit a dire qu elle est depassee.
+   ⚠️ L INVENTAIRE FAIT AUTORITE SUR LES VERSIONS. `versions.json` releve ce qui
+   TOURNE (`docker inspect`), tandis que `updates.json` n apporte ici que deux
+   choses : l etat « mise a jour disponible » et la version cible. En cas de
+   desaccord, l inventaire gagne.
+
+   ⚠️ LES CASES A COCHER N EXISTENT QUE POUR LES CONTENEURS ACTIONNABLES, et la
+   mecanique en aval n a PAS bouge : elle lit `input[type=checkbox]` et envoie
+   `b.value`. Emettre le nom du conteneur en `value` suffit a la laisser
+   intacte.
 
    Les lignes en attente passent sur DEUX HAUTEURS (cf. `fond.css`) :
    « 5.2.3_v2.0.14-ls471 -> 5.2.3_v2.0.14-ls473 » fait environ 250 px quand la
    colonne en mesure 104. */
-function paintUpd(u, note) {
+function paintUpd(u, note, vers) {
   const it = u.items || [];
+  const vit = (vers && vers.items) || [];
   const risque = (n) => /postgres|db$|broker/.test(n);
-  // Les deux populations sont separees : ce qu il y a a faire d abord, le reste
-  // en dessous et en retrait. L index d origine est conserve pour les cases.
-  const idx = it.map((x, k) => [x, k]);
-  const att = idx.filter(([x]) => x.upd), ajour = idx.filter(([x]) => !x.upd);
-  const ligne = ([x, k]) => `<li class="${x.upd ? "att" : "ok"}">
+  /* ⚠️ LE LIEN EST FILTRE. Son origine est l etiquette OCI de l image, donc une
+     donnee declarative que l on ne controle pas — celle de gluetun pointe vers
+     un fork alors que l image est officielle. Une image malveillante pourrait y
+     placer un `javascript:`. Seul un https absolu est rendu cliquable. */
+  const lienSur = (s) => typeof s === "string" && /^https:\/\/[\w.-]+\//.test(s);
+
+  const parNom = new Map(it.map(x => [x.n, x]));
+  const fusion = vit.map(v => {
+    const m = parNom.get(v.n);
+    parNom.delete(v.n);
+    return { n: v.n, d: v.d || "", ts: v.ts || 0, v: v.v || "", h: !!v.h,
+             url: v.u || "", upd: !!(m && m.upd), nv: (m && m.nv) || "" };
+  });
+  // ⚠️ UN CONTENEUR ARRETE EST SUIVI PAR `check-updates.sh` MAIS INVISIBLE A
+  // `docker ps`, donc absent de l inventaire. Sans ce rattrapage il
+  // disparaitrait de la fenetre au moment ou l on en a le plus besoin.
+  for (const m of parNom.values())
+    fusion.push({ n: m.n, d: "", ts: -1, v: m.v || "", h: false,
+                  url: "", upd: !!m.upd, nv: m.nv || "" });
+
+  // Les actionnables d abord, c est pour eux qu on ouvre la fenetre. Le reste
+  // garde l ordre de l inventaire, du plus recemment mis a jour au plus ancien.
+  fusion.sort((a, b) => (b.upd - a.upd) || (b.ts - a.ts));
+  const nAtt = fusion.filter(x => x.upd).length;
+
+  const ligne = (x, k) => `<li class="${x.upd ? "att" : ""}">
       ${x.upd ? `<input type="checkbox" id="c${k}" value="${esc(x.n)}">`
               : `<span class="pastille"></span>`}
-      <label ${x.upd ? `for="c${k}"` : ""}><span class="nm">${esc(x.n)}</span>
-        ${x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}</label>
-      <span class="vs">${x.upd && x.nv
-        ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>`
-        : `<s>${esc(x.v)}</s>`}</span></li>`;
+      <span class="hd">${esc(x.d)}</span>
+      <label class="hn" ${x.upd ? `for="c${k}"` : ""}>${esc(x.n)}${
+        x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}</label>
+      <span class="hv${x.h && !x.upd ? " brut" : ""}"${
+        x.h && !x.upd ? ' title="Aucune étiquette de version sur cette image : empreinte affichée à la place."' : ""}>${
+        x.upd && x.nv ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
+      ${lienSur(x.url)
+        ? `<a class="hl" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">notes</a>`
+        : `<span class="hl vide">—</span>`}</li>`;
 
-  dlg().innerHTML = `<form method="dialog"><h3>Mises à jour manuelles</h3>
-    <p class="sub">${u.total || 0} en attente sur ${u.verifies || 0} conteneurs surveillés · contrôle du ${esc(u.maj || "?")}</p>
-    <p class="sub2">Les autres sont mis à jour automatiquement chaque nuit, ou construits localement.</p>
+  dlg().innerHTML = `<form method="dialog"><h3>Conteneurs et mises à jour</h3>
+    <p class="sub">${fusion.length} conteneurs · ${nAtt
+      ? `${nAtt} mise${nAtt > 1 ? "s" : ""} à jour en attente`
+      : "tout est à jour"}</p>
+    <p class="sub2">Du plus récemment mis à jour au plus ancien, les actionnables en tête${
+      vers && vers.maj ? ` · relevé du ${esc(vers.maj)}` : ""}</p>
     <div class="scroll">
-      ${att.length
-        ? `<div class="majh">À mettre à jour<b>${att.length}</b></div>
-           <ul class="majl">${att.map(ligne).join("")}</ul>`
-        : `<div class="majv">Tout est à jour</div>`}
-      ${ajour.length
-        ? `<div class="majh discret">Déjà à jour<b>${ajour.length}</b></div>
-           <ul class="majl discret">${ajour.map(ligne).join("")}</ul>`
-        : ""}
-      ${it.length ? "" : `<div class="majv">Aucun conteneur surveillé</div>`}
+      ${fusion.length
+        ? `<ul class="hist">${fusion.map(ligne).join("")}</ul>`
+        : `<div class="majv">Aucun conteneur relevé</div>`}
     </div>
     <p class="etat" id="mst">${esc(note || "")}</p>
-    <div class="row centre">${att.length ? '<button type="button" id="mgo" class="go" disabled>Aucune mise à jour sélectionnée</button>' : ""}</div></form>`;
+    <div class="row centre">${nAtt ? '<button type="button" id="mgo" class="go" disabled>Aucune mise à jour sélectionnée</button>' : ""}</div></form>`;
 
   const d = dlg(), st = d.querySelector("#mst"), go = d.querySelector("#mgo");
   const boxes = [...d.querySelectorAll('input[type="checkbox"]')];
@@ -792,13 +838,13 @@ function paintUpd(u, note) {
         clearInterval(majTimer);
         go.className = "go ok"; go.textContent = "Terminé"; go.disabled = true;
         st.textContent = "✅ " + s.msg;
-        setTimeout(async () => { paintUpd(await getUpd(), "✅ " + s.msg); refresh(); }, 1500);
+        setTimeout(async () => { paintUpd(await getUpd(), "✅ " + s.msg, await getVersions()); refresh(); }, 1500);
       }
     }, 2000);
   });
 }
 
-async function popUpdates() { paintUpd(await getUpd(), ""); dlg().showModal(); }
+async function popUpdates() { paintUpd(await getUpd(), "", await getVersions()); dlg().showModal(); }
 
 /* Liste complete des conteneurs, triee par memoire decroissante. */
 /* Les piles se deduisent du prefixe du nom : aucune liste a maintenir,
