@@ -530,7 +530,7 @@ dialog.dlg[open]{display:flex;flex-direction:column}
 dialog.dlg>form{display:flex;flex-direction:column;min-height:0;flex:1}
 /* La fenêtre des mises à jour se reconnaît à sa liste : pas de classe à poser
    côté JS, donc rien à oublier au prochain appel. */
-dialog.dlg:has(.majl){width:min(560px,94vw)}
+dialog.dlg:has(.majl),dialog.dlg:has(.hist){width:min(560px,94vw)}
 .dlg.large{width:min(640px,94vw)}
 
 /* ---- Croix de fermeture ---- */
@@ -568,13 +568,13 @@ dialog.dlg:has(.majl){width:min(560px,94vw)}
   background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
 .majl li.att{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
 .majl.discret li{padding:6px 12px;background:transparent;border-color:transparent}
-.majl input[type=checkbox]{width:15px;height:15px;margin:0;accent-color:var(--sbl);cursor:pointer}
-.majl .pastille{width:5px;height:5px;border-radius:99px;background:var(--mut);opacity:.5;margin:0 5px}
+.majl input[type=checkbox],.hist input[type=checkbox]{width:15px;height:15px;margin:0;accent-color:var(--sbl);cursor:pointer}
+.majl .pastille,.hist .pastille{width:5px;height:5px;border-radius:99px;background:var(--mut);opacity:.5;margin:0 5px}
 .majl label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0;min-width:0;
   font-size:.8rem;text-transform:none;letter-spacing:0;color:var(--ink);cursor:pointer}
 .majl.discret label{color:var(--mut);font-size:.76rem;cursor:default}
 .majl .nm{overflow-wrap:anywhere}
-.majl .rq{font-size:.58rem;padding:1px 6px;border-radius:99px;white-space:nowrap;
+.majl .rq,.hist .rq{font-size:.58rem;padding:1px 6px;border-radius:99px;white-space:nowrap;
   background:rgba(214,138,38,.16);border:1px solid rgba(214,138,38,.3);color:#e0a458}
 .majl .vs{display:flex;align-items:center;gap:6px;flex:none;font-size:.7rem;
   font-family:ui-monospace,Consolas,monospace;color:var(--mut)}
