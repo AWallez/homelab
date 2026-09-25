@@ -775,8 +775,11 @@ function paintUpd(maj, note, vers) {
   const rangee = (n, v, s) => {
     s = s || {};
     const dispo = s.disponible || null;
+    // Une empreinte (h) ne dit rien : la version connue de l'outil passe devant,
+    // par exemple « nginx 1.30.5 » pour une image construite sur place.
+    const brut = !!(v && v.h) && !s.version;
     return { n, d: (v && v.d) || "", ts: v ? v.ts || 0 : -1,
-             v: (v && v.v) || s.version || "", h: !!(v && v.h), url: (v && v.u) || "",
+             v: (v && v.h && s.version) || (v && v.v) || s.version || "", h: brut, url: (v && v.u) || "",
              upd: !!(dispo || s.blocage), nv: (dispo && dispo.version) || "",
              mode: s.mode || "", bloc: s.blocage || null, neuf: !!s.decouvert,
              hors: ignores[n] || null,
