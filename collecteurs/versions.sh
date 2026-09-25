@@ -8,10 +8,15 @@
 # embarquer des donnees. Ce script, lui, est le vrai : c est celui qui tourne
 # sur le NAS.
 #
-# ⚠️ CE N EST PAS UN JOURNAL D EVENEMENTS. `maj-history.json` dit « le 14/09,
-# sonarr est passe de ls322 a ls324 ». Ce fichier-ci dit « sonarr est en ls324,
-# recree le 14/09 ». Trie par date decroissante, il repond aux deux questions a
-# la fois, ce qui evite d avoir deux listes a lire dans la meme fenetre.
+# ⚠️ CE N EST PAS UN JOURNAL D EVENEMENTS. Un journal dirait « le 14/09, sonarr
+# est passe de ls322 a ls324 ». Ce fichier-ci dit « sonarr est en ls324, recree
+# le 14/09 ». Trie par date decroissante, il repond aux deux questions a la
+# fois, ce qui evite d avoir deux listes a lire dans la meme fenetre.
+#
+# ⚠️ IL EST RELANCE APRES CHAQUE MISE A JOUR REUSSIE, par le reglage
+# `apres_mise_a_jour` de compose-auto-update, en plus de son passage quotidien.
+# Sans cela, la carte montrait la date d avant la mise a jour jusqu au releve
+# suivant, soit jusqu a un jour de retard.
 #
 # ⚠️ LA DATE EST CELLE DU CONTENEUR, PAS DE L IMAGE. `.Created` du conteneur est
 # l instant de sa derniere RECREATION, donc de sa derniere mise a jour reelle.
@@ -23,11 +28,6 @@ OUT=/volume1/docker/homelab/www/versions.json
 TMP=$(mktemp); NDJ=$(mktemp)
 trap 'rm -f "$TMP" "$NDJ"' EXIT
 
-# ⚠️ TABLE DUPLIQUEE AVEC maj-nas.sh. Les deux scripts resolvent les notes de
-# version de la meme facon, et la table doit rester identique dans les deux. La
-# factoriser reviendrait a toucher maj-nas.sh une quatrieme fois aujourd hui,
-# ce qui ne vaut pas le risque. A regrouper plus tard.
-#
 # Pour les images linuxserver.io, l etiquette OCI `source` pointe vers le depot
 # d EMPAQUETAGE, dont les notes parlent de la fabrication de l image et pas du
 # logiciel. D ou cette table vers l amont ; tout le reste lit l etiquette.

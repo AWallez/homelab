@@ -1,0 +1,303 @@
+{
+  "_": "Etat de DEMONSTRATION de compose-auto-update (https://github.com/AWallez/compose-auto-update). Toutes les valeurs sont inventees ; les noms suivent l inventaire de versions.json. La tuile « Mises a jour » de data.json est DERIVEE de ce fichier par genere-fixtures.js.",
+  "format": 1,
+  "derniere_passe": {
+    "fin": "2026-03-14T07:44:31+01:00",
+    "bilan": "1 mise(s) à jour, 1 erreur(s), 1 en attente, 1 nouveau(x)"
+  },
+  "conteneurs": {
+    "arr-soustitres": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v1.6.0-ls354",
+      "empreinte": "sha256:9e1b4a4b867a",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-indexeurs": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "2.5.2.5491-ls159",
+      "empreinte": "sha256:7efa2479dc92",
+      "disponible": {
+        "version": "2.5.2.5491-ls160",
+        "empreinte": "sha256:3d525378e212",
+        "vue_le": "2026-03-14T07:14:02+01:00"
+      },
+      "blocage": {
+        "raison": "telechargement",
+        "message": "téléchargement impossible après 3 essais",
+        "erreur": "Error response from daemon: Get \"https://ghcr.io/v2/\": net/http: TLS handshake timeout",
+        "conseil": "Le registre n'a pas répondu, rien n'a été installé. Relance la mise à jour depuis la page ; si l'échec persiste, vérifie que l'image existe toujours à cette adresse.",
+        "depuis": "2026-03-14T07:44:31+01:00"
+      },
+      "notifie": [],
+      "historique": []
+    },
+    "arr-films": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "6.3.0.10514-ls316",
+      "empreinte": "sha256:e4a260e22e8c",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-series": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "4.0.19.2979-ls324",
+      "empreinte": "sha256:cbe79268e049",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "supervision": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "a99bbdba82f5",
+      "empreinte": "sha256:b5ba526190b9",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-client": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [
+        {
+          "cle": "avertissement:lscr.io",
+          "message": "passe encore par lscr.io : dans son fichier compose, remplace « lscr.io/linuxserver/qbittorrent » par « ghcr.io/linuxserver/qbittorrent »"
+        }
+      ],
+      "version": "5.2.3_v2.0.14-ls475",
+      "empreinte": "sha256:2c2166af470a",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "tableaux": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "1b595815db66",
+      "empreinte": "sha256:2ed78ce5e854",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-resolveur": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v3.5.0",
+      "empreinte": "sha256:d0a8139413fe",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "dns-filtrant": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v0.107.6",
+      "empreinte": "sha256:fb10ddb8705e",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-croisement": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": true,
+      "avertissements": [],
+      "version": "version-6.13.7",
+      "empreinte": "sha256:aa0017359f5e",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-demandes": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v3.4.1",
+      "empreinte": "sha256:e79d7aa56472",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "sauvegarde": {
+      "mode": "auto",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "e85d511b2a8b",
+      "empreinte": "sha256:b1e07c2bae8a",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "serveur-media": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "10.9.11",
+      "empreinte": "sha256:2664a70e07df",
+      "disponible": {
+        "version": "10.10.7",
+        "empreinte": "sha256:69225e1352f3",
+        "vue_le": "2026-03-14T07:14:05+01:00"
+      },
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "arr-tunnel": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v3.41.3",
+      "empreinte": "sha256:1598b9f9565f",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "portfolio-notifs": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "f22fb212dc2e",
+      "empreinte": "sha256:cc7cb505da0e",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "umami": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "4de1f12b23e1",
+      "empreinte": "sha256:25a9dba42e0f",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "coffre-fort": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "1.32.7",
+      "empreinte": "sha256:8817de443ee9",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "umami-base": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "1bea307dfb3e",
+      "empreinte": "sha256:437a7064dccf",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "portfolio-base": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "1bea307dfb3e",
+      "empreinte": "sha256:5a241c05175e",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "vpn-acces": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "v15.4.0",
+      "empreinte": "sha256:6bcfe74ea004",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    },
+    "jeux-serveur": {
+      "mode": "manuel",
+      "mode_choisi": null,
+      "decouvert": false,
+      "avertissements": [],
+      "version": "11c80bbe604d",
+      "empreinte": "sha256:b902626ea28b",
+      "disponible": null,
+      "blocage": null,
+      "notifie": [],
+      "historique": []
+    }
+  },
+  "ignores": {
+    "portfolio-web": {
+      "etiquette": "local",
+      "raison": "image construite sur place : aucun registre ne peut la mettre à jour, elle se met à jour en la reconstruisant"
+    },
+    "portfolio-api": {
+      "etiquette": "local",
+      "raison": "image construite sur place : aucun registre ne peut la mettre à jour, elle se met à jour en la reconstruisant"
+    },
+    "portfolio-proxy": {
+      "etiquette": "local",
+      "raison": "image construite sur place : aucun registre ne peut la mettre à jour, elle se met à jour en la reconstruisant"
+    },
+    "portfolio-admin": {
+      "etiquette": "local",
+      "raison": "image construite sur place : aucun registre ne peut la mettre à jour, elle se met à jour en la reconstruisant"
+    },
+    "veille-images": {
+      "etiquette": "exclu",
+      "raison": "exclu par la configuration"
+    }
+  }
+}

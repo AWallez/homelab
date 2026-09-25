@@ -437,13 +437,15 @@ GROUPS.push(
        raison d attendre le clic.
 
        ⚠️ SECONDE CONDITION D ALERTE : la vetuste du controle. Avec un `warn`
-       portant seulement sur `total > 0`, la mort de `check-updates.sh` figeait le
-       compteur et la carte pouvait afficher « Tout est a jour » indefiniment
+       portant seulement sur `total > 0`, la mort de l outil de mise a jour figeait
+       le compteur et la carte pouvait afficher « Tout est a jour » indefiniment
        pendant que les mises a jour s accumulaient — un surveillant qui s arrete
-       sans prevenir, comme le watchdog du port VPN. Le controle est quotidien a
-       7 h : le seuil de 36 heures laisse passer une execution manquee, pas deux.
+       sans prevenir, comme le watchdog du port VPN. La passe est quotidienne, vers
+       7 h 10 : le seuil de 36 heures laisse passer une execution manquee, pas deux.
 
-       `age` vaut -1 quand `updates.json` est introuvable, ce qui se dit
+       Les donnees viennent de `maj.json`, l etat de compose-auto-update, que
+       collect.sh ramene au format de cette tuile. `age` vaut -1 quand le fichier
+       est introuvable, ce qui se dit
        autrement qu un controle simplement vieux, et `undefined` tant que le
        collecteur n a pas ete mis a jour : les deux comparaisons sont alors
        fausses et la carte se comporte comme avant. */

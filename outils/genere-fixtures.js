@@ -250,15 +250,55 @@ ecrit("ratios.json", {
             up: 412316860416, down: 0, ts: FIN - 42 * 60 }
 });
 
-/* ---- updates.json, que la fenetre des mises a jour lit EN DIRECT -----------
-   ⚠️ Elle ne se contente pas de la copie presente dans data.json : sans ce
-   fichier, la liste resterait perimee. Meme piege que celui documente le
-   16/08 cote NAS. */
+/* ---- maj.json, que la fenetre des mises a jour lit EN DIRECT ---------------
+   C est l etat de compose-auto-update (github.com/AWallez/compose-auto-update),
+   qui a remplace le 25/09/2026 `updates.json` et le script qui l ecrivait.
+
+   ⚠️ LA TUILE « MISES A JOUR » DE data.json EST DERIVEE DE CE FICHIER, avec la
+   meme regle que collect.sh en production. Ecrites a la main, les deux sources
+   avaient diverge : la tuile citait « indexeurs » la ou l inventaire disait
+   « arr-indexeurs ». Derivee, elle ne le peut plus. */
 const base = JSON.parse(fs.readFileSync(path.join(SRC, "base.json"), "utf8"));
-ecrit("updates.json", base.updates);
+const maj = JSON.parse(fs.readFileSync(path.join(SRC, "maj.json"), "utf8"));
+copie("maj.json", "maj.json");
+const suivis = Object.entries(maj.conteneurs);
+const attend = (s) => s.disponible != null || s.blocage != null;
+const fin = maj.derniere_passe.fin;
+base.updates = {
+  total: suivis.filter(([, s]) => attend(s)).length,
+  verifies: suivis.length,
+  maj: `${fin.slice(8, 10)}/${fin.slice(5, 7)} ${fin.slice(11, 16)}`,
+  age: base.updates.age,
+  items: suivis.map(([n, s]) => ({ n, upd: attend(s) }))
+};
+/* ⚠️ ON REMPLACE LE SEUL BLOC `updates`, DANS LE TEXTE. base.json est mis en
+   forme a la main, valeurs groupees par ligne : le reecrire avec JSON.stringify
+   detruisait cette mise en forme et changeait 280 lignes pour en modifier dix.
+   On repere donc l objet par comptage d accolades, en sautant les chaines, et
+   tout le reste du fichier sort identique a l octet. */
+function remplaceCle(texte, cle, valeur) {
+  const debut = texte.indexOf(`"${cle}"`);
+  const ouvre = texte.indexOf("{", debut);
+  if (debut < 0 || ouvre < 0) throw new Error(`cle ${cle} introuvable`);
+  let profondeur = 0, dansChaine = false;
+  for (let i = ouvre; i < texte.length; i++) {
+    const c = texte[i];
+    if (dansChaine) { if (c === "\\") i++; else if (c === '"') dansChaine = false; continue; }
+    if (c === '"') dansChaine = true;
+    else if (c === "{") profondeur++;
+    else if (c === "}" && --profondeur === 0)
+      return texte.slice(0, ouvre) + JSON.stringify(valeur) + texte.slice(i + 1);
+  }
+  throw new Error(`cle ${cle} : objet non referme`);
+}
+const pData = path.join(OUT, "data.json");
+fs.writeFileSync(pData, remplaceCle(fs.readFileSync(path.join(SRC, "base.json"), "utf8"),
+                                    "updates", base.updates));
+JSON.parse(fs.readFileSync(pData, "utf8"));      // le resultat doit rester du JSON valide
+console.log("  " + "data.json".padEnd(26) + String(fs.statSync(pData).size).padStart(8)
+            + " o   <- base.json + maj.json");
 
 /* ---- les sources ecrites a la main, recopiees telles quelles -------------- */
-copie("base.json", "data.json");
 copie("scenarios.json", "fixtures/scenarios.json");
 for (const f of fs.readdirSync(path.join(SRC, "scenarios")))
   copie(path.join("scenarios", f), "fixtures/scenarios/" + f);

@@ -704,9 +704,17 @@ function shortcuts() {
 
 let majTimer = null;
 
-async function getUpd() {
-  try { return await (await fetch("updates.json?" + Date.now())).json(); }
-  catch { return DATA.updates || {}; }
+/* ⚠️ DEPUIS LE 25/09/2026, LA SOURCE EST `maj.json`, écrit par compose-auto-update
+   à chaque passe et après chaque action demandée depuis cette page. Il remplace
+   `updates.json` (check-updates.sh) et `maj-history.json` (maj-nas.sh), tous deux
+   arrêtés. Pour chaque conteneur suivi : son mode, la version disponible, et
+   s'il est bloqué, pourquoi, avec la marche à suivre.
+
+   Le fichier peut manquer (installation neuve) : on renvoie un état vide plutôt
+   que de laisser l'absence casser l'ouverture de la fenêtre. */
+async function getMaj() {
+  try { return await (await fetch("maj.json?" + Date.now())).json(); }
+  catch { return { conteneurs: {} }; }
 }
 
 /* ⚠️ INVENTAIRE DE TOUS LES CONTENEURS, ecrit par `versions.sh`, trie du plus
@@ -729,27 +737,28 @@ async function majState() {
   catch { return ""; }
 }
 
-/* ⚠️ UNE SEULE LISTE, FUSION DE DEUX SOURCES. Il y en avait trois auparavant,
-   et les 13 conteneurs a mise a jour manuelle apparaissaient DEUX FOIS : dans
-   « Deja a jour » puis dans « Versions installees ». Pire, les deux sections se
-   contredisaient — `umami` affichait « ? » dans l une et son empreinte d image
-   dans l autre — parce que deux collecteurs repondaient a la meme question.
+/* ⚠️ UNE SEULE LISTE, FUSION DE DEUX SOURCES : l'inventaire (`versions.json`,
+   ce qui TOURNE, avec les liens de notes de version) et l'état de
+   compose-auto-update (`maj.json` : mode, version disponible, blocage). En cas
+   de désaccord sur la version en service, l'inventaire gagne.
 
-   ⚠️ L INVENTAIRE FAIT AUTORITE SUR LES VERSIONS. `versions.json` releve ce qui
-   TOURNE (`docker inspect`), tandis que `updates.json` n apporte ici que deux
-   choses : l etat « mise a jour disponible » et la version cible. En cas de
-   desaccord, l inventaire gagne.
+   Chaque ligne porte en plus :
+   - un bouton de MODE, « auto » ou « manuel », qui bascule le conteneur sans
+     toucher à la configuration ; le choix fait ici prime sur elle ;
+   - si le conteneur est BLOQUÉ (manuel temporaire), la raison, la marche à
+     suivre et l'erreur exacte : de quoi savoir quoi faire sans ouvrir un terminal.
 
-   ⚠️ LES CASES A COCHER N EXISTENT QUE POUR LES CONTENEURS ACTIONNABLES, et la
-   mecanique en aval n a PAS bouge : elle lit `input[type=checkbox]` et envoie
-   `b.value`. Emettre le nom du conteneur en `value` suffit a la laisser
-   intacte.
+   ⚠️ Le bouton de mode et le cadre de raison passent AU-DESSUS de la surcouche
+   cliquable du label (`z-index` dans `fond.css`) : sans cela, un clic sur
+   « auto » cochait la case de la ligne au lieu de basculer le mode.
 
-   Les lignes en attente passent sur DEUX HAUTEURS (cf. `fond.css`) :
-   « 5.2.3_v2.0.14-ls471 -> 5.2.3_v2.0.14-ls473 » fait environ 250 px quand la
-   colonne en mesure 104. */
-function paintUpd(u, note, vers) {
-  const it = u.items || [];
+   Les cases à cocher restent réservées aux conteneurs qui ont quelque chose à
+   appliquer : une nouvelle version, ou un blocage à lever. */
+function paintUpd(maj, note, vers) {
+  const suivis = (maj && maj.conteneurs) || {};
+  // Laissés de côté volontairement (image construite sur place, exclusion) :
+  // on l'affiche, sinon une ligne sans bouton de mode ressemble à un oubli.
+  const ignores = (maj && maj.ignores) || {};
   const vit = (vers && vers.items) || [];
   const risque = (n) => /postgres|db$|broker/.test(n);
   /* ⚠️ LE LIEN EST FILTRE. Son origine est l etiquette OCI de l image, donc une
@@ -757,45 +766,72 @@ function paintUpd(u, note, vers) {
      un fork alors que l image est officielle. Une image malveillante pourrait y
      placer un `javascript:`. Seul un https absolu est rendu cliquable. */
   const lienSur = (s) => typeof s === "string" && /^https:\/\/[\w.-]+\//.test(s);
+  const RAISON = { telechargement: "téléchargement impossible",
+                   installation: "mise à jour annulée, ancienne version remise",
+                   majeure: "version majeure à valider",
+                   retour_arriere: "retour arrière ÉCHOUÉ" };
+  const quand = (s) => s ? `${s.slice(8, 10)}/${s.slice(5, 7)} à ${s.slice(11, 16)}` : "?";
 
-  const parNom = new Map(it.map(x => [x.n, x]));
-  const fusion = vit.map(v => {
-    const m = parNom.get(v.n);
-    parNom.delete(v.n);
-    return { n: v.n, d: v.d || "", ts: v.ts || 0, v: v.v || "", h: !!v.h,
-             url: v.u || "", upd: !!(m && m.upd), nv: (m && m.nv) || "" };
-  });
-  // ⚠️ UN CONTENEUR ARRETE EST SUIVI PAR `check-updates.sh` MAIS INVISIBLE A
-  // `docker ps`, donc absent de l inventaire. Sans ce rattrapage il
-  // disparaitrait de la fenetre au moment ou l on en a le plus besoin.
-  for (const m of parNom.values())
-    fusion.push({ n: m.n, d: "", ts: -1, v: m.v || "", h: false,
-                  url: "", upd: !!m.upd, nv: m.nv || "" });
+  const rangee = (n, v, s) => {
+    s = s || {};
+    const dispo = s.disponible || null;
+    return { n, d: (v && v.d) || "", ts: v ? v.ts || 0 : -1,
+             v: (v && v.v) || s.version || "", h: !!(v && v.h), url: (v && v.u) || "",
+             upd: !!(dispo || s.blocage), nv: (dispo && dispo.version) || "",
+             mode: s.mode || "", bloc: s.blocage || null, neuf: !!s.decouvert,
+             hors: ignores[n] || null,
+             avert: (s.avertissements || []).map(a => a.message) };
+  };
+  const vus = new Set();
+  const fusion = vit.map(v => { vus.add(v.n); return rangee(v.n, v, suivis[v.n]); });
+  // ⚠️ UN CONTENEUR ARRÊTÉ est suivi mais absent de l'inventaire (`docker ps`) :
+  // sans ce rattrapage il disparaîtrait au moment où l'on en a le plus besoin.
+  for (const [n, s] of Object.entries(suivis)) if (!vus.has(n)) fusion.push(rangee(n, null, s));
 
-  // Les actionnables d abord, c est pour eux qu on ouvre la fenetre. Le reste
-  // garde l ordre de l inventaire, du plus recemment mis a jour au plus ancien.
-  fusion.sort((a, b) => (b.upd - a.upd) || (b.ts - a.ts));
+  // Les bloqués d'abord, puis les autres actionnables, puis l'inventaire.
+  fusion.sort((a, b) => (!!b.bloc - !!a.bloc) || (b.upd - a.upd) || (b.ts - a.ts));
   const nAtt = fusion.filter(x => x.upd).length;
+  const nBloc = fusion.filter(x => x.bloc).length;
+  const nAuto = fusion.filter(x => x.mode === "auto").length;
+
+  const motif = (x) => {
+    if (!x.bloc && !x.avert.length) return "";
+    const b = x.bloc;
+    return `<div class="motif${b && b.raison === "retour_arriere" ? " urgent" : ""}">${b
+      ? `<b>Manuel temporaire : ${esc(RAISON[b.raison] || b.raison)}</b>${esc(b.message)}. ${esc(b.conseil)}${
+          b.erreur ? `<details><summary>Erreur exacte</summary><code>${esc(b.erreur)}</code></details>` : ""}`
+      : ""}${x.avert.map(a => `<div>⚠️ ${esc(a)}</div>`).join("")}</div>`;
+  };
 
   const ligne = (x, k) => `<li class="${x.upd ? "att" : ""}">
       ${x.upd ? `<input type="checkbox" id="c${k}" value="${esc(x.n)}">`
               : `<span class="pastille"></span>`}
       <span class="hd">${esc(x.d)}</span>
       <label class="hn" ${x.upd ? `for="c${k}"` : ""}>${esc(x.n)}${
-        x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}</label>
+        x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}${
+        x.neuf ? '<span class="rq">nouveau</span>' : ""}</label>
       <span class="hv${x.h && !x.upd ? " brut" : ""}"${
         x.h && !x.upd ? ' title="Aucune étiquette de version sur cette image : empreinte affichée à la place."' : ""}>${
         x.upd && x.nv ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
       ${lienSur(x.url)
         ? `<a class="hl" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">notes</a>`
-        : `<span class="hl vide">—</span>`}</li>`;
+        : `<span class="hl vide">—</span>`}
+      ${x.mode
+        ? `<button type="button" class="mode ${x.mode === "auto" ? "auto" : "manuel"}" data-n="${esc(x.n)}"
+             data-m="${x.mode === "auto" ? "manuel" : "auto"}" title="${x.mode === "auto"
+               ? "Mis à jour la nuit. Cliquer pour passer en manuel."
+               : "Jamais mis à jour seul. Cliquer pour passer en automatique."}">${x.mode === "auto" ? "auto" : "manuel"}</button>`
+        : x.hors
+          ? `<span class="mode hors" title="${esc(x.hors.raison)}">${esc(x.hors.etiquette)}</span>`
+          : `<span class="mode vide"></span>`}
+      ${motif(x)}</li>`;
 
   dlg().innerHTML = `<form method="dialog"><h3>Conteneurs et mises à jour</h3>
-    <p class="sub">${fusion.length} conteneurs · ${nAtt
-      ? `${nAtt} mise${nAtt > 1 ? "s" : ""} à jour en attente`
-      : "tout est à jour"}</p>
-    <p class="sub2">Du plus récemment mis à jour au plus ancien, les actionnables en tête${
-      vers && vers.maj ? ` · relevé du ${esc(vers.maj)}` : ""}</p>
+    <p class="sub">${fusion.length} conteneurs · ${nAuto} en automatique · ${nAtt
+      ? `${nAtt} à faire à la main${nBloc ? `, dont ${nBloc} bloqué${nBloc > 1 ? "s" : ""}` : ""}`
+      : "rien à faire à la main"}</p>
+    <p class="sub2">Les actions en tête, puis du plus récemment mis à jour au plus ancien${
+      maj && maj.derniere_passe ? ` · dernière passe le ${esc(quand(maj.derniere_passe.fin))}` : ""}</p>
     <div class="scroll">
       ${fusion.length
         ? `<ul class="hist">${fusion.map(ligne).join("")}</ul>`
@@ -806,26 +842,24 @@ function paintUpd(u, note, vers) {
 
   const d = dlg(), st = d.querySelector("#mst"), go = d.querySelector("#mgo");
   const boxes = [...d.querySelectorAll('input[type="checkbox"]')];
+  const modes = [...d.querySelectorAll("button.mode")];
   const sync = () => { const n = boxes.filter(b => b.checked).length;
     if (go) { go.disabled = !n; go.textContent = n ? `Mettre à jour (${n})` : "Aucune mise à jour sélectionnée"; } };
   boxes.forEach(b => b.onchange = sync); sync();
+  const figer = (oui) => { boxes.forEach(b => b.disabled = oui); modes.forEach(b => b.disabled = oui); };
 
-  if (!go) return;
-  go.addEventListener("click", async () => {
-    const items = boxes.filter(b => b.checked).map(b => b.value);
-    if (!items.length) return;
-    // On mémorise l état AVANT : on n acceptera un "terminé" que s il a changé.
+  /* Une demande = un fichier déposé en PUT, puis on suit `maj-status.json`
+     jusqu'à « done ». Commun aux deux actions : mettre à jour, changer de mode.
+     On mémorise l'état AVANT : on n'accepte un « done » que s'il a changé. */
+  const demander = async (charge) => {
     const avant = await majState();
-    go.disabled = true; go.className = "go busy"; go.textContent = "Mise à jour en cours";
-    boxes.forEach(b => b.disabled = true);   // plus de relance tant que ça tourne
+    figer(true); if (go) go.disabled = true;
     st.textContent = "Demande envoyée…";
     try {
       await fetch("data/trigger.json", { method: "PUT",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) });
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(charge) });
     } catch {
-      st.textContent = "Déclenchement impossible."; go.className = "go";
-      go.disabled = false; go.textContent = "Réessayer";
-      boxes.forEach(b => b.disabled = false); return;
+      st.textContent = "Déclenchement impossible."; figer(false); sync(); return false;
     }
     clearInterval(majTimer);
     majTimer = setInterval(async () => {
@@ -836,15 +870,29 @@ function paintUpd(u, note, vers) {
       if (s.state === "running") { st.textContent = "⏳ " + s.msg; return; }
       if (s.state === "done") {
         clearInterval(majTimer);
-        go.className = "go ok"; go.textContent = "Terminé"; go.disabled = true;
-        st.textContent = "✅ " + s.msg;
-        setTimeout(async () => { paintUpd(await getUpd(), "✅ " + s.msg, await getVersions()); refresh(); }, 1500);
+        const fin = (s.ok === false ? "⚠️ " : "✅ ") + s.msg;
+        st.textContent = fin;
+        setTimeout(async () => { paintUpd(await getMaj(), fin, await getVersions()); refresh(); }, 1500);
       }
     }, 2000);
+    return true;
+  };
+
+  modes.forEach(b => b.addEventListener("click", () =>
+    demander({ action: "mode", nom: b.dataset.n, mode: b.dataset.m })));
+
+  if (!go) return;
+  go.addEventListener("click", async () => {
+    const items = boxes.filter(b => b.checked).map(b => b.value);
+    if (!items.length) return;
+    go.className = "go busy"; go.textContent = "Mise à jour en cours";
+    if (!await demander({ action: "appliquer", items })) {
+      go.className = "go"; go.textContent = "Réessayer"; go.disabled = false;
+    }
   });
 }
 
-async function popUpdates() { paintUpd(await getUpd(), "", await getVersions()); dlg().showModal(); }
+async function popUpdates() { paintUpd(await getMaj(), "", await getVersions()); dlg().showModal(); }
 
 /* Liste complete des conteneurs, triee par memoire decroissante. */
 /* Les piles se deduisent du prefixe du nom : aucune liste a maintenir,

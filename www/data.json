@@ -87,18 +87,7 @@
     "loc": "Amsterdam, Pays-Bas"
   },
 
-  "updates": {
-    "total": 0, "verifies": 11, "maj": "14/03 07:00", "age": 8,
-    "items": [
-      { "n": "serveur-media",  "v": "10.9.11", "nv": "10.9.11", "upd": false },
-      { "n": "supervision",    "v": "2.1.4",   "nv": "2.1.4",   "upd": false },
-      { "n": "coffre-fort",    "v": "1.32.7",  "nv": "1.32.7",  "upd": false },
-      { "n": "dns-filtrant",   "v": "0.107.6", "nv": "0.107.6", "upd": false },
-      { "n": "notifications",  "v": "2.11.0",  "nv": "2.11.0",  "upd": false },
-      { "n": "indexeurs",      "v": "1.28.2",  "nv": "1.28.2",  "upd": false },
-      { "n": "client-torrent", "v": "5.2.3",   "nv": "5.2.3",   "upd": false }
-    ]
-  },
+  "updates": {"total":2,"verifies":21,"maj":"14/03 07:44","age":8,"items":[{"n":"arr-soustitres","upd":false},{"n":"arr-indexeurs","upd":true},{"n":"arr-films","upd":false},{"n":"arr-series","upd":false},{"n":"supervision","upd":false},{"n":"arr-client","upd":false},{"n":"tableaux","upd":false},{"n":"arr-resolveur","upd":false},{"n":"dns-filtrant","upd":false},{"n":"arr-croisement","upd":false},{"n":"arr-demandes","upd":false},{"n":"sauvegarde","upd":false},{"n":"serveur-media","upd":true},{"n":"arr-tunnel","upd":false},{"n":"portfolio-notifs","upd":false},{"n":"umami","upd":false},{"n":"coffre-fort","upd":false},{"n":"umami-base","upd":false},{"n":"portfolio-base","upd":false},{"n":"vpn-acces","upd":false},{"n":"jeux-serveur","upd":false}]},
 
   "pc": { "on": true, "vu": "@-1min" },
   "backup": { "h": 4, "date": "14/03 a 06:00" }

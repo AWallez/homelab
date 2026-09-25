@@ -983,10 +983,49 @@ dialog.dlg::after {
 /* La légende de la section, plus discrète que `.sub2` qui sert aux titres. */
 .sub3 { margin: -2px 0 8px; font-size: .68rem; opacity: .45 }
 
+/* ---- 17c. compose-auto-update : mode de chaque conteneur, raison d'un blocage ----
+   Une sixième colonne pour le bouton de mode. Il passe AU-DESSUS de la surcouche
+   cliquable du label (`li.att label::before`) : sans le `z-index`, un clic sur
+   « auto » cochait la case de la ligne au lieu de basculer le mode. */
+.hist li { grid-template-columns: 18px auto minmax(0, 1fr) auto auto auto }
+.hist .mode {
+  position: relative; z-index: 1;
+  font: inherit; font-size: .62rem; line-height: 1; padding: 3px 8px;
+  border-radius: 999px; border: 1px solid rgba(255,255,255,.18);
+  background: transparent; color: inherit; opacity: .6; cursor: pointer;
+}
+.hist .mode.auto { color: var(--sbl); border-color: rgba(77,151,238,.5); opacity: .9 }
+.hist .mode:hover { opacity: 1 }
+.hist .mode:disabled { cursor: wait; opacity: .3 }
+.hist .mode:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px }
+.hist .mode.vide { border: 0; padding: 0 }
+/* Pas un bouton : un conteneur que l'outil laisse de côté exprès (image
+   construite sur place, exclusion). La raison est dans l'infobulle. */
+.hist .mode.hors { border-style: dashed; opacity: .45; cursor: help }
+
+/* Le cadre de raison occupe toute la largeur, sous la ligne. Colonne 2 et non 1 :
+   la case à cocher court déjà sur deux rangées en colonne 1. Mêmes teintes que
+   les pastilles d'avertissement (`.past span.wn`), rouge pour l'urgence. */
+.hist .motif {
+  grid-column: 2 / -1; position: relative; z-index: 1;
+  margin-top: 5px; padding: 6px 9px; border-radius: 7px;
+  font-size: .68rem; line-height: 1.4; white-space: normal;
+  color: #ffd08a; background: rgba(255,179,64,.11); border: 1px solid rgba(255,179,64,.30);
+}
+.hist .motif.urgent { color: #ffb3ad; background: rgba(255,69,58,.14); border-color: rgba(255,69,58,.45) }
+.hist .motif b { display: block; margin-bottom: 2px }
+.hist .motif details { margin-top: 4px; opacity: .85 }
+.hist .motif summary { cursor: pointer }
+.hist .motif code {
+  display: block; margin-top: 3px; font-size: .62rem;
+  white-space: pre-wrap; word-break: break-word;
+}
+
 @media (max-width: 600px) {
-  /* Quatre colonnes ne tiennent plus : la version passe sous le nom pour TOUTES
-     les lignes, actionnables comprises. */
-  .hist li { grid-template-columns: 18px auto minmax(0, 1fr) auto }
+  /* Tout ne tient plus sur une rangée : la version passe sous le nom pour TOUTES
+     les lignes, actionnables comprises. Restent sur la première : case, date,
+     nom, notes et mode. */
+  .hist li { grid-template-columns: 18px auto minmax(0, 1fr) auto auto }
   .hist .hv { grid-column: 3 / -1; justify-self: start; white-space: normal; word-break: break-all }
 }
 

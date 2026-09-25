@@ -37,7 +37,7 @@ const DOSSIERS = ["icons"];
 
 /* Noms interdits, verifies malgre la liste blanche : deux garde-fous valent
    mieux qu un quand l erreur consiste a ecraser des mesures irremplacables. */
-const INTERDITS = /^(data|live|history|history-min|containers|containers-hist|smart|updates|ratios)\.json$|^fixtures\//;
+const INTERDITS = /^(data|live|history|history-min|containers|containers-hist|smart|updates|ratios|versions|maj)\.json$|^fixtures\//;
 
 /* ⚠️ LE CHEMIN DE `ssh` EST EXPLICITE SOUS WINDOWS. Git Bash embarque son
    propre `ssh`, qui ne sait PAS parler a l agent de Windows : la cle vit dans
@@ -159,7 +159,8 @@ SAUVE=/tmp/deploiement-sauvegarde-$(date +%Y%m%d-%H%M%S)
 # protege contre un depot fabrique autrement que par le script.
 if find "$DEPOT" -name 'scenarios.json' -o -name 'data.json' -o -name 'history*.json' \\
         -o -name 'live.json' -o -name 'containers*.json' -o -name 'smart.json' \\
-        -o -name 'updates.json' -o -name 'ratios.json' | grep -q .; then
+        -o -name 'updates.json' -o -name 'ratios.json' -o -name 'maj.json' \\
+        -o -name 'versions.json' | grep -q .; then
   echo "ARRET : le depot contient une fixture. Rien n a ete installe." >&2
   exit 1
 fi

@@ -22,7 +22,7 @@ done > "$SW"
 # pas « en panne maintenant ». Croise avec l anciennete du demarrage, il devient
 # un signal d incident EN COURS. C est le couple qui informe, pas le compteur.
 # ⚠️ `docker restart` lance a la main N INCREMENTE PAS ce compteur, ni la
-# recreation nocturne par `maj-nas.sh` : seule la politique de redemarrage le
+# recreation par compose-auto-update : seule la politique de redemarrage le
 # fait. Le signal ne se declenchera donc pas sur tes propres interventions.
 # ⚠️ UN SEUL `docker inspect` pour tout le monde : un par conteneur coutait deux
 # secondes sur vingt-sept.

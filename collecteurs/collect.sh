@@ -458,15 +458,21 @@ if [ "$BST" -gt 0 ]; then
   BDATE=$(date -d "@$BST" '+%d/%m à %H:%M'); BAGO=$(( (NOWS - BST) / 3600 ))
 else BDATE="jamais"; BAGO=-1; fi
 
-# Age du dernier controle, en heures, releve sur le `mtime` du fichier.
-# `updates.json` ne porte que la chaine d affichage « 25/08 00:17 », pas
-# d horodatage exploitable — mais il est reecrit a chaque controle, par le cron
-# de 7 h comme par `maj-watch.sh` apres une mise a jour appliquee. Sa date de
-# modification est donc un temoin fidele, sans rien changer a check-updates.sh.
-# ⚠️ Sans cette mesure, un `check-updates.sh` mort laissait la carte afficher
-# « Tout est a jour » indefiniment, compteur fige sur sa derniere valeur.
-UPDF=/volume1/docker/homelab/www/updates.json
-UPD=$(cat "$UPDF" 2>/dev/null || echo '{}')
+# Tuile « Mises a jour ». La source est `maj.json`, l etat de compose-auto-update
+# (github.com/AWallez/compose-auto-update), reecrit a chaque passe et apres chaque
+# action de la page. On en reconstruit ici le format qu attend la tuile (total,
+# verifies, maj, items), qui n a donc pas eu a changer. « total » compte ce qui
+# attend une action manuelle : une version disponible, ou un blocage.
+# ⚠️ L age du controle se mesure sur le `mtime` du fichier, reecrit a chaque
+# passe meme quand rien ne change. Sans cette mesure, un outil mort laissait la
+# carte afficher « Tout est a jour » indefiniment, compteur fige.
+UPDF=/volume1/docker/homelab/www/maj.json
+UPD=$(jq -c '{
+  total: ([.conteneurs[] | select(.disponible != null or .blocage != null)] | length),
+  verifies: (.conteneurs | length),
+  maj: ((.derniere_passe.fin // "") | if . == "" then "?" else "\(.[8:10])/\(.[5:7]) \(.[11:16])" end),
+  items: [.conteneurs | to_entries[] | {n: .key, upd: (.value.disponible != null or .value.blocage != null)}]
+}' "$UPDF" 2>/dev/null || echo '{}')
 UPDT=$(stat -c %Y "$UPDF" 2>/dev/null || echo 0)
 if [ "${UPDT:-0}" -gt 0 ]; then UPDH=$(( (NOWS - UPDT) / 3600 )); else UPDH=-1; fi
 

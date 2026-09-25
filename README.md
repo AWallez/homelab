@@ -20,6 +20,7 @@ Un collecteur interroge dix-sept sources (API des services, `/proc`, `/sys`, `do
 - **Historique maison** sur 24 heures et 7 jours, avec alertes et notifications sur téléphone
 - **Un veilleur** qui répare tout seul la panne la plus fréquente de l'installation
 - **Sauvegardes chiffrées** dont la restauration a été testée
+- **Mises à jour des conteneurs pilotées depuis la page** : chaque conteneur passe d'automatique à manuel d'un clic, et une mise à jour qui échoue affiche sa raison et la marche à suivre
 
 ## Les décisions qui comptent
 
@@ -73,7 +74,8 @@ collect-fast.sh   2 s  ──>  live.json      ──┐
 collect.sh       30 s  ──>  data.json      ──┤
 history-build.sh  1 min ──> history.json   ──┼──>  index.html   ──>  nginx
 containers.sh     5 min ──> containers.json ─┤     app.js
-smart.sh          1 j  ──>  smart.json     ──┘     style.css + fond.css
+smart.sh          1 j  ──>  smart.json     ──┤     style.css + fond.css
+compose-auto-update 1 j ──> maj.json       ──┘
 ```
 
 Aucune écriture concurrente : **chaque script écrit son propre fichier**. Toutes les écritures sont atomiques, fichier temporaire puis renommage, ce qui garantit que le serveur ne sert jamais un JSON à moitié écrit.
@@ -107,13 +109,19 @@ Le tirage est déterministe : la même graine rend les mêmes courbes, avec un r
 | Dossier | Contenu |
 |---|---|
 | `www/` | le front et les données servies. Autonome, publiable tel quel |
-| `collecteurs/` | les scripts shell qui alimentent le tableau de bord |
+| `collecteurs/` | les scripts shell qui alimentent le tableau de bord, et celui qui exécute les demandes de la page |
 | `fixtures/` | les sources écrites à la main : un état nominal et onze calques |
 | `outils/` | générateur, serveur de développement, déploiement |
 
 Les collecteurs attendent leur configuration dans des variables d'environnement, listées et commentées dans `.env.example`. Ils ne citent jamais un secret autrement que par le nom de sa variable, et n'en affichent aucun : c'est ce qui permet de les publier tels quels.
 
 Le mode démonstration **s'active par la présence d'un fichier**. En production ce fichier n'existe pas : le sélecteur n'est jamais construit et le code correspondant devient une fonction identité. Rien à désactiver avant un déploiement, donc rien à oublier de désactiver.
+
+## Projet complémentaire : les mises à jour
+
+Les mises à jour des conteneurs sont confiées à **[compose-auto-update](https://github.com/AWallez/compose-auto-update)**, un outil écrit à part pour remplacer Watchtower après trois pannes de supervision silencieuses. Il télécharge, copie les données, recrée, vérifie, et revient en arrière si la nouvelle version ne tient pas.
+
+Les deux projets se parlent par un seul fichier. L'outil écrit l'état de chaque conteneur dans `maj.json` ; la fenêtre des mises à jour le lit, ajoute à chaque ligne un bouton pour passer le conteneur d'automatique à manuel, et affiche la raison et la marche à suivre quand une mise à jour a échoué. Les demandes faites depuis la page passent par `collecteurs/maj-watch.sh`, qui les confie à l'outil.
 
 ## Un mot sur la documentation
 
