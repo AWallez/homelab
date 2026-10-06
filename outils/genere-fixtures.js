@@ -71,6 +71,16 @@ function rafale(r, plafond) {
   return Math.round(plafond * (0.25 + R() * 0.75) * r);
 }
 
+/* Second tirage, reserve aux colonnes ajoutees le 05/10/2026 : le debit
+   Internet de la box. ⚠️ UN GENERATEUR A PART. Puiser dans `R` decalerait toute
+   la suite et redessinerait chaque courbe existante, ce qui ferait passer un
+   simple ajout pour un changement de tout le tableau de bord. */
+const R2 = graine(20261005);
+function debitBox(r, plafond) {
+  if (R2() > 0.18 + 0.3 * r) return Math.round(plafond * 0.01 * (0.5 + R2()));
+  return Math.round(plafond * (0.15 + R2() * 0.85) * r * r);
+}
+
 const MIN = 60;
 const N_MIN = 1440;                                   // 24 h a la minute
 const FIN = Math.floor(Date.now() / 1000 / MIN) * MIN;  // maintenant, en SECONDES
@@ -120,13 +130,16 @@ function mesure(t) {
     qbdl:     rafale(r, 5_600_000),
     qbul:     rafale(r, 2_400_000),
     vpnup:    enPanne("vpnup", t)  ? 2 : 1,
-    kumaup:   enPanne("kumaup", t) ? 2 : 1
+    kumaup:   enPanne("kumaup", t) ? 2 : 1,
+    wanrx:    debitBox(r, 30_000_000),
+    wantx:    debitBox(r, 4_000_000)
   };
 }
 
 const CHAMPS = ["t", "cpu", "ram", "disque", "reseau", "charge", "temp", "lecture",
   "ecriture", "charge5", "charge15", "swap", "nvme", "nvme0", "nvme1", "eth0",
-  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup"];
+  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup",
+  "wanrx", "wantx"];
 const CHAMPS_MIN = ["t", "cpu", "ram", "temp", "swap", "nvme0", "nvme1", "eth0",
   "nvme2", "nvme3", "qbdl", "qbul"];
 
@@ -180,14 +193,68 @@ for (let k = 0; k < N_S; k++) {
 ecrit("history.json", { j, s, champs: CHAMPS });
 
 /* ---- SMART -------------------------------------------------------------- */
+/* Detail de l espace dossier par dossier, pour la fenetre du volume
+   (06/10/2026). Les postes de la carte en sont DERIVES : ecrits a part, la
+   carte et sa fenetre se contrediraient. `p` : ce qu un dossier partage en
+   liens physiques avec un dossier deja compte, comme torrents avec Films. */
+const Go = (v) => Math.round(v * 1e9);
+const dossier = (n, enf) => {
+  const l = enf.map(([m, o, p]) => Object.assign({ n: m, o: Go(o) }, p ? { p: Go(p) } : {}));
+  return { n, o: l.reduce((a, x) => a + x.o, 0), l };
+};
+const DET = {
+  medias:   [dossier("Mediatheque", [["Films", 900], ["Series", 520], ["Animes", 110], ["torrents", 28, 1180],
+                                     ["#recycle", 8], ["cross-seed", 4, 260]])],
+  partages: [dossier("Famille", [["Photos", 310], ["Documents", 70], ["Videos", 38], ["#recycle", 2]]),
+             dossier("@home", [["alice", 120], ["bob", 40]]),
+             dossier("Commun", [["Logiciels", 60], ["Archives", 25]])],
+  cameras:  [dossier("Surveillance", [["entree", 210], ["jardin", 130]]), dossier("@cameramgr", [["flux", 18]])],
+  iscsi:    [dossier("@iscsi", [["LUN", 3298.5]])],
+  docker:   [dossier("@docker", [["overlay2", 11.8], ["volumes", 1.9], ["image", 0.5]]),
+             dossier("docker", [["arr", 2.2], ["portfolio", 1.1], ["supervision", 0.8]])],
+  applis:   [dossier("@appstore", [["apps", 8.4]]), dossier("@thumbnail", [["cache", 5.8]]),
+             dossier("@aiconsole", [["modeles", 3]])]
+};
+for (const k in DET) DET[k].sort((a, b) => b.o - a.o);
+const PARTS = Object.fromEntries(Object.entries(DET).map(([k, l]) => [k, l.reduce((a, x) => a + x.o, 0)]));
+PARTS.autres = Go(120);
+const OCCUPE = Object.values(PARTS).reduce((a, o) => a + o, 0);
+/* « Autres » decompose comme le fait le collecteur d apres btrfs : la somme
+   retombe sur le poste. */
+const AUTRES = { meta: Go(9.1), reserve: Go(0.5), cow: Go(104), snap: 0, nc: [] };
+AUTRES.depuis = PARTS.autres - AUTRES.meta - AUTRES.reserve - AUTRES.cow;
+/* Disque systeme : chaque partition, et le fichier d echange compte en swap. */
+const SYS = {
+  systeme: [dossier("/overlay", [["upper", 1.52], ["work", 0.01]]), dossier("/rootfs", [["usr", 1.1], ["lib", 0.24]]),
+            dossier("/boot", [["noyau", 0.15]])],
+  applis:  [dossier("/ugreen", [["@appstore", 1.6], ["data", 0.6], ["static", 0.3], ["language", 0.1]])],
+  swap:    [{ n: "partition nvme0n1p5", o: 2147483648 }, { n: "fichier /overlay/.swapfile", o: 4294967296 }]
+};
+for (const k in SYS) SYS[k].sort((a, b) => b.o - a.o);
+const SYSP = Object.fromEntries(Object.entries(SYS).map(([k, l]) => [k, l.reduce((a, x) => a + x.o, 0)]));
+
 ecrit("smart.json", {
   ts: FIN,
   d: [
-    { n: "nvme0", modele: "SSD systeme 128 Go", go: 128, ok: true, temp: 39,
-      usure: 2, spare: 100, heures: 6180, cycles: 41, brutaux: 3, erreurs: 0, ecrit: 1.62 },
-    { n: "nvme1", modele: "SSD donnees 8 To", go: 8001, ok: true, temp: 46,
-      usure: 1, spare: 100, heures: 6180, cycles: 39, brutaux: 2, erreurs: 0, ecrit: 26.4 }
-  ]
+    { n: "nvme0", modele: "PCIe SSD 128GB", go: 128, ok: true, temp: 39,
+      usure: 2, spare: 100, heures: 6180, cycles: 41, brutaux: 3, erreurs: 0, ecrit: 1.62,
+      role: "systeme" },
+    { n: "nvme1", modele: "NVMe Pro 8000GB", go: 8001, ok: true, temp: 46,
+      usure: 1, spare: 100, heures: 6180, cycles: 39, brutaux: 2, erreurs: 0, ecrit: 26.4,
+      role: "donnees" }
+  ],
+  /* L organisation, comme sur la machine reelle : un RAID 1 monte pour UN seul
+     disque, donc sans miroir, et le disque systeme hors grappe. La place par
+     poste est celle du VOLUME, en octets. */
+  grappes: [
+    { nom: "Volume 1", raid: "raid1", fs: "btrfs", n: 1, att: 1, err: 0, disques: ["nvme1"],
+      esp: { tot: 7984990126080, used: OCCUPE, parts: PARTS, det: DET, mesure: "@-19h", autres: AUTRES } },
+    { nom: "Système", sys: true, disques: ["nvme0"],
+      esp: { tot: 128035676160, parts: SYSP, det: SYS, mesure: "@-19h" } }
+  ],
+  /* Quatre emplacements M.2 pour les donnees, le disque systeme ayant le sien a
+     part : un seul est occupe. */
+  slots: { tot: 4, libres: 3 }
 });
 
 /* ---- conteneurs --------------------------------------------------------- */
@@ -216,9 +283,25 @@ const conteneurs = NOMS.map((n, i) => {
     mem24: Math.round(mem * (0.85 + R() * 0.3))
   };
 });
+/* ⚠️ `mem` EST UN POURCENTAGE DE LA MEMOIRE TOTALE, comme le `MemPerc` de
+   `docker stats` que lit `containers.sh` ; la page le reconvertit en Mo avec
+   `nas.ramt`. Le generateur tirait des Mo et les ecrivait tels quels : la carte
+   annoncait 34 484 Mo pour un conteneur de 433 Mo (corrige le 05/10/2026). On
+   tire toujours en Mo, pour ne pas toucher a la suite aleatoire, et on convertit
+   a l ecriture seulement. */
+const BASE = JSON.parse(fs.readFileSync(path.join(SRC, "base.json"), "utf8"));
+const RAM_MO = BASE.nas.ramt / 1024;
+const enPct = (mo) => Math.round(mo / RAM_MO * 10000) / 100;
+/* `anon` : la memoire que le conteneur occupe VRAIMENT, sans le cache, en Mo —
+   la mesure de la carte et de la fenetre « Memoire ». Repartie au prorata pour
+   que la somme retombe exactement sur le groupe « conteneurs » de base.json. */
+const ANON_TOT = ((BASE.mem && BASE.mem.g) || []).find(x => x.k === "conteneurs") || { mo: 0 };
+const MEM_TOT = conteneurs.reduce((a, c) => a + c.mem, 0) || 1;
 ecrit("containers.json", {
   t: FIN,
-  c: conteneurs.sort((a, b) => (b.mem + b.swap) - (a.mem + a.swap)),
+  c: conteneurs.slice().sort((a, b) => (b.mem + b.swap) - (a.mem + a.swap))
+    .map(c => Object.assign({}, c, { mem: enPct(c.mem), mem24: enPct(c.mem24),
+                                      anon: Math.round(c.mem / MEM_TOT * ANON_TOT.mo) })),
   /* Un redemarrage automatique dans les 24 h : la carte a de quoi montrer son
      bandeau de notification, qui resterait invisible autrement. */
   ev: [{ n: "veille-images", t: FIN - 5.4 * 3600 }]
@@ -229,7 +312,7 @@ const hist = {};
 for (const c of conteneurs) {
   const v = [];
   for (let k = 0; k < N_H; k++)
-    v.push(Math.round(c.mem24 * (0.82 + 0.36 * rythme(FIN - (N_H - 1 - k) * PAS_H)) + bruit(6)));
+    v.push(enPct(Math.round(c.mem24 * (0.82 + 0.36 * rythme(FIN - (N_H - 1 - k) * PAS_H)) + bruit(6))));
   hist[c.n] = v;
 }
 ecrit("containers-hist.json", { pas: PAS_H, n: N_H, c: hist });
@@ -291,12 +374,55 @@ function remplaceCle(texte, cle, valeur) {
   }
   throw new Error(`cle ${cle} : objet non referme`);
 }
+/* `acces` : les connexions des 24 h, DERIVEES D UN EMPLOI DU TEMPS comme le
+   collecteur les derive des journaux : la liste complete pour la fenetre de la
+   carte, les huit regroupements de la carte, le total et ce qui vient
+   d Internet. Ecrits a la main, la carte et sa fenetre se contredisaient vite.
+   Chaque ligne : [debut, fin] en minutes avant maintenant, nombre de
+   connexions reparties entre les deux, puis service, compte, machine, methode,
+   reussie. Tirage a part (`R3`), pour la meme raison que `R2`. */
+const R3 = graine(20261006);
+const PLAN_ACCES = [
+  [48,   6,    15, "SSH", "admin", "Poste",     "clé",          1],
+  [52,   52,   1,  "Web", "admin", "Poste",     "mot de passe", 1],
+  [185,  180,  2,  "SSH", "admin", "Telephone", "clé",          1],
+  [300,  262,  9,  "SSH", "admin", "Poste",     "clé",          1],
+  [365,  365,  1,  "Web", "admin", "Telephone", "biométrie",    1],
+  [570,  480,  18, "SSH", "admin", "Poste",     "clé",          1],
+  [600,  600,  1,  "Web", "admin", "Poste",     "mot de passe", 1],
+  [838,  838,  1,  "SSH", "admin", "Portable",  "clé",          1],
+  [842,  840,  3,  "SSH", "root",  "Portable",  "refusée",      0],
+  [1200, 1140, 10, "SSH", "admin", "Poste",     "clé",          1],
+  [1380, 1380, 1,  "Web", "admin", "Poste",     "mot de passe", 1]
+];
+const ev = [];
+for (const [deb, fin, nb, ...e] of PLAN_ACCES)
+  for (let k = 0; k < nb; k++) {
+    const pas = nb > 1 ? (deb - fin) / (nb - 1) : 0;
+    const bruit = k && k < nb - 1 ? (R3() - 0.5) * pas * 0.6 : 0;
+    ev.push([Math.round((deb - k * pas + bruit) * 10) / 10, ...e, 0]);
+  }
+ev.sort((a, b) => a[0] - b[0]);
+/* Les regroupements de la carte, avec la regle du collecteur : identiques ET
+   consecutives, sans limite d ecart. */
+const log = [];
+for (const [m, s, u, n, r, ok] of ev) {
+  const p = log[log.length - 1];
+  if (p && p.s === s && p.u === u && p.n === n && p.r === r && p.ok === !!ok) p.c++;
+  else log.push({ t: "@-" + m + "min", s, u, n, r, ok: !!ok, x: false, c: 1 });
+}
+const acces = Object.assign({}, base.acces, {
+  ev: ev.map(([m, ...e]) => ["@-" + m + "min", ...e]),
+  log: log.slice(0, 8), n: ev.length, ext: 0
+});
+delete acces._;
+
 const pData = path.join(OUT, "data.json");
-fs.writeFileSync(pData, remplaceCle(fs.readFileSync(path.join(SRC, "base.json"), "utf8"),
-                                    "updates", base.updates));
+fs.writeFileSync(pData, remplaceCle(remplaceCle(fs.readFileSync(path.join(SRC, "base.json"), "utf8"),
+                                    "updates", base.updates), "acces", acces));
 JSON.parse(fs.readFileSync(pData, "utf8"));      // le resultat doit rester du JSON valide
 console.log("  " + "data.json".padEnd(26) + String(fs.statSync(pData).size).padStart(8)
-            + " o   <- base.json + maj.json");
+            + " o   <- base.json + maj.json + " + ev.length + " connexions");
 
 /* ---- les sources ecrites a la main, recopiees telles quelles -------------- */
 copie("scenarios.json", "fixtures/scenarios.json");
@@ -305,6 +431,44 @@ for (const f of fs.readdirSync(path.join(SRC, "scenarios")))
 
 /* Raccourcis : la page retombe sur sa liste par defaut si le fichier manque,
    mais autant montrer une barre remplie. */
+/* `systeme.json` : ce que ne donne pas `data.json`. Ici seulement les periodes
+   de panne de chaque sonde Kuma, CALEES sur l incident `kumaup` simule plus
+   haut, pour que l infobulle du ruban nomme des sondes la ou il est rouge.
+   Horodatages RELATIFS, resolus a l affichage comme ceux de base.json. */
+const ik = INCIDENTS.find(i => i.col === "kumaup");
+const rel = (s) => "@-" + Math.round(-s / 60) + "min";
+/* `disq` : le detail de chaque SSD pour sa fenetre (05/10/2026), aux memes
+   valeurs que smart.json. Le disque systeme tourne en x2 sur un emplacement
+   qui en accepte x4, comme sur le vrai NAS : la fenetre doit le dire. */
+const H = (o) => ({ cw: 0, spare: 100, spare_min: 10, err_journal: 0, t_alerte: 0, t_crit: 0, ...o });
+ecrit("systeme.json", {
+  /* Ce que FanKarr a telecharge (06/10/2026), lu en production dans ses fichiers
+     de suivi : episodes importes, place, telechargements en cours. */
+  fankarr: { ep: 147, o: 354619441774, absents: 0, series: ["Série Kaï"], cours: 1, dernier: "@-14j" },
+  kuma: { inc: [
+  { n: "serveur-media", s: 0, t0: rel(ik.debut), t1: rel(ik.debut + ik.duree) },
+  { n: "indexeurs", s: 2, t0: rel(ik.debut + 4 * 60), t1: rel(ik.debut + 19 * 60) },
+  { n: "indexeurs", s: 0, t0: rel(ik.debut + 19 * 60), t1: rel(ik.debut + 31 * 60) }
+] }, disq: {
+  nvme0: { ctrl: "nvme0", fw: "SBFMJ1.3", ok: true, lien: ["8.0 GT/s PCIe", "2", "8.0 GT/s PCIe", "4"],
+           seuils: [85, 95], capt: [["Composite", 39], ["Sensor 1", 51]],
+           h: H({ usure: 2, ecrit: 1.62e12, lu: 3.9e12, occupe: 512, cycles: 41, heures: 6180, brutaux: 3 }),
+           rythme: { j1: 5.1e9, j7: 6.4e9 },
+           parts: [{ n: "nvme0n1p1", o: 268435456, fs: "vfat", m: "/boot", sur: [] },
+                   { n: "nvme0n1p4", o: 2147483648, fs: "ext4", m: "/rootfs", sur: [] },
+                   { n: "nvme0n1p5", o: 2147483648, fs: "swap", m: "[SWAP]", sur: [] },
+                   { n: "nvme0n1p6", o: 4294967296, fs: "ext4", m: "/ugreen", sur: [] },
+                   { n: "nvme0n1p7", o: 117018271232, fs: "ext4", m: "/overlay", sur: [] }] },
+  nvme1: { ctrl: "nvme1", fw: "731100WD", ok: true, lien: ["16.0 GT/s PCIe", "4", "16.0 GT/s PCIe", "4"],
+           seuils: [90, 94], capt: [["Composite", 46], ["Sensor 1", 57], ["Sensor 2", 45]],
+           h: H({ usure: 1, ecrit: 26.4e12, lu: 61.8e12, occupe: 2210, cycles: 39, heures: 6180, brutaux: 2, err_journal: 14 }),
+           rythme: { j1: 118e9, j7: 96e9 },
+           parts: [{ n: "nvme1n1p1", o: 16382951424, fs: null, m: null, sur: [] },
+                   { n: "nvme1n1p2", o: 7985178869760, fs: "linux_raid_member", m: null,
+                     sur: [{ n: "md1", t: "raid1", fs: null, m: null },
+                           { n: "pool1-volume1", t: "lvm", fs: "btrfs", m: "/volume1" }] }] }
+} });
+
 ecrit("data/shortcuts.json", [
   { name: "Documentation", url: "https://developer.mozilla.org/fr/" },
   { name: "Forge",         url: "https://github.com/" },

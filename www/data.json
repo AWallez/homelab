@@ -11,7 +11,10 @@
     "ramu": 4404019, "ramt": 8155136, "cores": 8,
     "net": 1524288, "disk": 63, "disktot": 7984990126080,
     "load": 0.74, "load5": 0.91, "load15": 1.12,
-    "dr": 486210, "dw": 1932544
+    "dr": 486210, "dw": 1932544,
+    "fans": [ { "n": "processeur", "rpm": 2566 },
+              { "n": "boîtier 1", "rpm": 1064 },
+              { "n": "boîtier 2", "rpm": 998 } ]
   },
 
   "site":   { "ms": 68, "cert": 74, "ok": true },
@@ -90,5 +93,49 @@
   "updates": {"total":2,"verifies":21,"maj":"14/03 07:44","age":8,"items":[{"n":"arr-soustitres","upd":false},{"n":"arr-indexeurs","upd":true},{"n":"arr-films","upd":false},{"n":"arr-series","upd":false},{"n":"supervision","upd":false},{"n":"arr-client","upd":false},{"n":"tableaux","upd":false},{"n":"arr-resolveur","upd":false},{"n":"dns-filtrant","upd":false},{"n":"arr-croisement","upd":false},{"n":"arr-demandes","upd":false},{"n":"sauvegarde","upd":false},{"n":"serveur-media","upd":true},{"n":"arr-tunnel","upd":false},{"n":"portfolio-notifs","upd":false},{"n":"umami","upd":false},{"n":"coffre-fort","upd":false},{"n":"umami-base","upd":false},{"n":"portfolio-base","upd":false},{"n":"vpn-acces","upd":false},{"n":"jeux-serveur","upd":false}]},
 
   "pc": { "on": true, "vu": "@-1min" },
-  "backup": { "h": 4, "date": "14/03 a 06:00" }
+  "backup": { "h": 4, "date": "14/03 à 06:00", "t": "@-4h",
+              "add": 39845888, "dur": 160, "snap": 17,
+              "chk": { "t": "@-6j", "ok": true } },
+
+  "_reseau_securite": "Cartes ajoutees le 05/10/2026. Les adresses arrivent deja traduites en noms : le collecteur connait le reseau, la page non.",
+  "secu": { "fw": 21, "manq": [], "ouverts": [], "verifies": 12,
+            "refus": 3, "ext": 0, "ssh": true },
+  "acces": {"now":[{"t":"iSCSI","n":"Poste","c":1},{"t":"SSH","n":"Poste","c":1},{"t":"SMB","n":"","c":0}],"ev":[["@-6min","SSH","admin","Poste","clé",1,0],["@-9.2min","SSH","admin","Poste","clé",1,0],["@-11.5min","SSH","admin","Poste","clé",1,0],["@-14.3min","SSH","admin","Poste","clé",1,0],["@-18min","SSH","admin","Poste","clé",1,0],["@-21.1min","SSH","admin","Poste","clé",1,0],["@-23.4min","SSH","admin","Poste","clé",1,0],["@-27.8min","SSH","admin","Poste","clé",1,0],["@-30.8min","SSH","admin","Poste","clé",1,0],["@-33.4min","SSH","admin","Poste","clé",1,0],["@-35.2min","SSH","admin","Poste","clé",1,0],["@-39.1min","SSH","admin","Poste","clé",1,0],["@-41.2min","SSH","admin","Poste","clé",1,0],["@-45.6min","SSH","admin","Poste","clé",1,0],["@-48min","SSH","admin","Poste","clé",1,0],["@-52min","Web","admin","Poste","mot de passe",1,0],["@-180min","SSH","admin","Telephone","clé",1,0],["@-185min","SSH","admin","Telephone","clé",1,0],["@-262min","SSH","admin","Poste","clé",1,0],["@-266min","SSH","admin","Poste","clé",1,0],["@-270.5min","SSH","admin","Poste","clé",1,0],["@-277.5min","SSH","admin","Poste","clé",1,0],["@-282.3min","SSH","admin","Poste","clé",1,0],["@-285.8min","SSH","admin","Poste","clé",1,0],["@-289.9min","SSH","admin","Poste","clé",1,0],["@-296.3min","SSH","admin","Poste","clé",1,0],["@-300min","SSH","admin","Poste","clé",1,0],["@-365min","Web","admin","Telephone","biométrie",1,0],["@-480min","SSH","admin","Poste","clé",1,0],["@-485.5min","SSH","admin","Poste","clé",1,0],["@-490.9min","SSH","admin","Poste","clé",1,0],["@-496.9min","SSH","admin","Poste","clé",1,0],["@-502.2min","SSH","admin","Poste","clé",1,0],["@-507.8min","SSH","admin","Poste","clé",1,0],["@-513min","SSH","admin","Poste","clé",1,0],["@-515.7min","SSH","admin","Poste","clé",1,0],["@-523.3min","SSH","admin","Poste","clé",1,0],["@-528.8min","SSH","admin","Poste","clé",1,0],["@-532.8min","SSH","admin","Poste","clé",1,0],["@-537.7min","SSH","admin","Poste","clé",1,0],["@-544.7min","SSH","admin","Poste","clé",1,0],["@-549.1min","SSH","admin","Poste","clé",1,0],["@-553.8min","SSH","admin","Poste","clé",1,0],["@-559.9min","SSH","admin","Poste","clé",1,0],["@-563.6min","SSH","admin","Poste","clé",1,0],["@-570min","SSH","admin","Poste","clé",1,0],["@-600min","Web","admin","Poste","mot de passe",1,0],["@-838min","SSH","admin","Portable","clé",1,0],["@-840min","SSH","root","Portable","refusée",0,0],["@-840.9min","SSH","root","Portable","refusée",0,0],["@-842min","SSH","root","Portable","refusée",0,0],["@-1140min","SSH","admin","Poste","clé",1,0],["@-1148.5min","SSH","admin","Poste","clé",1,0],["@-1153.6min","SSH","admin","Poste","clé",1,0],["@-1161.7min","SSH","admin","Poste","clé",1,0],["@-1166.2min","SSH","admin","Poste","clé",1,0],["@-1172.3min","SSH","admin","Poste","clé",1,0],["@-1179min","SSH","admin","Poste","clé",1,0],["@-1185min","SSH","admin","Poste","clé",1,0],["@-1192.9min","SSH","admin","Poste","clé",1,0],["@-1200min","SSH","admin","Poste","clé",1,0],["@-1380min","Web","admin","Poste","mot de passe",1,0]],"log":[{"t":"@-6min","s":"SSH","u":"admin","n":"Poste","r":"clé","ok":true,"x":false,"c":15},{"t":"@-52min","s":"Web","u":"admin","n":"Poste","r":"mot de passe","ok":true,"x":false,"c":1},{"t":"@-180min","s":"SSH","u":"admin","n":"Telephone","r":"clé","ok":true,"x":false,"c":2},{"t":"@-262min","s":"SSH","u":"admin","n":"Poste","r":"clé","ok":true,"x":false,"c":9},{"t":"@-365min","s":"Web","u":"admin","n":"Telephone","r":"biométrie","ok":true,"x":false,"c":1},{"t":"@-480min","s":"SSH","u":"admin","n":"Poste","r":"clé","ok":true,"x":false,"c":18},{"t":"@-600min","s":"Web","u":"admin","n":"Poste","r":"mot de passe","ok":true,"x":false,"c":1},{"t":"@-838min","s":"SSH","u":"admin","n":"Portable","r":"clé","ok":true,"x":false,"c":1}],"n":62,"ext":0},
+  "lan": { "up": 1, "vit": 10000, "mtu": 9000, "coup": 0, "err": 4 },
+  "wan": { "ok": 1, "v6": 1, "cd": 2000000, "cu": 900000,
+           "boxup": 4016838, "err": 0, "lat": 7 },
+  "_mem": "Memoire en Mo. tot = prog + zram + noyau + cache + libre. tasse = donnees d origine dans le zram, zcap = sa capacite, ssd = ce qui a deborde sur le SSD. g = qui la prend, groupe par groupe : mo = memoire anonyme (sans le cache), t = swap. La somme des mo vaut prog, celle des t vaut tasse + ssd : autres ramasse le reste.",
+  "mem": { "tot": 7964, "dispo": 3900, "prog": 2350, "zram": 420, "noyau": 650, "cache": 2950, "libre": 1594,
+           "tasse": 1150, "zcap": 3836, "ssd": 0, "psi": 0.2, "psi5": 0.1,
+           "ram": { "go": 8, "slots": 2, "libres": 1 },
+           "g": [ { "k": "conteneurs", "mo": 1300, "t": 348, "n": 26 },
+                  { "k": "systeme", "mo": 520, "t": 420, "l": [
+                      { "n": "interface-web", "mo": 140, "t": 90, "cpu": 1.2 },
+                      { "n": "indexation", "mo": 95, "t": 120, "cpu": 0.4 },
+                      { "n": "partage-fichiers", "mo": 80, "t": 60, "cpu": 0.3 },
+                      { "n": "serveur-web", "mo": 70, "t": 30, "cpu": 0.2 },
+                      { "n": "controle", "mo": 60, "t": 50, "cpu": 0.6 },
+                      { "n": "journaux", "mo": 40, "t": 40, "cpu": 0.1 },
+                      { "n": "planificateur", "mo": 35, "t": 30, "cpu": 0.1 } ] },
+                  { "k": "docker", "mo": 260, "t": 120, "l": [
+                      { "n": "containerd", "mo": 150, "t": 70, "cpu": 0.8 },
+                      { "n": "dockerd", "mo": 110, "t": 50, "cpu": 1.5 } ] },
+                  { "k": "photos", "mo": 40, "t": 180, "p": 330, "l": [
+                      { "n": "analyse-images", "mo": 25, "t": 130, "cpu": 0.2 },
+                      { "n": "albums", "mo": 15, "t": 50, "cpu": 0.1 } ] },
+                  { "k": "cameras", "mo": 110, "t": 20, "l": [
+                      { "n": "enregistreur", "mo": 70, "t": 12, "cpu": 4.1 },
+                      { "n": "flux-video", "mo": 40, "t": 8, "cpu": 6.3 } ] },
+                  { "k": "autres", "mo": 120, "t": 62, "l": [
+                      { "n": "sessions", "mo": 60, "t": 40 },
+                      { "n": "base-systeme", "mo": 45, "t": 15, "cpu": 0.2 },
+                      { "n": "init", "mo": 15, "t": 7 } ] } ],
+           "det": {
+             "zram": [ { "n": "zram0", "algo": "lz4", "orig": 287, "compr": 100, "used": 105, "cap": 959 },
+                       { "n": "zram1", "algo": "lz4", "orig": 288, "compr": 101, "used": 105, "cap": 959 },
+                       { "n": "zram2", "algo": "lz4", "orig": 287, "compr": 100, "used": 105, "cap": 959 },
+                       { "n": "zram3", "algo": "lz4", "orig": 288, "compr": 101, "used": 105, "cap": 959 } ],
+             "swaps": [ { "n": "ssd", "used": 0, "size": 2048 }, { "n": "fichier", "used": 0, "size": 4096 } ],
+             "noyau": { "slab_r": 140, "slab_u": 260, "pt": 90, "ks": 40 },
+             "cache": { "actif": 1700, "inactif": 1100, "shmem": 150 } } }
 }

@@ -17,6 +17,59 @@
 const IP = "nas.local";
 const go = (n) => `http://${IP}:${n}`;
 
+/* ---- Reglages des cartes systeme -------------------------------- */
+/* Ce que le lien reseau du serveur DOIT negocier. En dessous, la carte passe
+   a l ambre : un lien retombe a 1 Gb/s ou des trames geantes perdues se
+   voient sinon seulement au debit, quand on s en sert. */
+const LIEN = { vit: 10000, mtu: 9000 };
+
+/* Ecart minimal entre deux sauvegardes, tel que le script de sauvegarde
+   l applique : sert a annoncer l heure de la prochaine copie. */
+const SAUVEGARDE_ECART_H = 20;
+
+/* Sous ce regime, un ventilateur est considere comme arrete ou mourant. */
+const VENTILO_MIN = 300;
+
+/* Groupes de la carte « Memoire ». Le collecteur rend une CLE, la page la
+   traduit : les noms parlent a l utilisateur, pas au systeme. */
+const MEMOIRE = {
+  conteneurs: ["Conteneurs", "", "#4d97ee"],
+  systeme:    ["Services système", "", "#8a94a6"],
+  photos:     ["Photos et IA", "", "#ff9f0a"],
+  docker:     ["Moteur Docker", "", "#39c2d0"],
+  cameras:    ["Caméras", "", "#c07bf0"],
+  autres:     ["Autres", "sessions, base, divers", "#5b6170"],
+};
+
+/* Seuils du verdict de la carte « Memoire ». La PRESSION est la part du temps ou
+   des programmes attendent de la memoire (moyenne sur 5 min) ; le zram, la part
+   remplie du tiroir compresse ; le SSD, ce qui a deja deborde dessus, en Mo. */
+const MEM_SEUILS = { pression: 1, pressionMax: 5, zram: .7, ssd: 100, dispo: .2, dispoMin: .05 };
+
+/* Postes de place de la carte « Stockage », dans l ordre des barres. Un disque
+   n affiche que les postes qu il porte : le collecteur rend ce qu il mesure. */
+const ESPACE = {
+  medias:  ["médias", "#4d97ee"],
+  partages: ["partages", "#5ac8fa"],
+  cameras: ["caméras", "#ff6482"],
+  iscsi:   ["iSCSI", "#c07bf0"],
+  docker:  ["Docker", "#39c2d0"],
+  systeme: ["système", "#8a94a6"],
+  applis:  ["applications", "#ff9f0a"],
+  swap:    ["swap", "#bf5af2"],
+  autres:  ["autres", "#5b6170"],
+};
+/* Nom d usage de chaque disque selon son role ; le modele passe en sous-titre. */
+const ROLES = { donnees: "SSD données", systeme: "SSD système" };
+
+/* Verdict de la carte « Memoire » : un mot et sa teinte. */
+const etatMemoire = (m) => {
+  const S = MEM_SEUILS, zf = m.zcap ? m.tasse / m.zcap : 0;
+  if (m.psi5 >= S.pressionMax || m.dispo < m.tot * S.dispoMin) return ["Saturée", "cr"];
+  if (m.psi5 >= S.pression || zf >= S.zram || m.ssd >= S.ssd || m.dispo < m.tot * S.dispo) return ["Juste", "wn"];
+  return ["À l'aise", "ok"];
+};
+
 /* ---- GROUPS ----------------------------------------------------- */
 const GROUPS = [
   { n: "Portfolio", i: "briefcase", s: [
@@ -103,7 +156,17 @@ const GROUPS = [
             + past([[d.seerr.done + " complétées", d.seerr.pending > 0 ? "" : "ok"]]),
       warn: d => d.seerr.pending > 0 },
     { n: "FanKarr", d: "Catalogue FanKai", u: go(9898), x: "https://catalogue.example.com",
-      ic: "fankarr.ico", mini: 1, w: 4 },
+      ic: "fankarr.ico", mini: 1, w: 4,
+      /* Ce que FanKarr a telecharge (06/10/2026, demande : « des
+         pastilles comme Sonarr et Radarr »), lu par systeme.py dans ses fichiers
+         de suivi. LES DEUX MEMES que Sonarr et Radarr, en cours et place prise :
+         le nombre d episodes, la serie suivie et le dernier import ont ete
+         essayes puis retires a sa demande. Le collecteur les fournit toujours.
+         ⚠️ Aucune alerte : FanKarr ne signale ni manque ni echec exploitable. */
+      r: d => { const f = d.fankarr;
+        if (!f) return `<div class="note">Relevé de FanKarr en attente</div>`;
+        return past([[f.cours ? f.cours + " en téléchargement" : "aucun téléchargement"], [Go(f.o)]]);
+      } },
   ]},
 ];
 
@@ -471,19 +534,51 @@ GROUPS.push(
       },
       warn: d => (d.updates || {}).total > 0
               || (d.updates || {}).age < 0 || (d.updates || {}).age > 36 },
+    /* L age seul disait DE QUAND date la copie, pas si elle est complete ni si
+       elle se relira. Depuis le 05/10/2026 le script de sauvegarde laisse un
+       compte rendu : ce qui est parti, la duree, les versions gardees, et le
+       resultat du controle d integrite du dimanche, qui relit une partie des
+       donnees deja deposees sur le PC.
+       ⚠️ Les pastilles n apparaissent qu avec `t`, l heure de la copie : un
+       collecteur qui n ecrit encore que l age laisse la carte telle qu avant. */
     { n: "Sauvegarde", d: "Copie chiffrée vers le PC", ic: "sauvegarde", w: 2,
-      r: d => jauge(d.backup.h < 0 ? "jamais" : "il y a " + d.backup.h + " h",
+      r: d => { const b = d.backup || {};
+        const chk = b.chk || null;
+        return jauge(b.h < 0 ? "jamais" : "il y a " + b.h + " h",
                     "seuil d'alerte à 48 h",
-                    d.backup.h < 0 ? 100 : d.backup.h / 48 * 100,
-                    (d.backup.h < 0 || d.backup.h > 48) ? "var(--scr)"
-                      : d.backup.h > 24 ? "var(--swn)" : "var(--sok)"),
+                    b.h < 0 ? 100 : b.h / 48 * 100,
+                    (b.h < 0 || b.h > 48) ? "var(--scr)"
+                      : b.h > 24 ? "var(--swn)" : "var(--sok)")
+          + (b.t ? past([[b.date],
+                         b.add != null ? ["+ " + taille(b.add) + " envoyés"] : null,
+                         b.dur != null ? ["durée " + chrono(b.dur)] : null,
+                         b.snap ? [b.snap + " versions gardées"] : null,
+                         !chk ? ["intégrité jamais vérifiée"]
+                         : chk.ok ? ["intégrité vérifiée il y a "
+                                     + anciennete(Math.max(0, Date.now() / 1000 - chk.t)), "ok"]
+                         : ["contrôle d'intégrité en échec", "wn"]])
+                 : "");
+      },
       /* ⚠️ La jauge sait dire « jamais » quand `h` est negatif ; la note doit
          le savoir aussi, sinon elle annonce « Derniere copie le jamais ».
          Defaut trouve le 02/09/2026 par le scenario « premier demarrage »,
-         un etat qu on ne rencontre jamais en fonctionnement normal. */
-      note: d => d.backup.h < 0 ? "Aucune sauvegarde enregistrée"
-                                : "Dernière copie le " + d.backup.date,
-      warn: d => d.backup.h > 48 || d.backup.h < 0 },
+         un etat qu on ne rencontre jamais en fonctionnement normal.
+         La note annonce desormais la PROCHAINE copie : elle ne part qu apres
+         l ecart minimal, et seulement si le PC repond. Un PC reste eteint se lit
+         donc ici bien avant de declencher l alerte des 48 h. */
+      note: d => { const b = d.backup || {};
+        if (b.h < 0) return "Aucune sauvegarde enregistrée";
+        if (!b.t) return "Dernière copie le " + b.date;
+        const p = b.t + SAUVEGARDE_ECART_H * 3600, on = (d.pc || {}).on;
+        if (p <= Date.now() / 1000)
+          return on ? "Copie imminente : le PC est allumé" : "Prochaine copie dès que le PC s'allume";
+        const dt = new Date(p * 1000);
+        return "Prochaine copie " + (dt.toDateString() === new Date().toDateString() ? "" : "demain ")
+          + "vers " + dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")
+          + (on ? "" : ", si le PC est allumé");
+      },
+      warn: d => d.backup.h > 48 || d.backup.h < 0
+              || ((d.backup || {}).chk || {}).ok === false },
     /* Fusion de « Systeme » et « Memoire et swap ».
        Les deux cartes pesaient 758 px pour repeter la barre du haut : trois
        anneaux donnaient processeur, memoire et temperature aux memes valeurs a la
@@ -585,55 +680,99 @@ GROUPS.push(
                   ["pointe disques " + pd + " °C", pd >= 70 ? "wn" : ""],
                   [val("eth0") > 0
                     ? "réseau ~" + Math.round(val("eth0")) + " °C · normal par conception"
-                    : "réseau : relevé en cours"]]);
+                    : "réseau : relevé en cours"],
+                  ventilos(d.nas.fans, VENTILO_MIN)]);
       },
+      /* Un ventilateur qui ralentit precede la surchauffe : c est le signal le
+         plus precoce de la carte. */
       warn: d => {
         const L = dern(d);
         const val = n => { const i = col(d, n); return i < 0 ? 0 : (L[i] || 0); };
-        return d.nas.temp >= 85 || disquesHist(d).some(n => val(n) >= 70);
+        return d.nas.temp >= 85 || disquesHist(d).some(n => val(n) >= 70)
+          || (d.nas.fans || []).some(f => f.rpm < VENTILO_MIN);
       } },
-    { n: "Conteneurs", d: "Mémoire par service", ic: "docker", w: 2, pop: "conteneurs",
-      r: d => { const rt = d.nas.ramt || 0;
-        const c = ((d.cont && d.cont.c) || []).slice().sort((a, b) => reelC(b, rt) - reelC(a, rt));
-        const go = (mo) => vg((mo / 1024).toFixed(1));
-        const tot = c.reduce((a, x) => a + reelC(x, rt), 0);
-        const sw = c.reduce((a, x) => a + (x.swap || 0), 0);
-        const six = c.slice(0, 6).reduce((a, x) => a + reelC(x, rt), 0);
-        /* La legende est indispensable : sans elle, un segment voile et un
-           trait fin ne veulent rien dire. Dix-huit pixels bien depenses. */
-        /* ⚠️ LE JOURNAL, PAS LE COMPTEUR. La premiere version croisait `rs` et `age` :
-           elle ne tenait qu UNE HEURE, et une alerte d une heure sur une page
-           qu on ne consulte pas toutes les heures n alerte personne.
-           `containers.sh` enregistre desormais les AUGMENTATIONS du compteur,
-           horodatees, et en conserve 24 h. C est la seule facon de dire
-           « redemarre il y a 6 h » sans risque : `age` mesure le dernier demarrage
-           QUELLE QU EN SOIT LA CAUSE, un redemarrage manuel aurait donc fait
-           passer pour automatique un plantage vieux de trois semaines. */
-        const ev = ((d.cont && d.cont.ev) || []).slice().sort((a, b) => (b.t || 0) - (a.t || 0));
-        const maint = Math.floor(Date.now() / 1000);
-        return bars(c.slice(0, 6), rt)
-          + leg([["en mémoire", "#4d97ee"],
-                 ["en swap", "rgba(77,151,238,.38)"],
-                 ["moyenne 24 h", "#e8edf6"]])
-          + (ev.length
-            ? `<div class="evr"><span class="k">&#8635;</span><span>`
-              + ev.slice(0, 3).map(x =>
-                  `<b>${esc(x.n)}</b> il y a ${esc(duree(Math.max(0, maint - (x.t || 0)) / 60))}`)
-                .join(" · ")
-              + (ev.length > 3 ? ` · et ${ev.length - 3} autres` : "")
-              + ` — redémarrage${ev.length > 1 ? "s" : ""} automatique${ev.length > 1 ? "s" : ""}`
-              + ` sur 24 h</span></div>`
+    /* LA CARTE DE LA MEMOIRE VIVE, refaite le 05/10/2026 sur maquette (melange
+       des versions A et B retenu). Elle repond d abord a la question
+       qui bride ce serveur : LA MEMOIRE SUFFIT-ELLE ?
+       1. LE VERDICT : ce qui est DISPONIBLE (libre plus cache rendable) et un
+          mot. « Juste » est ambre mais ne declenche rien : rien n attend encore.
+          Seul « Saturee » allume le voyant. Les barrettes viennent du
+          collecteur : une barrette ajoutee se verra toute seule.
+       2. CE QUE CONTIENT LA RAM. Le cache est HACHURE : il se rend a la demande,
+          et c est lui qui faisait lire « 74 % utilises » comme une alerte.
+       3. CE QUI EST TASSE dans le zram, compresse dans la RAM elle-meme, et A QUI
+          ca appartient ; puis ce qui a DEBORDE sur le SSD, cent fois plus lent,
+          vrai signe de manque.
+       4. QUI LA PREND, en memoire et tasse, sur la meme echelle : les services
+          du systeme et les cameras a cote des conteneurs.
+          ⚠️ LES LIGNES ADDITIONNEES DOIVENT RETOMBER SUR LE TOUT. Le collecteur
+          classe chaque groupe de processus du systeme (cgroup) : la memoire
+          anonyme et le swap de chacun, sans le cache. Leur somme vaut
+          « programmes » et ce qui est tasse ou deborde, a moins de 1 % pres
+          (mesure le 05/10/2026 : 1 867 Mo contre 1 874, 3 401 Mo contre
+          3 407). « Autres » ramasse ce qu aucune categorie ne reclame : rien ne
+          disparait. Le noyau et le cache n appartiennent a personne, ils
+          restent dans la barre de composition.
+       ⚠️ Ni courbe (la carte « Systeme » trace deja memoire et swap sur 24 h) ni
+       liste des conteneurs : elle passe dans la fenetre, ouverte au clic.
+       ⚠️ RETIRES A LA DEMANDE D ALEXIS : la pastille de pression (elle compte
+       toujours dans le verdict, sans s afficher) et le bandeau des redemarrages
+       automatiques des conteneurs. */
+    { n: "Mémoire", d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
+      r: d => { const m = d.mem;
+        if (!m || !m.tot) return `<div class="note">Relevé de la mémoire en attente</div>`;
+        const E = etatMemoire(m);
+        const ram = m.ram || {};
+        const zf = m.zcap ? m.tasse / m.zcap : 0;
+        const grp = k => MEMOIRE[k] || [k, "", "#8a94a6"];
+        /* Du plus gros au plus petit EN MEMOIRE, comme la fenetre, sauf « Autres »,
+           toujours en dernier : c est un reste, pas un concurrent. */
+        const g = (m.g || []).slice().sort((a, b) => (a.k === "autres") - (b.k === "autres")
+          || b.mo - a.mo);
+        const M = Math.max(1, ...g.map(x => x.mo + (x.t || 0)));
+        return `<div class="verdict"><b>${moGo(m.dispo)}</b><span>disponibles sur ${moGo(m.tot)}`
+            + (ram.go ? `<br>${ram.go} Go installés · ${ram.libres ? ram.libres + " emplacement" + (ram.libres > 1 ? "s" : "") + " libre" + (ram.libres > 1 ? "s" : "") : "aucun emplacement libre"}` : "")
+            + `</span><em class="${E[1]}">${E[0]}</em></div>`
+          + intertitre("Ce que contient la RAM")
+          + compo([[m.prog / m.tot * 100, "#4d97ee"], [m.zram / m.tot * 100, "#c07bf0"],
+                   [m.noyau / m.tot * 100, "#8a94a6"], [m.cache / m.tot * 100, "#4d97ee", 1]])
+          + `<div class="leg gauche">`
+            + [["programmes", "#4d97ee", m.prog], ["zram", "#c07bf0", m.zram], ["noyau", "#8a94a6", m.noyau],
+               ["cache", hachure("#4d97ee"), m.cache], ["libre", "rgba(255,255,255,.14)", m.libre]]
+              .map(([n, c, v]) => `<span><i style="background:${c}"></i>${n}<b>${moGo(v)}</b></span>`).join("")
+            + `</div>`
+          + (m.tasse > 0
+            ? `<div class="dqb"><div class="bv"><span><b>${moGo(m.tasse)} tassés</b> dans ${moGo(m.zram)} de zram`
+              + (m.zram > 0 ? ` · ×${vg((m.tasse / m.zram).toFixed(1))}` : "") + `</span>`
+              + `<span class="${zf >= MEM_SEUILS.zram ? "wn" : ""}">zram plein à ${Math.round(zf * 100)} %</span></div>`
+              + `<div class="jauge-b"><i style="width:${pc(zf * 100).toFixed(1)}%;background:#c07bf0"></i></div>`
+              + `<div class="bv">${m.ssd > 0
+                  ? `<span class="${m.ssd >= MEM_SEUILS.ssd ? "wn" : ""}">${moGo(m.ssd)} débordés sur le SSD, cent fois plus lent</span>`
+                  : `<span>rien n'a débordé sur le SSD</span>`}</div></div>`
             : "")
-          + `<div class="note">${c.length} conteneurs · <b>${go(tot)} Go réels</b>`
-          + ` dont ${go(sw)} Go évacués · les 6 premiers : ${go(six)} Go</div>`; } },
-      /* ⚠️ PAS DE `warn` ICI, et c est deliberé. Le voyant global dit ce qui va
-         mal MAINTENANT ; ce bandeau raconte ce qui s est produit dans la
-         journee. Le brancher sur le voyant teindrait la page en ambre pendant
-         24 h pour un incident deja resolu, et userait le signal : a force de
-         voir la page orange sans rien a faire, on cesse de la regarder. */
-        { n: "Disques NVMe", d: "Santé et usure", ic: "ssd", w: 2,
-      r: d => disques(d.smart),
-      warn: d => ((d.smart && d.smart.d) || []).some(x => !x.ok || x.erreurs > 0 || x.usure >= 80) },
+          + intertitre("Qui la prend · en mémoire et tassé")
+          + rangsDuo(g.map(x => { const k = grp(x.k);
+              return [k[0] + (x.n ? " (" + x.n + ")" : ""),
+                      moGo(x.mo) + (x.t > 0 ? " + " + moGo(x.t) + " tassés" : ""),
+                      x.mo / M * 100, (x.t || 0) / M * 100, k[2],
+                      x.p > x.mo * 1.3 ? "pointe " + moGo(x.p) : k[1]]; }));
+      },
+      warn: d => !!d.mem && d.mem.tot > 0 && etatMemoire(d.mem)[1] === "cr" },
+    /* FUSION de « Disques NVMe » et « Espace disque » le 05/10/2026, puis
+       refonte sur maquette : l organisation du stockage, grappe par grappe,
+       avec ses disques dedans. Voir `grappesDisques`.
+       SMART dit si le DISQUE va bien ; btrfs dit si les DONNEES vont bien : une
+       erreur de somme de controle signale une corruption avant toute panne.
+       ⚠️ « Aucun miroir » est AMBRE MAIS NE DECLENCHE RIEN : c est un fait de
+       l installation, pas un incident. Le voyant s allume si un disque a des
+       erreurs ou s use, si un miroir existant perd un disque, ou si btrfs
+       compte des erreurs. Le volume presque plein est deja l alerte de la carte
+       « Systeme ». */
+    { n: "Stockage", d: "Volumes et disques", ic: "ssd", w: 2,
+      r: d => grappesDisques(d.smart, { ESPACE, ROLES }),
+      warn: d => { const s = d.smart || {};
+        return (s.d || []).some(x => !x.ok || x.erreurs > 0 || x.usure >= 80)
+          || (s.grappes || []).some(g => g.err > 0 || (!g.sys && g.n < g.att)); } },
     { n: "Uptime Kuma", d: "Sondes et alertes", u: go(3001), ic: "uptime-kuma", w: 4,
       /* ⚠️ NI `calme` NI `hero` ICI, et c'est un retrait délibéré. Le bandeau
          vert répétait l'addition des trois lignes — « 28 sondes en ligne »
@@ -661,6 +800,105 @@ GROUPS.push(
              || ((d.kuma.groupes || []).some(g => (+g.ko || 0) + (+g.att || 0) > 0)) },
     { n: "ntfy", d: "Notifications push", u: go(8081),
       x: "https://notifs.example.com", ic: "ntfy", mini: 1, w: 4 },
+  ]},
+  /* Ajoute le 05/10/2026, inspire de deux applications de l App Center essayees
+     puis retirees. Quatre cartes de meme largeur, donc deux rangees pleines. */
+  { n: "Réseau et sécurité", i: "shield", s: [
+    /* Chaque ligne vise une chose qui A DEJA CASSE SANS BRUIT. Le 05/10/2026,
+       cinq `.env` etaient lisibles par tous depuis cinq semaines — repasses en
+       777 par une mise a jour du systeme — sans que rien ne le signale.
+       Le pare-feu : si le script qui reinjecte les regles Docker ne passait pas
+       apres un redemarrage, tous les services deviendraient injoignables. Le
+       collecteur verifie que CHAQUE reseau Docker actif a sa regle ; un simple
+       compte ne dirait pas lequel manque. */
+    { n: "Sécurité", d: "Contrôles du serveur", ic: "securite", w: 2,
+      r: d => { const s = d.secu;
+        if (!s) return `<div class="note">Contrôles en attente</div>`;
+        const ouv = s.ouverts || [], manq = s.manq || [];
+        const pl = (n, m) => n > 1 ? m : "";
+        return controles([
+          ouv.length ? ["wn", ouv.length + " fichier" + pl(ouv.length, "s") + " sensible" + pl(ouv.length, "s")
+                              + " lisible" + pl(ouv.length, "s") + " par tous",
+                        ouv.slice(0, 2).join(", ") + (ouv.length > 2 ? "…" : "")]
+                     : ["ok", "Fichiers sensibles fermés", s.verifies ? s.verifies + " vérifiés" : ""],
+          manq.length ? ["wn", manq.length + " réseau" + pl(manq.length, "x") + " Docker sans règle", manq.slice(0, 2).join(", ")]
+          /* `fw` vaut null quand les regles n ont pas pu etre lues : on le dit,
+             plutot que d afficher « null regles en place ». */
+          : s.fw == null ? ["in", "Pare-feu : contrôle en attente", ""]
+          : ["ok", "Pare-feu : " + s.fw + " règles en place", "liste blanche"],
+          [s.refus > 20 ? "wn" : "ok", nb(s.refus) + " connexion" + pl(s.refus, "s") + " refusée" + pl(s.refus, "s"), "sur 24 h"],
+          s.ext > 0 ? ["wn", s.ext + " connexion" + pl(s.ext, "s") + " depuis Internet", "sur 24 h"]
+                    : ["ok", "Aucun accès depuis Internet", "réseau local et VPN"],
+          s.ssh ? ["in", "SSH ouvert", "se referme seul"] : ["ok", "SSH fermé", ""]]);
+      },
+      warn: d => { const s = d.secu || {};
+        return (s.ouverts || []).length > 0 || (s.manq || []).length > 0 || s.ext > 0 || s.refus > 20; } },
+    /* Qui est connecte maintenant, et les dernieres connexions. Les adresses
+       arrivent TRADUITES EN NOMS par le collecteur (« PC fixe », le nom d un
+       client WireGuard) ; une adresse hors du reseau local et du VPN passe a
+       l ambre, et c est la seule condition d alerte. Un clic ouvre les 24 h
+       entieres, heure par heure puis connexion par connexion (`popAcces`). */
+    { n: "Accès", d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
+      r: d => { const a = d.acces;
+        if (!a) return `<div class="note">Relevé des connexions en attente</div>`;
+        return intertitre("Connectés maintenant") + sessions(a.now || [])
+          + intertitre("Dernières connexions")
+          + ((a.log || []).length ? journal(a.log, 4) : `<div class="note">Aucune connexion enregistrée</div>`);
+      },
+      note: d => { const a = d.acces;
+        if (!a) return null;
+        return nb(a.n) + " connexion" + (a.n > 1 ? "s" : "") + " sur 24 h · "
+          + (a.ext > 0 ? a.ext + " depuis Internet" : "toutes depuis le réseau local ou le VPN");
+      },
+      warn: d => (d.acces || {}).ext > 0 },
+    /* Le lien du serveur vers le switch. Il passe a l ambre s il negocie moins
+       que prevu, s il perd ses trames geantes, ou s il est TOMBE ET REMONTE
+       depuis le demarrage : c est ce que produit un switch qui se fige.
+       La courbe est la colonne `reseau`, collectee depuis l origine et jamais
+       affichee jusqu ici : recu et envoye confondus. */
+    { n: "Réseau local", d: "Lien du serveur vers le switch", ic: "reseau", w: 2,
+      r: d => { const l = d.lan;
+        if (!l) return `<div class="note">Relevé du lien en attente</div>`;
+        const v = Hf(d, "reseau"), red = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+        const lent = l.vit > 0 && l.vit < LIEN.vit, petit = l.mtu < LIEN.mtu;
+        return (l.up ? hero(l.vit >= 1000 ? vg(l.vit / 1000) + " Gb/s" : l.vit + " Mb/s",
+                            "lien vers le switch<br>" + (l.mtu >= 9000 ? "trames géantes " + l.mtu
+                                                                       : "trames de " + l.mtu + " octets"),
+                            lent || petit ? "wn" : "")
+                     : hero("Coupé", "le serveur n'a plus de lien réseau", "cr"))
+          + (aire([{ v, c: "#4d97ee", n: "trafic" }], null, { u: "dbt", ts: Hf(d, "t") })
+             || `<div class="note">Trafic en cours d'enregistrement</div>`)
+          + past([v.length ? ["moyenne " + Mo(red)] : null,
+                  v.length ? ["pointe " + Mo(Math.max(...v))] : null,
+                  [l.coup > 0 ? l.coup + " coupure" + (l.coup > 1 ? "s" : "") + " depuis le démarrage"
+                              : "lien stable depuis le démarrage", l.coup > 0 ? "wn" : "ok"],
+                  [nb(l.err) + " erreur" + (l.err > 1 ? "s" : "") + " reçue" + (l.err > 1 ? "s" : ""),
+                   l.err > 10000 ? "wn" : ""]]);
+      },
+      warn: d => { const l = d.lan;
+        return !!l && (!l.up || (l.vit > 0 && l.vit < LIEN.vit) || l.mtu < LIEN.mtu || l.coup > 0); } },
+    /* La premiere question d une panne : le serveur, la box ou l operateur ?
+       Le debit est celui de TOUTE LA MAISON, puisque c est la box qui le mesure.
+       ⚠️ LE REDEMARRAGE DE LA BOX EST AMBRE MAIS NE DECLENCHE RIEN. Il explique
+       une panne du port du VPN, qui en suit souvent un, mais c est la carte VPN
+       qui porte cette alerte : le dire deux fois teindrait la page pour un
+       evenement deja passe. */
+    { n: "Internet", d: "Fibre et box de la maison", ic: "internet", w: 2,
+      r: d => { const w = d.wan;
+        if (!w) return `<div class="note">Relevé de la box en attente</div>`;
+        const gb = k => k >= 1000000 ? vg(k / 1000000) + " Gb/s" : Math.round(k / 1000) + " Mb/s";
+        const recent = w.boxup >= 0 && w.boxup < 86400;
+        return (w.ok ? hero("En ligne", "fibre · " + (w.v6 ? "IPv4 et IPv6" : "IPv4 seul")
+                                        + "<br>abonnement " + gb(w.cd) + " ↓ · " + gb(w.cu) + " ↑")
+                     : hero("Hors ligne", "la box n'a plus de connexion Internet", "cr"))
+          + (aire([{ v: Hf(d, "wantx"), c: "#34c759", n: "envoyé" },
+                   { v: Hf(d, "wanrx"), c: "#4d97ee", n: "reçu" }], null, { u: "dbt", ts: Hf(d, "t") })
+             || `<div class="note">Débit en cours d'enregistrement</div>`)
+          + past([w.lat > 0 ? ["latence " + w.lat + " ms", w.lat > 40 ? "wn" : ""] : ["latence : sans réponse", "wn"],
+                  ["box en service depuis " + anciennete(w.boxup), recent ? "wn" : ""],
+                  [w.err > 0 ? nb(w.err) + " erreurs fibre" : "0 erreur fibre", w.err > 0 ? "wn" : "ok"]]);
+      },
+      warn: d => { const w = d.wan; return !!w && (!w.ok || w.err > 0); } },
   ]},
   { n: "Bureau et infrastructure", i: "server", s: [
     { n: "AdGuard Home", d: "DNS filtrant du réseau", u: go(3000), ic: "adguard-home", w: 2,

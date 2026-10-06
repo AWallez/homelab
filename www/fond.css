@@ -712,7 +712,7 @@ dialog.dlg::after {
    faisaient 119, et tout le reste tombait 18 px trop a droite. Des `min-width`
    ne posent qu un plancher : seules des largeurs fixes garantissent que toutes
    les lignes partagent la meme geometrie. */
-.ln { grid-template-columns: 1fr 64px 60px 46px 60px }
+.ln { grid-template-columns: 1fr 64px 60px 46px }   /* colonne « derive » retiree le 05/10/2026 */
 .ln .sw {
   font-size: .7rem;
   text-align: right;
@@ -1321,22 +1321,25 @@ dialog.dlg::after {
    vraiment le conteneur, et les pourcentages suivent. */
 .gech { margin: 0 .667% 0 8.667% }
 
-/* ---- 29. La barre nomme les cartes en alerte ----------------------------
-   ⚠️ `:empty` PLUTOT QU UNE CONDITION EN JAVASCRIPT : le conteneur est rendu a
-   chaque fois, ce qui garde CONSTANT le nombre d enfants de `.hp`. `fusionne`
-   remplace tout un niveau des que ce nombre change, et la barre entiere
-   clignoterait a chaque apparition ou disparition d une alerte. */
-.hp .souci:empty { display: none }
-.hp .souci { display: flex; flex-wrap: wrap; justify-content: flex-end;
-  gap: 4px 5px; margin-top: 2px }
-.hp .souci .cible { font-size: .68rem; font-weight: 600; line-height: 1.5;
+/* ---- 29. Les cartes en alerte, nommees sous la barre ------------------
+   Rangee a part depuis le 06/10/2026 (`#soucis`, juste apres `#bar`) : logees
+   dans le bloc d etat de la barre, les pastilles l allongeaient a chaque alerte
+   et la faisaient passer sur deux lignes sur les ecrans moyens.
+   ⚠️ `:empty` PLUTOT QU UNE CONDITION EN JAVASCRIPT : la rangee est rendue a
+   chaque tour, vide quand tout va bien, et disparait alors sans laisser de trou.
+   ⚠️ L ECART BARRE / RACCOURCIS EST CONSERVE : quand la rangee est la, la barre
+   lui cede sa marge basse (70 px sur grand ecran, 38 sur telephone) et ne garde
+   que 16 px ; la rangee la reprend sous elle. Sans alerte, rien ne bouge. */
+.soucis:empty { display: none }
+.bar:has(+ .soucis:not(:empty)) { margin-bottom: 16px }
+.soucis { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  max-width: 760px; margin: 0 auto 54px; padding: 0 16px }
+@media (max-width: 600px) { .soucis { margin-bottom: 26px } }
+.soucis .cible { font-size: .72rem; font-weight: 600; line-height: 1.6;
   color: var(--warn); background: rgba(255,159,10,.12);
   border: 1px solid rgba(255,159,10,.30); border-radius: 99px;
-  padding: 0 .45rem; cursor: pointer; transition: background .15s ease }
-.hp .souci .cible:hover { background: rgba(255,159,10,.24) }
-
-/* Sur les paliers etroits la barre se centre : ses pastilles suivent. */
-@media (max-width: 1100px) { .hp .souci { justify-content: center } }
+  padding: 1px .6rem; cursor: pointer; transition: background .15s ease }
+.soucis .cible:hover { background: rgba(255,159,10,.24) }
 
 /* La pastille d ATTENTION de la ligne d etat.
    ⚠️ Nom long et explicite : `att` est DEJA pris par `.majl li.att`.
@@ -1402,6 +1405,13 @@ dialog.dlg::after {
    son contenu. */
 .duo.tro > *:first-child { flex: 1 1 auto; min-width: 190px }
 .duo.tro > *:last-child  { flex: 0 1 auto; min-width: 0 }
+/* Sur telephone, la colonne des ratios passe SOUS le trace et, ne prenant que
+   sa largeur, restait collee a gauche (signale le 06/10/2026).
+   `margin-inline: auto` la centre quand elle est seule sur sa ligne, et ne
+   change rien cote a cote : le trace, qui grandit, prend deja tout le vide.
+   Son titre, plus large qu elle, deborde des deux cotes au lieu d un seul. */
+.duo.tro > *:last-child { margin-inline: auto }
+.duo.tro > *:last-child > .trkh { white-space: nowrap; align-self: center }
 
 /* ---- 33. Boutons du poste de travail ------------------------------------
    ⚠️ `margin-top: auto` est DEJA reclame par `.note` dans une carte : deux

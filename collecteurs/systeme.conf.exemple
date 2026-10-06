@@ -1,0 +1,53 @@
+# Reglages de `systeme.py`, propres a l installation. A copier en `systeme.conf`
+# a cote du script. Aucun secret ici.
+
+[reseau]
+interface = eth0
+# Reseaux consideres comme « chez soi » : une connexion venue d ailleurs passe a l ambre.
+locaux = 192.168.1.0/24, 10.8.0.0/24, 127.0.0.0/8
+# Conteneur wg-easy : ses clients donnent leur nom a leur adresse VPN.
+wireguard = wg-easy
+
+[noms]
+192.168.1.10 = Poste
+192.168.1.1 = Box
+
+[box]
+# Interface locale de la box (routes lisibles sans mot de passe) et le nom de son certificat.
+adresse = 192.168.1.1
+nom = mabox.example
+latence = 1.1.1.1
+
+[kuma]
+# Page de statut publique d Uptime Kuma : ses battements donnent les periodes de panne de chaque sonde.
+url = http://127.0.0.1:3001
+page = mapage
+
+[securite]
+racine = /volume1/docker
+sensibles = */.env, */*.env, */*/.env, _backup/*, _system/nas-backup.sh
+script_parefeu = /usr/local/bin/firewall-docker-rules.sh
+
+[stockage]
+volume = /volume1
+racine = /rootfs
+systeme = /rootfs, /boot, /overlay
+applications = /ugreen
+emplacements = 4
+
+[espace]
+# Dossiers du volume par poste, mesures chaque nuit. Les dossiers en @ non nommes vont
+# dans « applications » ; ce qu aucun poste ne couvre (metadonnees btrfs, dossiers non
+# classes) va dans « autres », decompose dans la fenetre de l espace.
+medias = Medias
+partages = Partage, @home
+cameras = Surveillance
+iscsi = @iscsi
+docker = @docker, docker
+
+[fankarr]
+# Facultatif : valeurs par defaut ci-dessous. Fichiers de suivi de FanKarr, dossier
+# monte en /data dans son conteneur, et sauvegardes de qBittorrent (telechargements en cours).
+config = /volume1/docker/arr/fankarr/config
+data = /volume1/Medias
+bt_backup = /volume1/docker/arr/qbittorrent/config/qBittorrent/BT_backup

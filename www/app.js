@@ -82,7 +82,7 @@ const coupure = (v, pas) => v.reduce((a, x) => a + (x > 0 ? (x - 1) * pas : 0), 
    Dans un viewBox de n unites etire par `preserveAspectRatio="none"`, chaque
    barre occupe exactement une unite : les largeurs sont egales PAR CONSTRUCTION
    et la gouttiere devient proportionnelle. Meme technique que `.courbe`. */
-const ruban = (v, n, alt, ts) => {
+const ruban = (v, n, alt, ts, col) => {
   n = n || 48;
   const c = [];
   for (let k = 0; k < n; k++) {
@@ -96,6 +96,7 @@ const ruban = (v, n, alt, ts) => {
     + ` role="img" aria-label="${esc(alt || "Joignabilité sur 24 heures")}"`
     + (ts && ts.length > 1
         ? ` data-lec="batt" data-t0="${ts[0]}" data-ps="${Math.round((ts[ts.length - 1] - ts[0]) / (n - 1 || 1))}"`
+          + (col ? ` data-col="${esc(col)}"` : "")
         : "")
     + `><rect class="capt" x="0" y="0" width="${n}" height="10"/>`
     + c.map((x, k) => `<rect x="${(k + 0.13).toFixed(2)}" width="0.74" height="10"${
@@ -169,7 +170,7 @@ const rubanH = (d, col, alt, par) => {
   const pc = tsc.length > PAR ? (tsc[PAR] - tsc[0]) / 60 : 0;
   return `<div class="rleg"><span>${pc ? "1 barre = " + esc(duree(pc)) : ""}</span>`
     + `<span>maintenant</span></div>`
-    + ruban(vc, n, alt + (pc ? ", une case par " + duree(pc) : ""), tsc)
+    + ruban(vc, n, alt + (pc ? ", une case par " + duree(pc) : ""), tsc, col)
     // ⚠️ Pas de 3 h et non 6. Sur 24 h cela fait huit reperes espaces de
     // 12,5 %, soit 66 px sur un ruban de 530 et 35 px sur un de 278, pour
     // des etiquettes de ~24 px. C est la limite basse : a 2 h elles se
@@ -229,8 +230,9 @@ const Hs = (d, n) => { const i = col(d, n);
   return i < 0 ? [] : (((d.hist || {}).s) || []).map(p => +p[i] || 0); };
 
 /* Colonnes de temperature par disque, triees, quel qu en soit le nombre. La
-   machine a quatre emplacements M.2 dont deux libres : un SSD ajoute plus tard
-   apparaitra tout seul, sans toucher ni au collecteur ni a la page. */
+   machine a quatre emplacements M.2 de donnees, dont trois libres, plus celui du
+   systeme : un SSD ajoute plus tard apparaitra tout seul, sans toucher ni au
+   collecteur ni a la page. */
 const disquesHist = (d) => (((d.hist || {}).champs) || [])
   .filter(n => /^nvme\d+$/.test(n)).sort();
 
@@ -250,6 +252,42 @@ const disquesHist = (d) => (((d.hist || {}).champs) || [])
    a 10 min tant que le fichier n existe pas — au premier demarrage, ou si le
    cron n est pas encore passe. */
 let FIN = null, FINT = 0;
+
+/* ---- `systeme.json`, ecrit par `systeme.py` chaque minute (05/10/2026) ----
+   Memoire, stockage, securite, acces, reseau, Internet, ventilateurs, detail
+   de la sauvegarde et periodes de panne de chaque sonde Kuma. Relu toutes les
+   20 s : le fichier ne change qu une fois par minute.
+   ⚠️ Absent ou illisible, il ne casse rien : les cartes gardent ce que donne
+   `data.json`, ou leur etat d attente. */
+let SYS = null, SYST = 0;
+async function lireSysteme() {
+  if (SYS && Date.now() - SYST < 20000) return SYS;
+  try {
+    SYS = await fetch("systeme.json?" + Date.now()).then(r => r.ok ? r.json() : null);
+    SYST = Date.now();
+  } catch (e) { /* les cartes gardent leur etat */ }
+  return SYS;
+}
+/* Fusion dans les donnees de la page. Chaque cle de `systeme.json` remplace
+   celle de `data.json` ; les cles partagees (sauvegarde, SMART, conteneurs)
+   sont COMPLETEES et non remplacees. */
+function fusionSysteme(d, s) {
+  if (!s) return;
+  for (const k of ["secu", "acces", "lan", "wan", "mem", "fankarr"]) if (s[k]) d[k] = s[k];
+  if (s.fans && d.nas) d.nas.fans = s.fans;
+  if (s.backup) d.backup = Object.assign({}, d.backup, s.backup);
+  if (s.kuma) d.kuma = Object.assign({}, d.kuma, s.kuma);
+  if (s.stock && d.smart) {
+    d.smart.grappes = s.stock.grappes;
+    d.smart.slots = s.stock.slots;
+    for (const x of d.smart.d || []) if ((s.stock.roles || {})[x.n]) x.role = s.stock.roles[x.n];
+  }
+  if (s.mem && s.mem.anon && d.cont)
+    for (const x of d.cont.c || []) if (s.mem.anon[x.n] != null) x.anon = s.mem.anon[x.n];
+  /* Detail de chaque disque pour sa fenetre, range sous le disque de smart.json. */
+  if (s.disq && d.smart)
+    for (const x of d.smart.d || []) if (s.disq[x.n]) x.det = s.disq[x.n];
+}
 async function histFin() {
   if (FIN && Date.now() - FINT < 30000) return FIN;
   try {
@@ -501,6 +539,215 @@ const etatv = (v, sub, ok) => `<div class="etatv">
   <span class="ep${ok ? "" : " ko"}"></span>
   <span class="vv"><b>${esc(v)}</b><span>${esc(sub)}</span></span></div>`;
 
+/* ---- Composants des cartes « Reseau et securite » (05/10/2026) ---- */
+
+/* Liste de controles, une ligne par verification. Trois etats et non deux :
+   `in` dit un fait qui n est ni bon ni mauvais — le SSH ouvert est voulu tant
+   qu on s en sert, il ne doit ni rassurer en vert ni alarmer en ambre. */
+const controles = (l) => `<ul class="chk">${l.filter(Boolean).map(([t, txt, q]) =>
+  `<li class="${t}"><span class="k">${t === "wn" ? "!" : t === "in" ? "i" : "&#10003;"}</span>`
+  + `<span>${esc(txt)}</span>${q ? `<em>${esc(q)}</em>` : ""}</li>`).join("")}</ul>`;
+
+/* Intertitre a l interieur d une carte qui empile deux listes. */
+const intertitre = (t) => `<div class="sh">${esc(t)}</div>`;
+
+/* Sessions ouvertes, une tuile par protocole. Une tuile ETEINTE plutot
+   qu absente : « aucun partage ouvert » est une information, et la rangee
+   garde la meme forme d un rendu a l autre. */
+const sessions = (l) => `<div class="ses">${l.map(x =>
+  `<span class="${x.c > 0 ? "" : "vide"}"><i></i>${esc(x.t)} · ${
+    x.c > 0 ? esc(x.n || "?") + (x.c > 1 ? " ×" + x.c : "") : "aucun"}</span>`).join("")}</div>`;
+
+/* Journal des connexions. L heure seule pour aujourd hui, le jour au-dela :
+   « 21:40 » sans date laisserait croire a une connexion de ce soir.
+   ⚠️ LES CONNEXIONS IDENTIQUES QUI SE SUIVENT SONT REGROUPEES (« ×4 ») : un
+   script qui se connecte en boucle remplissait les quatre lignes de la carte
+   avec la meme entree, et cachait la connexion d avant (05/10/2026). L heure
+   affichee est celle de la plus recente. */
+const journal = (l, max) => {
+  const auj = new Date().toDateString();
+  const g = [];
+  for (const x of l) {
+    const p = g[g.length - 1];
+    /* `c` arrive deja compte par le collecteur ; la page n ajoute que ce qu il
+       n a pas regroupe lui-meme. */
+    if (p && p.s === x.s && p.u === x.u && p.n === x.n && p.r === x.r && p.ok === x.ok) p.c += x.c || 1;
+    else g.push(Object.assign({}, x, { c: x.c || 1 }));
+  }
+  return `<div class="jr">${g.slice(0, max || g.length).map(x => {
+    const t = new Date((x.t || 0) * 1000);
+    const h = t.toDateString() === auj
+      ? t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+      : t.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+    return `<div><span class="h">${h}</span><span class="s">${esc(x.s)}</span>`
+      + `<span class="q">${esc(x.u)} · ${esc(x.n)}${x.c > 1 ? ` <small>×${x.c}</small>` : ""}</span>`
+      + `<span class="r ${x.ok ? "ok" : "wn"}">${esc(x.r)}</span></div>`;
+  }).join("")}</div>`;
+};
+
+/* Barres classees : libelle, valeur, longueur en %, couleur, precision.
+   Plus simple que `bars()` des conteneurs, qui scinde memoire et swap. */
+const rangs = (l) => `<div class="rangs">${l.map(([n, v, w, c, s]) =>
+  `<div class="rg"><span>${esc(n)}${s ? `<small>${esc(s)}</small>` : ""}</span><b>${esc(v)}</b>`
+  + `<i style="width:${pc(w).toFixed(1)}%;background:${c || "var(--sbl)"}"></i></div>`).join("")}</div>`;
+
+/* Jauge empilee : plusieurs segments sur la meme piste. */
+const pile = (v, l, parts) => `<div class="jauge empilee">
+  <div class="jauge-t"><b>${esc(v)}</b><span>${esc(l)}</span></div>
+  <div class="jauge-b pile">${parts.map(([w, c]) =>
+    `<i style="width:${pc(w).toFixed(2)}%;background:${c}"></i>`).join("")}</div></div>`;
+
+/* Barre de composition. Un segment marque `h` est HACHURE : il se rend a la
+   demande, comme le cache, et ne doit pas se lire comme de la place prise. */
+const hachure = (c) => `repeating-linear-gradient(135deg,${teinte(c, .55)} 0 4px,${teinte(c, .2)} 4px 8px)`;
+/* ⚠️ CLASSE `ramc`, PAS `compo` : `.compo` est deja le bloc barre + legende de
+   la fenetre des conteneurs. La reprendre ici avait ecrase ce bloc a 9 px de
+   haut, et sa legende debordait sur les titres de colonnes (05/10/2026). */
+const compo = (parts) => `<div class="jauge-b pile ramc">${parts.map(([w, c, h]) =>
+  `<i style="width:${pc(w).toFixed(2)}%;background:${h ? hachure(c) : c}"></i>`).join("")}</div>`;
+
+/* Barres a deux tons : le plein en memoire, le voile tasse en zram. Meme
+   lecture que les barres des conteneurs, a l echelle d une application. */
+const rangsDuo = (l) => `<div class="rangs">${l.map(([n, v, w1, w2, c, s]) =>
+  `<div class="rg"><span>${esc(n)}${s ? `<small>${esc(s)}</small>` : ""}</span><b>${esc(v)}</b>`
+  + `<span class="p"><i style="width:${pc(w1).toFixed(1)}%;background:${c}"></i>`
+  + (w2 > 0 ? `<i style="width:${pc(w2).toFixed(1)}%;background:${teinte(c, .38)}"></i>` : "")
+  + `</span></div>`).join("")}</div>`;
+
+/* N NUANCES D UNE COULEUR, de la plus claire a la plus foncee, la couleur de base
+   au milieu. Elles servent aux sous-parties d une categorie : on reconnait la
+   famille a la teinte, et chaque membre a sa clarte. Ecart borne a 35 % vers le
+   blanc et vers le noir, au-dela les extremes se confondaient avec le fond. */
+const nuances = (hex, n) => {
+  const v = parseInt(hex.slice(1), 16), rgb = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  const mix = (t) => "#" + rgb.map(c => Math.round(t >= 0 ? c + (255 - c) * t : c * (1 + t)))
+    .map(c => c.toString(16).padStart(2, "0")).join("");
+  if (n <= 1) return [hex];
+  return Array.from({ length: n }, (_, i) => mix(.35 - .7 * i / (n - 1)));
+};
+
+/* Megaoctets en Mo ou Go, a la francaise. */
+const moGo = (mo) => mo >= 1000 ? vg((mo / 1024).toFixed(1)) + " Go" : Math.round(mo) + " Mo";
+
+/* Volume en octets, a l unite la plus lisible. `vol()` reste a la page pour
+   les gros volumes ; ici on descend jusqu au Mo, l ordre d une copie du jour.
+   Une seule decimale en To, comme la barre du haut : « 4,4 To » doit se lire
+   pareil sur la carte et dans la barre. */
+const taille = (o) => o >= 1099511627776 ? vg((o / 1099511627776).toFixed(1)) + " To"
+  : o >= 1073741824 ? vg((o / 1073741824).toFixed(1)) + " Go"
+  : Math.max(0, Math.round(o / 1048576)) + " Mo";
+
+/* Duree d une operation en secondes : « 2 min 40 ». */
+const chrono = (s) => s < 60 ? Math.round(s) + " s"
+  : Math.floor(s / 60) + " min " + String(Math.round(s % 60)).padStart(2, "0");
+
+/* Pastille des ventilateurs : compacte quand tout tourne, NOMINATIVE des
+   qu un ventilateur faiblit, seul cas ou savoir lequel importe. */
+const ventilos = (f, min) => {
+  if (!f || !f.length) return null;
+  const lent = f.filter(x => x.rpm < min);
+  return lent.length
+    ? ["ventilateur " + lent.map(x => x.n).join(" et ") + " à " + nb(lent[0].rpm) + " tr/min", "wn"]
+    : ["ventilateurs " + f.map(x => nb(x.rpm)).join(" · ") + " tr/min"];
+};
+
+/* « 4,6 / 7,3 To » plutot que « 4,6 To / 7,3 To » quand l unite est la meme. */
+const surTotal = (a, b) => {
+  const x = taille(a), y = taille(b), u = y.split(" ").pop();
+  return (x.endsWith(" " + u) ? x.slice(0, -u.length - 1) : x) + " / " + y;
+};
+
+/* Carte Stockage : L ORGANISATION DU STOCKAGE, telle que la machine la monte.
+   Un bloc par GRAPPE — le volume de donnees et son type de RAID, puis le disque
+   systeme a part — et, dans chaque bloc, les SSD qui la composent. Les
+   emplacements libres ferment la liste : c est la que se joue un miroir.
+   ⚠️ LA BARRE DE PLACE APPARTIENT AU VOLUME, PAS AU DISQUE. Aujourd hui un seul
+   SSD porte le volume, et les deux se confondent ; avec un second SSD en miroir,
+   une barre par disque montrerait deux fois les memes donnees.
+   ⚠️ LES PETITS POSTES ONT UNE LARGEUR MINIMALE A L ECRAN (CSS). Les medias font
+   98 % du volume : a l echelle, iSCSI ou Docker tiendraient dans un tiers de
+   pixel. La legende donne les vraies tailles.
+   Version retenue le 05/10/2026, qui a ecarte la tendance de
+   remplissage, la relecture complete et le taux de la partition racine : rien
+   de ce qui n appelle pas une action.
+   Le detail par disque — rythme d ecriture, duree de vie, arrets brutaux —
+   reste calcule par `disques()`, reserve a la fenetre.
+   `cfg` porte les libelles du site (`ESPACE`, `ROLES`) : ce fichier n en sait rien. */
+const RAID = { raid0: "RAID 0", raid1: "RAID 1", raid5: "RAID 5", raid6: "RAID 6", raid10: "RAID 10",
+               linear: "JBOD", single: "disque simple" };
+const ligneDisque = (x, cfg) => {
+  const role = cfg.ROLES[x.role];
+  const modele = x.modele.replace(/_/g, " ").replace(/\s*\d+(?:[.,]\d+)?\s*(?:GB|TB|Go|To)$/i, "");
+  const cap = x.go >= 1000 ? vg((x.go / 1000).toFixed(1)) + " To" : x.go + " Go";
+  const ko = !x.ok || x.erreurs > 0;
+  const tc = x.temp >= 65 ? "cr" : x.temp >= 55 ? "wn" : "ok";
+  /* Un clic ouvre la fiche du disque (`popDisque`, ecouteur delegue : la carte
+     est redessinee toutes les deux secondes). */
+  return `<div class="dq" data-disque="${esc(x.n)}" role="button" tabindex="0" title="Voir le détail du disque">`
+    + `<i class="${ko ? "cr" : "ok"}"></i>`
+    + `<span class="dn"><b>${esc(role || modele)}</b><small>${esc(cap + (role ? " · " + modele : ""))}</small></span>`
+    + `<em class="${tc}">${x.temp} °C</em>`
+    + `<em class="${x.usure >= 80 ? "wn" : ""}">usure ${x.usure} %</em>`
+    + `<em class="${ko ? "wn" : "ok"}">${x.erreurs} erreur${x.erreurs > 1 ? "s" : ""}</em>`
+    + `<span class="ouvre" aria-hidden="true"></span></div>`;
+};
+const grappesDisques = (s, cfg) => {
+  const dq = (s && s.d) || [];
+  if (!dq.length) return `<div class="note">Relevé des disques en attente</div>`;
+  const gs = ((s && s.grappes) || []).slice().sort((a, b) => (a.sys ? 1 : 0) - (b.sys ? 1 : 0));
+  /* Sans grappes (collecteur pas encore a jour) : les disques seuls. */
+  if (!gs.length) return `<div class="blocs"><div class="dqb">${dq.map(x => ligneDisque(x, cfg)).join("")}</div></div>`;
+  const vus = new Set();
+  const blocs = gs.map(g => {
+    const membres = dq.filter(x => (g.disques || []).includes(x.n));
+    membres.forEach(x => vus.add(x.n));
+    const e = g.esp || null;
+    let tete;
+    if (g.sys) tete = `<b>${esc(g.nom || "Système")}</b><span>hors grappe · disque de démarrage</span>`;
+    else {
+      const etat = g.att < 2 ? ["aucun miroir", "wn"]
+        : g.n < g.att ? ["miroir dégradé : " + g.n + "/" + g.att, "wn"]
+        : ["miroir actif", "ok"];
+      tete = `<b>${esc(g.nom)}</b><span>${esc([RAID[g.raid] || g.raid,
+                g.att + " disque" + (g.att > 1 ? "s" : ""), g.fs].filter(Boolean).join(" · "))}</span>`
+        + `<span class="faits"><span class="${etat[1]}">${esc(etat[0])}</span>`
+        + (g.err != null ? `<span class="${g.err > 0 ? "wn" : "ok"}">${g.err > 0 ? nb(g.err) + " erreurs" : "0 erreur"} btrfs</span>` : "")
+        + `</span>`;
+    }
+    let espace = "";
+    if (e && e.tot) {
+      const parts = Object.keys(cfg.ESPACE).filter(k => ((e.parts || {})[k] || 0) > 0).map(k => [k, e.parts[k]]);
+      const used = e.used != null ? e.used : parts.reduce((a, [, o]) => a + o, 0);
+      espace = `<div class="jauge-b pile">` + parts.map(([k, o]) =>
+          `<i style="width:${pc(o / e.tot * 100).toFixed(2)}%;background:${cfg.ESPACE[k][1]}"></i>`).join("")
+        + `</div><div class="bv"><span><b>${esc(surTotal(used, e.tot))}</b> · ${esc(taille(Math.max(0, e.tot - used)))} libres</span></div>`
+        + leg(parts.map(([k, o]) => [cfg.ESPACE[k][0], cfg.ESPACE[k][1], taille(o)]));
+    }
+    /* L en-tete et la barre d un volume de donnees ouvrent le detail de son
+       espace (`popEspace`), les lignes de disque leur fiche. */
+    const zone = !espace ? `<div class="gh">${tete}</div>${espace}`
+      : `<div class="vz" data-espace="${esc(g.nom)}" role="button" tabindex="0" title="Voir ce qui prend la place">`
+        + `<div class="gh">${tete}<span class="ouvre" aria-hidden="true"></span></div>${espace}</div>`;
+    return `<div class="dqb${g.sys ? " sys" : ""}">${zone}`
+      + `<div class="dqs">${membres.map(x => ligneDisque(x, cfg)).join("")}</div></div>`;
+  });
+  /* Un disque qu aucune grappe ne reclame : neuf, ou pas encore monte. */
+  const seuls = dq.filter(x => !vus.has(x.n));
+  if (seuls.length) blocs.push(`<div class="dqb"><div class="gh"><b>Hors grappe</b><span>disque non utilisé</span></div>`
+    + `<div class="dqs">${seuls.map(x => ligneDisque(x, cfg)).join("")}</div></div>`);
+  const sl = s.slots || null;
+  if (sl && sl.libres > 0) {
+    const mono = gs.find(g => !g.sys && g.raid === "raid1" && g.att < 2);
+    blocs.push(`<div class="libre">${sl.libres} emplacement${sl.libres > 1 ? "s" : ""} M.2 libre${sl.libres > 1 ? "s" : ""} sur ${sl.tot}`
+      + (mono ? ` · un second SSD ferait du ${esc(mono.nom.toLowerCase())} un vrai miroir` : "") + `</div>`);
+  }
+  return `<div class="blocs">${blocs.join("")}</div>`;
+};
+
+/* Anciennete en secondes. `duree()` compte en heures sans plafond, ce qui
+   donne « 144 h » pour six jours : au-dela de deux jours on passe aux jours. */
+const anciennete = (s) => s >= 172800 ? Math.round(s / 86400) + " j" : duree(s / 60);
+
 /* GROUPS : deplace dans `services.js`, charge avant ce fichier. */
 
 const ICONS = {
@@ -510,6 +757,7 @@ const ICONS = {
   doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
   chart: '<path d="M3 17l5-6 4 4 4-7 5 9"/>',
   server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/>',
+  shield: '<path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
 };
 const svg = (p, k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${k || 2}">${p}</svg>`;
 const esc = (s) => String(s).replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
@@ -556,24 +804,33 @@ addEventListener("click", (e) => {
   location.href = el.dataset.lien;
 }, true);
 
+/* LES CARTES EN ALERTE, NOMMEES. Le fond passait a l ambre sans dire d ou ca
+   venait, et il fallait parcourir les vingt-sept cartes pour trouver la
+   coupable.
+   ⚠️ MEME FILTRE QUE `sante()`, et surtout MEME LISTE `TACHES` : une carte
+   qui ne fait pas virer le fond ne doit pas etre nommee ici, sinon la barre
+   accuserait un innocent.
+   ⚠️ Calcule sur les DONNEES et non sur le DOM. `sante()` tourne sur son
+   propre intervalle : si elle ecrivait dans la barre, `fusionne` effacerait
+   son texte au rendu suivant.
+   ⚠️ `try` autour du predicat : une carte dont la donnee manque ne doit pas
+   emporter toute la barre du haut avec elle. */
+const soucisDe = (d) => GROUPS.flatMap(g => g.s).filter(s => {
+  if (!s.warn || TACHES.includes(s.n)) return false;
+  try { return !!s.warn(d); } catch (e) { return false; }
+}).map(s => s.n);
+
+/* LES PASTILLES SORTENT DE LA BARRE (06/10/2026, sur demande). Logees dans
+   le bloc d etat, elles l allongeaient a chaque alerte et faisaient passer la
+   barre sur deux lignes sur les ecrans moyens. Elles ont maintenant leur rangee
+   a elles, centree juste sous la barre (`#soucis`), vide quand tout va bien. */
+const pastilles = (d) => soucisDe(d).map(n =>
+  `<span class="cible" data-carte="${esc(n)}">${esc(n)}</span>`).join("");
+
 function bar(d) {
   const now = new Date();
   const ok = d.nas.run === d.nas.all, off = d.nas.all - d.nas.run;
-  /* LES CARTES EN ALERTE, NOMMEES. Le fond passait a l ambre sans dire d ou ca
-     venait, et il fallait parcourir les vingt-sept cartes pour trouver la
-     coupable.
-     ⚠️ MEME FILTRE QUE `sante()`, et surtout MEME LISTE `TACHES` : une carte
-     qui ne fait pas virer le fond ne doit pas etre nommee ici, sinon la barre
-     accuserait un innocent.
-     ⚠️ Calcule sur les DONNEES et non sur le DOM. `sante()` tourne sur son
-     propre intervalle : si elle ecrivait dans la barre, `fusionne` effacerait
-     son texte au rendu suivant.
-     ⚠️ `try` autour du predicat : une carte dont la donnee manque ne doit pas
-     emporter toute la barre du haut avec elle. */
-  const soucis = GROUPS.flatMap(g => g.s).filter(s => {
-    if (!s.warn || TACHES.includes(s.n)) return false;
-    try { return !!s.warn(d); } catch (e) { return false; }
-  }).map(s => s.n);
+  const soucis = soucisDe(d);
 
   const dsk = d.nas.disk || 0, dtot = d.nas.disktot || 0;
   return `<div class="clock"><b>${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</b>
@@ -594,8 +851,6 @@ function bar(d) {
         !ok ? off + " service" + (off > 1 ? "s" : "") + " arrêté" + (off > 1 ? "s" : "")
         : soucis.length ? soucis.length + " point" + (soucis.length > 1 ? "s" : "") + " d'attention"
         : "Tout va bien"}</div>
-      <div class="souci">${soucis.map(n =>
-        `<span class="cible" data-carte="${esc(n)}">${esc(n)}</span>`).join("")}</div>
       <em><span>${d.nas.run} conteneurs</span><span>${d.updates.total || 0} MAJ en attente</span></em></div>`;
 }
 
@@ -916,86 +1171,667 @@ const tendance = (v) => {
 };
 
 async function popConteneurs() {
-  const H = await fetch("containers-hist.json?" + Date.now()).then(r => r.json()).catch(() => null);
-  const hc = (H && H.c) || {}, pas = (H && H.pas) || 1800, np = (H && H.n) || 0;
-  const ok = np * pas >= 86400;
-  const reste = Math.max(1, Math.ceil((86400 - np * pas) / 3600));
-
+  /* ⚠️ PLUS DE DERIVE NI DE MOYENNE 24 H (retirees sur demande le
+     05/10/2026) : la fenetre ne charge donc plus `containers-hist.json`. */
   const d = document.getElementById("dlg");
   const rt = DATA.nas.ramt || 0;
+  const m = DATA.mem || null;
+  const MEM = typeof MEMOIRE !== "undefined" ? MEMOIRE : {};
+  const cat = k => MEM[k] || [k, "", "#8a94a6"];
   const c = ((DATA.cont && DATA.cont.c) || []).slice();
-  // Tout raisonne en Mo REELS : residente + evacuee en zram. Sans le second terme,
-  // la fenetre contredisait la carte (Jellyfin 6e ici, 2e la-bas).
-  const R = (x) => reelC(x, rt);
-  const tot = Math.max(1, c.reduce((a, x) => a + R(x), 0));
-  const comp = c.reduce((a, x) => a + (x.swap || 0), 0);
 
+  /* LA FENETRE DE TOUTE LA MEMOIRE (05/10/2026), et plus seulement des
+     conteneurs : meme categories que la carte, chacune depliable jusqu au
+     processus, puis ce qui n appartient a personne — noyau, cache, swap.
+     ⚠️ « MEMOIRE » = CE QUE LE PROCESSUS OCCUPE VRAIMENT, sans le cache
+     (`anon` du cgroup), et « swap » ce qui en a ete evacue. C est la mesure de
+     la carte : les lignes d un groupe additionnees retombent sur son titre, et
+     les titres sur la carte. Tant que le collecteur ne fournit pas `anon`, les
+     conteneurs retombent sur le pourcentage de `docker stats`. */
+  const memC = (x) => x.anon != null ? x.anon : moC(x.mem, rt);
+  const totC = (x) => memC(x) + (x.swap || 0);
+
+  /* Groupes ouverts, retenus PAR NAVIGATEUR : un confort de lecture, pas une
+     donnee a partager. Tous replies a la premiere ouverture. */
+  let ouverts = [];
+  try { ouverts = JSON.parse(localStorage.getItem("hl-pop-ouverts") || "[]"); } catch (e) { /* navigation privee */ }
+  /* ⚠️ UNE SEULE ECHELLE POUR TOUTE LA FENETRE, titres comme lignes : `E`, le
+     plus gros bloc affiche. Avec une echelle par groupe, un service pouvait
+     montrer une barre plus longue que celle de son propre groupe. Les petits
+     processus deviennent de minces traits : c est leur vraie part.
+     `E` est fixe plus bas, une fois tous les blocs connus, avant le premier
+     dessin. */
+  let E = 1;
+  /* Rien n est dessine pour une valeur nulle : la largeur minimale qui garde
+     visibles les petits processus aurait fait d un zero un point. */
+  const barre2 = (mem, sw, coul, cl) => `<span class="${cl}">`
+    + (mem > 0 ? `<i style="width:${(mem / E * 100).toFixed(2)}%;background:${coul}"></i>` : "")
+    + (sw > 0 ? `<u style="width:${(sw / E * 100).toFixed(2)}%;background:${coul}"></u>` : "") + `</span>`;
+  /* TITRE DE GROUPE = UNE LIGNE COMME LES AUTRES (05/10/2026, sur demande) :
+     ses totaux dans les memes colonnes — memoire, swap, processeur — au lieu
+     d une phrase « 9 services · 586 Mo · dont 235 Mo en swap » a dechiffrer. Le
+     nombre de membres, qui n a pas de colonne, suit le nom en petit. La barre
+     dessous, sur l echelle commune : repliee, la fenetre se lit comme un
+     histogramme. `v` : [memoire, swap, processeur ou null]. */
+  const groupe = (id, coul, nom, n, v, lignes, cl) =>
+    `<details class="grp${cl ? " " + cl : ""}" data-g="${esc(id)}"${ouverts.includes(id) ? " open" : ""}>`
+    + `<summary class="grp-h ln"><span class="nm"><span class="chev" aria-hidden="true"></span>`
+    + `<i style="background:${coul}"></i><b>${esc(nom)}</b>${n ? `<small>${n}</small>` : ""}</span>`
+    + `<span class="mm">${moGo(v[0])}</span><span class="sw">${v[1] ? moGo(v[1]) : "—"}</span>`
+    + `<span class="cp">${v[2] != null ? vg((+v[2]).toFixed(1)) + " %" : "—"}</span>`
+    + barre2(v[0], v[1], coul, "gb") + `</summary><div class="grp-l">${lignes}</div></details>`;
+  /* Processeur d un groupe : la somme de ses membres, ou rien si aucun n est mesure. */
+  const somCpu = (l) => { const v = l.filter(y => y.cpu != null);
+    return v.length ? v.reduce((a, y) => a + (+y.cpu || 0), 0) : null; };
+
+  /* Une ligne de processus : nom, memoire, swap, processeur, puis la barre a deux
+     tons — plein en memoire, voile en swap — a l echelle de la fenetre. */
+  const ligne = (nom, mem, sw, cpu, coul) =>
+    `<div class="ln"><span class="nm">${nom}</span>`
+    + `<span class="mm">${mem != null ? moGo(mem) : "—"}</span>`
+    + `<span class="sw">${sw ? moGo(sw) : "—"}</span>`
+    + `<span class="cp">${cpu != null ? vg((+cpu).toFixed(1)) + " %" : "—"}</span>`
+    + barre2(mem || 0, sw, coul, "tr") + `</div>`;
+  /* Precision en petit apres un nom, la ou aucune colonne ne la porte. */
+  const precis = (t) => t ? `<small>${esc(t)}</small>` : "";
+  const section = (t) => `<div class="psec">${esc(t)}</div>`;
+
+  /* ---- Les programmes : UNE LISTE, DANS L ORDRE DE LA LEGENDE ----
+     Refonte demandee le 05/10/2026 : trois parties et douze titres
+     replies se lisaient mal. Chaque CATEGORIE de la carte devient une ligne, du
+     plus gros au plus petit, « Autres » en dernier ; ses SOUS-PARTIES (les piles
+     de conteneurs, les processus d un service) prennent des NUANCES de sa
+     couleur. La barre du haut est decoupee pareil : on lit la categorie, puis ce
+     qui la compose, sans legende supplementaire. */
   const g = new Map();
   c.forEach(x => { const p = pileDe(x.n);
-    if (!g.has(p.n)) g.set(p.n, { n: p.n, c: p.c, l: [], t: 0 });
-    const e = g.get(p.n); e.l.push(x); e.t += R(x); });
-  const piles = [...g.values()].sort((a, b) => b.t - a.t);
-  piles.forEach(p => p.l.sort((a, b) => R(b) - R(a)));
+    if (!g.has(p.n)) g.set(p.n, { n: p.n, l: [], t: 0, mem: 0, sw: 0 });
+    const e = g.get(p.n); e.l.push(x); e.t += totC(x); e.mem += memC(x); e.sw += x.swap || 0; });
+  /* ⚠️ TOUT EST TRIE PAR MEMOIRE, la valeur de la premiere colonne et de la
+     legende. Trie par memoire + swap, l ordre semblait faux des qu on lisait les
+     chiffres : Photos et IA (40 Mo) passait devant Cameras (110 Mo). */
+  const piles = [...g.values()].sort((a, b) => b.mem - a.mem);
+  piles.forEach(p => p.l.sort((a, b) => memC(b) - memC(a)));
 
-  const compo = `<div class="compo"><div class="cbar">`
-    + piles.map(p => `<i style="width:${(p.t / tot * 100).toFixed(1)}%;background:${p.c}"></i>`).join("")
-    + `</div><div class="clg">` + piles.map(p =>
-        `<span><i style="background:${p.c}"></i>${esc(p.n)} <b>${p.t} Mo</b></span>`).join("")
-    + `</div></div>`;
+  /* Copie : on ne touche pas aux donnees partagees avec la carte. Le total des
+     conteneurs est RECALCULE depuis leurs piles, pour que le titre retombe
+     exactement sur la somme de ses lignes et la legende sur le titre. */
+  const catsM = ((m && m.g) || []).map(x => Object.assign({}, x));
+  const cc = catsM.find(x => x.k === "conteneurs");
+  const pm = piles.reduce((a, p) => a + p.mem, 0), psw = piles.reduce((a, p) => a + p.sw, 0);
+  if (cc && piles.length) { cc.mo = pm; cc.t = psw; }
+  else if (!cc && c.length) catsM.push({ k: "conteneurs", mo: pm, t: psw });
+  const cats = catsM.sort((a, b) => (a.k === "autres") - (b.k === "autres") || b.mo - a.mo);
 
-  /* En-tete de colonnes. Sans lui, la colonne « swap » ne serait qu un nombre nu
-     au milieu d une ligne.
-     ⚠️ Il est place AU-DESSUS de la zone defilante, et son alignement se regle
-     dans `fond.css` : `.scroll` reserve 10 px de barre et 8 de remplissage,
-     l en-tete compense donc par 18 px de marge droite. Le placer DANS `.scroll`
-     alignait aussi, mais imposait de le rendre collant, donc de lui donner un
-     fond, qui barrait le verre. */
-  const entete = `<div class="ln lnh"><span class="nm">service</span>`
-    + `<span class="mm">réel</span><span class="sw">swap</span>`
-    + `<span class="cp">proc.</span><span class="dv">dérive</span></div>`;
+  /* Sous-parties de chaque categorie, avec leur nuance : nom, memoire, swap, et
+     ce qu il faut pour dessiner leurs lignes. */
+  const parts = cats.map(x => {
+    const base = cat(x.k)[2];
+    if (x.k === "conteneurs") {
+      const nu = nuances(base, piles.length);
+      return piles.map((p, i) => ({ n: p.n, v: p.t, mem: p.mem, sw: p.sw, c: nu[i], pile: p }));
+    }
+    const l = (x.l || []).slice().sort((a, b) => b.mo - a.mo);
+    const nu = nuances(base, l.length);
+    return l.map((y, i) => ({ n: y.n, v: y.mo + (y.t || 0), mem: y.mo, sw: y.t || 0, cpu: y.cpu, c: nu[i] }));
+  });
 
-  const corps = piles.map(p => {
-    const mx = Math.max(1, ...p.l.map(R));
-    return `<div class="grp"><div class="grp-h"><i style="background:${p.c}"></i>`
-      + `<b>${esc(p.n)}</b><em>${p.l.length} services · ${p.t} Mo</em></div>`
-      + p.l.map(x => {
-          const pre = PILES.find(q => x.n.startsWith(q.k));
-          const nom = pre ? `<s>${esc(pre.k)}</s>${esc(x.n.slice(pre.k.length))}` : esc(x.n);
-          const t = ok ? tendance(hc[x.n]) : null;
-          const sw = x.swap || 0;
-          /* ⚠️ MEME ECHELLE QUE LES SEGMENTS : `mx` est le maximum du GROUPE,
-             pas du service. Un repere calcule sur une autre base se poserait
-             a cote de la barre qu il commente. Le repli sur `mem` quand
-             `mem24` manque reprend celui de la carte : un service qui vient
-             de demarrer montre son repere sur sa valeur du moment plutot que
-             de le voir tomber a zero. */
-          const moy = Math.min(100,
-            moC(x.mem24 != null ? x.mem24 : x.mem, rt) / mx * 100);
-          return `<div class="ln"><span class="nm">${nom}</span>`
-            + `<span class="mm">${R(x)} Mo</span>`
-            + `<span class="sw">${sw ? sw + " Mo" : "—"}</span>`
-            + `<span class="cp">${vg(x.cpu.toFixed(1))} %</span>`
-            + (t ? `<span class="dv ${t.c}">${t.t}</span>` : `<span></span>`)
-            + `<span class="tr">`
-            + `<i style="width:${(moC(x.mem, rt) / mx * 100).toFixed(1)}%;background:${p.c}"></i>`
-            + (sw ? `<u style="width:${(sw / mx * 100).toFixed(1)}%;background:${p.c}"></u>` : "")
-            + `<s style="left:${moy.toFixed(1)}%"></s>`
-            + `</span></div>`;
-        }).join("") + `</div>`;
+  const det0 = (m && m.det) || {};
+  E = Math.max(1, ...cats.map(x => x.mo + (x.t || 0)),
+    (det0.zram || []).reduce((a, x) => a + x.used + x.orig, 0) + (det0.swaps || []).reduce((a, x) => a + x.used, 0),
+    (m && m.noyau) || 0, (m && m.cache) || 0);
+
+  const programmes = cats.map((x, i) => {
+    const k = cat(x.k), ps = parts[i];
+    if (x.k === "conteneurs") {
+      const n = ps.reduce((a, p) => a + p.pile.l.length, 0);
+      return groupe("s:conteneurs", k[2], k[0], n, [x.mo, x.t || 0, somCpu(c)],
+        ps.map(p => groupe("c:" + p.n, p.c, p.n, p.pile.l.length, [p.mem, p.sw, somCpu(p.pile.l)],
+          p.pile.l.map(y => {
+            const pre = PILES.find(q => y.n.startsWith(q.k));
+            const nom = pre ? `<s>${esc(pre.k)}</s>${esc(y.n.slice(pre.k.length))}` : esc(y.n);
+            return ligne(nom, memC(y), y.swap || 0, y.cpu, p.c);
+          }).join(""), "sous")).join(""));
+    }
+    return groupe("s:" + x.k, k[2], k[0], ps.length, [x.mo, x.t || 0, somCpu(ps)],
+      ps.length ? ps.map(p => ligne(esc(p.n), p.mem, p.sw, p.cpu, p.c)).join("")
+                : `<div class="note">Détail en attente du collecteur</div>`);
   }).join("");
 
-  /* Le pied a ete supprime : sa barre de separation et sa mention « derive
-     sur 24 h » coutaient 30 px pour une legende, qui a rejoint le sous-titre
-     et l en-tete de colonnes. */
+  /* ---- 3. Ce qui n appartient a personne ---- */
+  let noyau = "";
+  const det = m && m.det;
+  if (det) {
+    const z = det.zram || [], sw = det.swaps || [];
+    const orig = z.reduce((a, x) => a + x.orig, 0), used = z.reduce((a, x) => a + x.used, 0);
+    const ssd = sw.reduce((a, x) => a + x.used, 0);
+    const NOMS_SWAP = { ssd: "partition du SSD", fichier: "fichier d'échange" };
+    /* HORS PROGRAMMES, MEMES COLONNES (05/10/2026, sur demande).
+       Zram : « memoire » = la RAM qu il occupe vraiment, « swap » = les donnees
+       de swap qu il contient. Le titre additionne zram et SSD dans sa colonne
+       swap : c est exactement ce que les programmes ont en swap, d un cote de
+       la fenetre comme de l autre. Compression et remplissage, qui n ont pas de
+       colonne, suivent le nom en petit. La partition et le fichier d echange
+       n occupent pas de RAM : « — » en memoire. */
+    const nz = nuances("#c07bf0", z.length);
+    noyau += groupe("k:zram", "#c07bf0", "Zram et swap", null, [used, orig + ssd, null],
+      z.map((x, i) => ligne(esc(x.n) + precis([x.algo, x.used ? "×" + vg((x.orig / x.used).toFixed(1)) : "",
+            "plein à " + Math.round(x.orig / (x.cap || 1) * 100) + " %"].filter(Boolean).join(" · ")),
+          x.used, x.orig, null, nz[i])).join("")
+      + sw.map(x => ligne(esc(NOMS_SWAP[x.n] || x.n) + precis("sur " + moGo(x.size) + (x.n === "ssd" ? " · lent" : "")),
+          null, x.used, null, "#ff9f0a")).join(""));
+    const n = det.noyau || {};
+    const tn = m.noyau || 0;
+    const parts = [["caches d'objets, récupérables", n.slab_r], ["caches d'objets, fixes", n.slab_u],
+                   ["tables de pages", n.pt], ["piles des processus", n.ks]].filter(([, v]) => v > 0);
+    const rn = Math.max(0, tn - parts.reduce((a, [, v]) => a + v, 0));
+    if (rn > 0) parts.push(["pilotes et réservé", rn]);
+    const nn = nuances("#8a94a6", parts.length);
+    noyau += groupe("k:noyau", "#8a94a6", "Noyau", null, [tn, 0, null],
+      parts.map(([l, v], i) => ligne(esc(l), v, 0, null, nn[i])).join(""));
+    const ca = det.cache || {}, tc = m.cache || 0;
+    const pc2 = [["fichiers lus récemment", ca.actif], ["fichiers anciens, rendus en premier", ca.inactif],
+                 ["mémoire partagée", ca.shmem]].filter(([, v]) => v > 0);
+    const nc = nuances("#4d97ee", pc2.length);
+    noyau += groupe("k:cache", "#4d97ee", "Cache", null, [tc, 0, null],
+      pc2.map(([l, v], i) => ligne(esc(l), v, 0, null, nc[i])).join(""));
+  }
+
+  /* ---- Barre de tete : chaque categorie, decoupee en ses sous-parties ----
+     La legende ne nomme que les categories, dans l ORDRE DE LA LISTE : les
+     nuances suffisent a montrer qu un bloc se compose de plusieurs parties.
+     ⚠️ LA BARRE ET LA LEGENDE PORTENT LA MEMOIRE SEULE, la valeur de la colonne
+     « memoire ». Elles additionnaient le swap : la legende annoncait 1,6 Go pour
+     des conteneurs dont le titre disait 1,3 Go (05/10/2026). Le swap reste dans
+     sa colonne et dans le voile des barres. */
+  const tt = Math.max(1, cats.reduce((a, x) => a + x.mo, 0));
+  /* Survol d un segment : la categorie en titre, la sous-partie, sa memoire et
+     sa part de la memoire des programmes. Lu par l infobulle commune
+     (`data-lec="part"`, voir `litPart`). */
+  const seg = (titre, nom, v, coul) => `<i data-lec="part" data-t="${esc(titre)}" data-n="${esc(nom)}"`
+    + ` data-v="${esc(moGo(v) + " · " + vg((v / tt * 100).toFixed(1)) + " %")}" data-c="${coul}"`
+    + ` style="width:${(v / tt * 100).toFixed(2)}%;background:${coul}"></i>`;
+  const barre = `<div class="compo"><div class="cbar">`
+    + cats.map((x, i) => parts[i].length
+        ? parts[i].map(p => seg(cat(x.k)[0], p.n, p.mem, p.c)).join("")
+        : seg(cat(x.k)[0], "en mémoire", x.mo, cat(x.k)[2])).join("")
+    + `</div><div class="clg">` + cats.map(x =>
+        `<span><i style="background:${cat(x.k)[2]}"></i>${esc(cat(x.k)[0])} <b>${moGo(x.mo)}</b></span>`).join("")
+    + `</div></div>`;
+
+  /* En-tete de colonnes. ⚠️ Il est place AU-DESSUS de la zone defilante, et son
+     alignement se regle dans `fond.css` : `.scroll` reserve 10 px de barre et 8
+     de remplissage, l en-tete compense donc par 18 px de marge droite. */
+  const entete = `<div class="ln lnh"><span class="nm">processus</span>`
+    + `<span class="mm">mémoire</span><span class="sw">swap</span>`
+    + `<span class="cp">proc.</span></div>`;
+
+  const swTot = m ? ((m.g || []).reduce((a, x) => a + (x.t || 0), 0)) : c.reduce((a, x) => a + (x.swap || 0), 0);
   d.classList.add("large");
-  d.innerHTML = `<h3>Conteneurs</h3>
-    <div class="sub">${c.length} services · ${vg((tot / 1024).toFixed(1))} Go réels,
-      soit ${Math.round(tot * 1024 / (rt || 1) * 100)} % de la mémoire · dont ${comp} Mo en swap
-      · ${ok ? "dérive sur 24 h" : "dérive disponible dans " + reste + " h"}
-      · trait clair : moyenne 24 h</div>
-    ${compo}${entete}<div class="scroll">${corps}</div>`;
+  d.innerHTML = `<h3>Mémoire</h3>
+    <div class="sub">${m ? moGo(m.dispo) + " disponibles sur " + moGo(m.tot)
+        + " · programmes " + moGo(m.prog) + " et " + moGo(swTot) + " en swap"
+      : c.length + " conteneurs"}</div>
+    ${barre}${entete}<div class="scroll">${programmes
+      + (noyau ? section("Hors programmes · noyau, cache et swap") + noyau : "")}</div>`;
+  d.querySelectorAll("details.grp").forEach(el => el.addEventListener("toggle", () => {
+    const o = [...d.querySelectorAll("details.grp[open]")].map(x => x.dataset.g);
+    try { localStorage.setItem("hl-pop-ouverts", JSON.stringify(o)); } catch (e) { /* navigation privee */ }
+  }));
   d.showModal();
 }
+
+/* ---- Fenetre « Acces » : TOUTES LES CONNEXIONS DES 24 H (05/10/2026) ----
+   Demandee le 05/10/2026 : la carte n en montre que quatre. Trois lectures, de la
+   plus large a la plus fine : l histogramme heure par heure dit QUAND, le
+   compte par machine et par methode dit QUI et COMMENT, puis le journal entier,
+   ou les connexions identiques rapprochees forment une rafale qu on deplie
+   jusqu a la minute.
+   `ev` arrive du collecteur en tableaux courts :
+   [heure, service, compte, machine, methode, ok, Internet]. Un collecteur plus
+   ancien n envoie que `log`, deja regroupe : la fenetre s en contente. */
+const RAFALE_S = 30 * 60;     // deux connexions identiques a moins de 30 min : meme rafale
+let ACC_H = [];               // tranches de l histogramme, relues par l infobulle
+const COUL_ACC = { SSH: "#4d97ee", UGOS: "#c07bf0", Web: "#c07bf0" };
+/* Couleur d une connexion : celle de son service, sauf alerte. Internet passe
+   avant le refus : une tentative venue de dehors est le cas a voir d abord. */
+const accCoul = (e) => e.x ? "#ff453a" : !e.ok ? "#ff9f0a" : COUL_ACC[e.s] || "#5ac8fa";
+const accCat = (e) => e.x ? "depuis Internet" : !e.ok ? "refusée" : e.s;
+
+function popAcces() {
+  const d = document.getElementById("dlg");
+  d.classList.add("large");
+  const a = DATA.acces;
+  if (!a) {
+    d.innerHTML = `<h3>Accès</h3><div class="note">Relevé des connexions en attente</div>`;
+    return d.showModal();
+  }
+  const ev = (a.ev || []).length
+    ? a.ev.map(x => ({ t: +x[0], s: x[1], u: x[2], n: x[3], r: x[4], ok: !!x[5], x: !!x[6], c: 1 }))
+    : (a.log || []).map(x => Object.assign({}, x, { c: x.c || 1 }));
+  const tot = ev.reduce((s, e) => s + e.c, 0);
+  const n = a.n != null ? a.n : tot;
+  const refus = ev.reduce((s, e) => s + (e.ok ? 0 : e.c), 0);
+  const ext = ev.reduce((s, e) => s + (e.x ? e.c : 0), 0);
+  const pl = (v, m) => nb(v) + " " + m + (v > 1 ? "s" : "");
+
+  /* ---- 1. Histogramme, une colonne par heure d horloge ----
+     La premiere est entamee : la fenetre du collecteur commence 24 h avant
+     maintenant, rarement pile sur une heure. ⚠️ UNE COLONNE NON VIDE GARDE 8 %
+     DE HAUTEUR : a cote d une rafale de cent connexions, une connexion seule
+     au telephone disparaissait. */
+  const fin = Date.now() / 1000;
+  const h = new Date((fin - 86400) * 1000); h.setMinutes(0, 0, 0);
+  const t0 = h.getTime() / 1000, nH = Math.ceil((fin - t0) / 3600);
+  ACC_H = Array.from({ length: nH }, (_, i) => ({ t0: t0 + i * 3600, t1: Math.min(fin, t0 + (i + 1) * 3600), n: 0, g: new Map() }));
+  for (const e of ev) {
+    const b = ACC_H[Math.floor((e.t - t0) / 3600)];
+    if (!b) continue;
+    b.n += e.c;
+    const k = [e.s, e.u, e.n, e.r, e.x].join("|");
+    const x = b.g.get(k) || { s: e.s, u: e.u, n: e.n, r: e.r, c: 0, col: accCoul(e), cat: accCat(e) };
+    x.c += e.c; b.g.set(k, x);
+  }
+  const M = Math.max(1, ...ACC_H.map(b => b.n));
+  const ORDRE = (c) => c === "depuis Internet" ? 2 : c === "refusée" ? 1 : 0;
+  const colonnes = ACC_H.map((b, i) => {
+    /* Segments empiles par categorie, les alertes en haut de la colonne. */
+    const cats = new Map();
+    for (const x of b.g.values()) {
+      const c = cats.get(x.cat) || { cat: x.cat, col: x.col, c: 0 };
+      c.c += x.c; cats.set(x.cat, c);
+    }
+    const segs = [...cats.values()].sort((p, q) => ORDRE(p.cat) - ORDRE(q.cat) || q.c - p.c);
+    const ht = b.n ? Math.max(8, b.n / M * 100) : 0;
+    return `<span class="acb${b.n ? "" : " vide"}" data-lec="acc" data-i="${i}"><i style="height:${ht.toFixed(1)}%">`
+      + segs.map(s => `<b style="flex:${s.c};background:${s.col}"></b>`).join("") + `</i></span>`;
+  }).join("");
+  /* Repere toutes les six heures, a l aplomb de sa colonne. */
+  const axe = ACC_H.map(b => { const hh = new Date(b.t0 * 1000).getHours();
+    return `<span>${hh % 6 === 0 ? String(hh).padStart(2, "0") + " h" : ""}</span>`; }).join("");
+  const presentes = [...new Set(ev.map(accCat))].sort((p, q) => ORDRE(p) - ORDRE(q));
+  const legende = presentes.map(c => {
+    const e = ev.find(x => accCat(x) === c);
+    const v = ev.filter(x => accCat(x) === c).reduce((s, x) => s + x.c, 0);
+    return `<span><i style="background:${accCoul(e)}"></i>${esc(c)} <b>${nb(v)}</b></span>`;
+  }).join("");
+  const histo = `<div class="acx"><div class="acx-m">${pl(M, "connexion")} au plus dans une heure</div>`
+    + `<div class="acx-b" style="--n:${nH}">${colonnes}</div>`
+    + `<div class="acx-a" style="--n:${nH}">${axe}</div></div>`
+    + `<div class="clg">${legende}</div>`;
+
+  /* ---- 2. Qui et comment ---- */
+  const compte = (cle, coul, prec) => {
+    const m = new Map();
+    for (const e of ev) {
+      const k = cle(e);
+      const x = m.get(k) || { k, c: 0, e, l: [] };
+      x.c += e.c; x.l.push(e); m.set(k, x);
+    }
+    const l = [...m.values()].sort((p, q) => q.c - p.c);
+    const mx = Math.max(1, ...l.map(x => x.c));
+    return rangs(l.map(x => [x.k, nb(x.c), x.c / mx * 100, coul(x), prec(x)]));
+  };
+  /* Une machine se colore selon sa pire connexion : une seule venue d Internet
+     ou refusee suffit a la faire remarquer. */
+  const pire = (x) => accCoul(x.l.find(e => e.x) || x.l.find(e => !e.ok) || x.e);
+  const services = (x) => [...new Set(x.l.map(e => e.u))].join(", ") + " · " + [...new Set(x.l.map(e => e.s))].join(", ");
+  const qui = ev.length ? `<div class="acc-duo">`
+    + `<div><div class="psec">Par machine</div>${compte(e => e.n, pire, services)}</div>`
+    + `<div><div class="psec">Par méthode</div>${compte(e => e.s + " · " + e.r, x => accCoul(x.e), () => "")}</div>`
+    + `</div>` : "";
+
+  /* ---- 3. Le journal, par rafales ----
+     Une rafale : des connexions identiques (service, compte, machine, methode,
+     resultat) qui se suivent a moins de 30 min. Un script qui se connecte en
+     boucle tient sur une ligne, « 09:21 → 10:47 ×30 », au lieu de trente. */
+  const raf = [];
+  for (const e of ev.slice().sort((p, q) => q.t - p.t)) {
+    const p = raf[raf.length - 1];
+    if (p && p.s === e.s && p.u === e.u && p.n === e.n && p.r === e.r && p.ok === e.ok && p.x === e.x
+        && p.t0 - e.t <= RAFALE_S) { p.c += e.c; p.t0 = e.t; p.ts.push(e.t); }
+    else raf.push(Object.assign({}, e, { t1: e.t, t0: e.t, ts: [e.t] }));
+  }
+  const auj = new Date().toDateString(), hier = new Date(Date.now() - 86400000).toDateString();
+  const jourDe = (t) => { const j = new Date(t * 1000).toDateString();
+    return j === auj ? "Aujourd'hui" : j === hier ? "Hier"
+      : new Date(t * 1000).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
+  /* Minutes d une rafale, les doublons d une meme minute fondus en « ×3 ». */
+  const minutes = (ts) => {
+    const m = new Map();
+    for (const t of ts) { const k = hhmm(t); m.set(k, (m.get(k) || 0) + 1); }
+    return [...m].map(([k, v]) => `<span>${k}${v > 1 ? `<small>×${v}</small>` : ""}</span>`).join("");
+  };
+  const ligne = (x) => {
+    const plage = x.t0 === x.t1 || hhmm(x.t0) === hhmm(x.t1) ? hhmm(x.t1) : hhmm(x.t0) + " → " + hhmm(x.t1);
+    const cl = x.x ? "cr" : x.ok ? "ok" : "wn";
+    const corps = `<span class="chev" aria-hidden="true"></span><span class="h">${plage}</span>`
+      + `<span class="s">${esc(x.s)}</span>`
+      + `<span class="q">${esc(x.u)} · ${esc(x.n)}${x.c > 1 ? ` <small>×${nb(x.c)}</small>` : ""}</span>`
+      + `<span class="r ${cl}">${esc(x.r)}${x.x ? " · Internet" : ""}</span>`;
+    /* Depliable seulement quand il y a plus d une minute a montrer. */
+    return x.ts.length > 1 && new Set(x.ts.map(hhmm)).size > 1
+      ? `<details class="acj"><summary class="acr">${corps}</summary><div class="acm">${minutes(x.ts)}</div></details>`
+      : `<div class="acr seul">${corps}</div>`;
+  };
+  let jour = "", journalHtml = "";
+  for (const x of raf) {
+    const j = jourDe(x.t1);
+    if (j !== jour) { journalHtml += `<div class="psec">${esc(j)}</div>`; jour = j; }
+    journalHtml += ligne(x);
+  }
+
+  const coupe = (a.ev || []).length && a.ev.length < n ? " · les " + nb(a.ev.length) + " plus récentes affichées" : "";
+  d.innerHTML = `<h3>Accès</h3>
+    <div class="sub">${pl(n, "connexion")} sur 24 h · ${refus ? pl(refus, "refusée") : "aucune refusée"} · ${
+      ext ? nb(ext) + " depuis Internet" : "toutes depuis le réseau local ou le VPN"}${coupe}</div>
+    ${ev.length ? histo : ""}<div class="scroll">${ev.length ? qui + journalHtml
+      : `<div class="note">Aucune connexion sur 24 h</div>`}</div>`;
+  d.showModal();
+}
+
+/* ---- Fenetre d un disque (05/10/2026) ----
+   Pourquoi : la ligne d un disque dans la carte Stockage
+   (temperature, usure, erreurs) « est bien mais vague ». Un clic ouvre sa
+   fiche : quatre chiffres, puis la sante, les sondes de temperature, l usure
+   et les ecritures, l identite et la liaison, les partitions.
+   Le detail vient de `systeme.json` (`disq`, collecteur root, relu toutes les
+   10 min) ; sans lui, la fenetre se contente de smart.json. */
+const PCIE = { "2.5": "1.0", "5.0": "2.0", "8.0": "3.0", "16.0": "4.0", "32.0": "5.0", "64.0": "6.0" };
+/* Points de montage d UGOS, en clair. */
+const MONTAGES = { "/boot": "démarrage", "/rootfs": "système", "[SWAP]": "swap", "/ugreen": "applications UGOS",
+                   "/overlay": "système, partie modifiable", "/mnt/factory": "réglages d'usine" };
+/* Octets en unites DECIMALES, celles des fabricants : la fiche d un disque dit
+   « 8 To » et « 45 To ecrits ». `taille()`, binaire, reste celle de l espace
+   occupe, comme l affichent UGOS et Windows. */
+const dec = (o) => o >= 1e12 ? vg((o / 1e12).toFixed(1)) + " To" : o >= 1e9 ? vg((o / 1e9).toFixed(1)) + " Go"
+  : Math.round(o / 1e6) + " Mo";
+
+function popDisque(n) {
+  const s = DATA.smart || {}, x = (s.d || []).find(y => y.n === n);
+  if (!x) return;
+  const dl = document.getElementById("dlg");
+  dl.classList.add("large");
+  const det = x.det || {}, h = det.h || {};
+  const val = (a, b) => a != null ? a : b;
+  const usure = val(h.usure, x.usure), heures = val(h.heures, x.heures), cycles = val(h.cycles, x.cycles);
+  const ecrit = val(h.ecrit, x.ecrit != null ? x.ecrit * 1e12 : null);
+  const spare = val(h.spare, x.spare), brutaux = val(h.brutaux, x.brutaux), errM = val(h.err_media, x.erreurs);
+  const role = ROLES[x.role];
+  const modele = x.modele.replace(/_/g, " ").replace(/\s*\d+(?:[.,]\d+)?\s*(?:GB|TB|Go|To)$/i, "");
+  const cap = x.go >= 1000 ? vg((x.go / 1000).toFixed(1)) + " To" : x.go + " Go";
+  const g = (s.grappes || []).find(y => (y.disques || []).includes(n));
+  const ou = !g ? "hors grappe" : g.sys ? "disque de démarrage" : g.nom + " · " + (RAID[g.raid] || g.raid);
+  const jours = heures != null ? Math.round(heures / 24) : null;
+  const [tMax, tCrit] = det.seuils || [];
+  const pl = (v, m, p) => nb(v) + " " + (v > 1 ? (p || m + "s") : m);
+  const sec = (t) => `<div class="psec">${esc(t)}</div>`;
+  const kv = (l) => `<div class="dkv">${l.filter(Boolean).map(([k, v, cl]) =>
+    `<span>${esc(k)}</span><b${cl ? ` class="${cl}"` : ""}>${esc(v)}</b>`).join("")}</div>`;
+
+  /* ---- Quatre chiffres, les memes seuils que la ligne de la carte ---- */
+  const tuile = (v, l, cl) => `<div class="dtu${cl ? " " + cl : ""}"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  const tuiles = `<div class="dtus">`
+    + tuile(x.temp + " °C", "température", x.temp >= 65 ? "cr" : x.temp >= 55 ? "wn" : "")
+    + tuile(usure != null ? usure + " %" : "—", "usure", usure >= 80 ? "wn" : "")
+    + tuile(ecrit ? dec(ecrit) : "—", "écrits au total")
+    + tuile(jours != null ? nb(jours) + " j" : "—", "en service") + `</div>`;
+
+  /* ---- Sante ----
+     ⚠️ LE JOURNAL D ERREURS N EST PAS UNE ALERTE : il compte surtout des
+     commandes que le disque a refusees (une fonction non geree), sans aucun
+     rapport avec les donnees. Ce sont les erreurs DU SUPPORT qui comptent. */
+  const CW = [[1, "réserve de secours épuisée"], [2, "température hors limites"], [4, "fiabilité dégradée"],
+              [8, "passé en lecture seule"], [16, "sauvegarde interne en échec"]];
+  const chaud = (h.t_alerte || 0) + (h.t_crit || 0);
+  const sante = controles([
+    det.ok === false || !x.ok ? ["wn", "Bilan SMART : défaut signalé", "disque à remplacer"]
+      : ["ok", "Bilan SMART : aucun défaut", ""],
+    h.cw > 0 ? ["wn", "Alerte du disque : " + CW.filter(([b]) => h.cw & b).map(([, t]) => t).join(", "), ""] : null,
+    spare != null ? [h.spare_min != null && spare <= h.spare_min ? "wn" : "ok", "Réserve de secours " + spare + " %",
+                     h.spare_min != null ? "alerte sous " + h.spare_min + " %" : ""] : null,
+    errM > 0 ? ["wn", pl(errM, "erreur") + " du support", "données illisibles ou abîmées"]
+      : ["ok", "Aucune erreur du support", "données illisibles ou abîmées"],
+    h.err_journal == null ? null : h.err_journal > 0
+      ? ["in", pl(h.err_journal, "entrée") + " au journal d'erreurs", "commandes refusées, sans gravité"]
+      : ["ok", "Journal d'erreurs vide", ""],
+    chaud > 0 ? ["wn", "En surchauffe pendant " + duree(chaud), "depuis la mise en service"]
+      : h.t_alerte != null ? ["ok", "Jamais en surchauffe", tMax ? "alerte à " + tMax + " °C" : ""] : null,
+    brutaux == null ? null : brutaux > 0
+      ? ["in", pl(brutaux, "arrêt brutal", "arrêts brutaux"), "coupures de courant ou redémarrages forcés"]
+      : ["ok", "Aucun arrêt brutal", ""],
+  ]);
+
+  /* ---- Temperature : les sondes du disque, puis 24 h d historique ---- */
+  const dg = v => Math.round(v) + " °C";
+  const v24 = Hf(DATA, n).filter(v => v > 0), v7 = Hs(DATA, n).filter(v => v > 0);
+  const capt = det.capt || [];
+  const nc = nuances("#4d97ee", capt.length);
+  /* ⚠️ PAS DE COURBE (retiree sur demande le 05/10/2026) : la carte
+     Temperatures trace deja chaque disque sur 24 h. Restent ce qu elle ne
+     montre pas : les sondes du disque une a une, sa plage, ses seuils. */
+  const temp = (capt.length ? leg(capt.map(([l, t], i) =>
+        [l === "Composite" ? "globale" : l.replace(/^Sensor/, "sonde"), nc[i], t + " °C"])) : "")
+    + past([v24.length ? ["24 h : de " + dg(Math.min(...v24)) + " à " + dg(Math.max(...v24)), ""] : null,
+            /* ⚠️ La serie de 7 jours est faite de MOYENNES HORAIRES, qui lissent
+               les pointes : seule, elle annoncait 42 °C quand les dernieres 24 h,
+               a la minute, montaient a 44. On prend le plus haut des deux. */
+            v7.length ? ["pointe sur 7 jours " + dg(Math.max(...v7, ...v24)), ""] : null,
+            tMax ? ["alerte à " + tMax + " °C" + (tCrit ? ", critique à " + tCrit + " °C" : ""), ""] : null]);
+
+  /* ---- Usure et ecritures ----
+     La duree de vie restante se deduit de l usure DEJA CONSOMMEE et de l age :
+     c est le seul chiffre que le disque donne sur lui-meme. Sous 1 %, l usure
+     est arrondie a zero et toute projection serait inventee. */
+  const ry = det.rythme || {};
+  const parJour = ry.j7 != null ? [ry.j7, "moyenne sur 7 jours"] : ry.j1 != null ? [ry.j1, "sur les dernières 24 h"]
+    : ecrit && heures ? [ecrit / (heures / 24), "moyenne depuis la mise en service"] : null;
+  const reste = usure >= 1 && heures ? heures / 8760 * (100 - usure) / usure : null;
+  const usureHtml = usure != null ? pile(usure + " %", "de la durée de vie garantie consommée",
+      [[usure, usure >= 80 ? "#ffb340" : "#34c759"]]) : "";
+  const ecr = kv([
+    ["Écrit au total", ecrit ? dec(ecrit) : "—"],
+    h.lu ? ["Lu au total", dec(h.lu)] : null,
+    parJour ? ["Écrit par jour", "≈ " + dec(parJour[0]) + " · " + parJour[1]] : null,
+    usure != null ? ["Durée de vie restante", reste != null
+      ? "≈ " + (reste >= 10 ? nb(Math.round(reste)) : vg(reste.toFixed(1))) + " ans au rythme actuel"
+      : "trop peu d'usure pour l'estimer"] : null,
+  ]);
+
+  /* ---- Fiche : identite, liaison, vie du disque ----
+     La liaison dit si le disque tourne a pleine vitesse : un emplacement M.2
+     cable en x2 divise son debit par deux sans aucun autre symptome. */
+  const [lv, ll, lvm, llm] = det.lien || [];
+  const gen = (t) => { const m = /^([\d.]+)/.exec(t || ""); return m ? "PCIe " + (PCIE[m[1]] || m[1] + " GT/s") : ""; };
+  const bride = lvm && (lvm !== lv || llm !== ll);
+  const fiche = kv([
+    ["Modèle", modele], ["Capacité", cap], det.fw ? ["Micrologiciel", det.fw] : null,
+    lv ? ["Liaison", gen(lv) + " ×" + ll + (bride ? " · le disque accepte " + gen(lvm) + " ×" + llm : " · le maximum du disque")] : null,
+    heures != null ? ["En service", nb(heures) + " h, soit " + pl(jours, "jour")] : null,
+    cycles != null ? ["Allumages", nb(cycles)] : null,
+    h.occupe != null ? ["Contrôleur occupé", duree(h.occupe) + " au total"] : null,
+  ]);
+
+  /* ---- Partitions, et ce que chacune porte ---- */
+  const parts = (det.parts || []).filter(p => p.o >= 1e6).map(p => {
+    const raid = (p.sur || []).find(c => /^raid/.test(c.t || ""));
+    const fin = (p.sur || []).filter(c => c.m).slice(-1)[0];
+    const nomM = (m) => MONTAGES[m] || (g && !g.sys && /^\/volume\d/.test(m) ? g.nom.toLowerCase() : m);
+    const quoi = raid ? (RAID[raid.t] || raid.t) + " (" + raid.n + ")" + (fin ? " → " + nomM(fin.m) + (fin.fs ? " · " + fin.fs : "") : "")
+      : p.m ? nomM(p.m) + (p.fs && p.fs !== "swap" ? " · " + p.fs : "")
+      : p.fs ? p.fs + " · non montée" : "réservée, sans système de fichiers";
+    return `<span>${esc(p.n.replace(/^nvme\d+n\d+/, ""))}</span><b>${esc(dec(p.o))}</b><em>${esc(quoi)}</em>`;
+  }).join("");
+
+  dl.innerHTML = `<h3>${esc(role ? role + " · " + modele : modele)}</h3>
+    <div class="sub">${esc([cap, ou].join(" · "))}</div>${tuiles}
+    <div class="scroll disq">${sec("Santé")}${sante}${sec("Température")}${temp}`
+    + `${sec("Usure et écritures")}${usureHtml}${ecr}${sec("Fiche")}${fiche}`
+    + `${parts ? sec("Partitions") + `<div class="dpt">${parts}</div>` : ""}`
+    + `${x.det ? "" : `<div class="note">Détail complet en attente du collecteur</div>`}</div>`;
+  dl.showModal();
+}
+/* ---- Fenetre de l espace d un volume (06/10/2026) ----
+   Meme esprit que la fenetre Memoire, demandee le 06/10/2026 : la carte dit
+   combien prend chaque categorie, la fenetre dit QUOI. Une ligne par
+   categorie, de la plus grosse a la plus petite (« Autres » en dernier),
+   depliable jusqu aux dossiers et a leurs enfants ; nuances de la couleur de la
+   categorie pour ses dossiers ; UNE SEULE ECHELLE pour toutes les barres.
+   Donnees : `esp.det` de systeme.json, ecrit par la mesure de nuit
+   (`du_detail`). `p` : ce qu un dossier partage, en liens physiques, avec un
+   dossier deja compte (torrents et Films/Series). */
+const NOMS_DOSSIER = { "#recycle": "corbeille" };
+function popEspace(nom) {
+  const s = DATA.smart || {}, g = (s.grappes || []).find(y => y.nom === nom);
+  if (!g || !g.esp) return;
+  const dl = document.getElementById("dlg");
+  dl.classList.add("large");
+  const e = g.esp, det = e.det || {};
+  const ES = typeof ESPACE !== "undefined" ? ESPACE : {};
+  /* Noms de categorie avec majuscule, comme dans la fenetre Memoire : la
+     legende de la carte les ecrit en minuscules, au fil de la phrase. */
+  const cat = k => { const c = ES[k] || [k, "#8a94a6"];
+    return [/^[a-z][A-Z]/.test(c[0]) ? c[0] : c[0].charAt(0).toUpperCase() + c[0].slice(1), c[1]]; };   /* « iSCSI » reste tel quel */
+  const tot = e.tot || 1;
+  const used = e.used != null ? e.used : Object.values(e.parts || {}).reduce((a, o) => a + o, 0);
+  const cats = Object.entries(e.parts || {}).filter(([, o]) => o > 0)
+    .sort(([a, x], [b, y]) => (a === "autres") - (b === "autres") || y - x);
+  const E = Math.max(1, ...cats.map(([, o]) => o));
+  let ouverts = [];
+  try { ouverts = JSON.parse(localStorage.getItem("hl-pop-espace") || "[]"); } catch (er) { /* navigation privee */ }
+  const pct = o => { const v = o / tot * 100; return v >= 10 ? Math.round(v) + " %" : vg(v.toFixed(1)) + " %"; };
+  const barre = (o, c, cl) => `<span class="${cl}">${o > 0 ? `<i style="width:${(o / E * 100).toFixed(2)}%;background:${c}"></i>` : ""}</span>`;
+  const nomD = n => esc(NOMS_DOSSIER[n] || n);
+  const ligne = (n, o, c, pre) => `<div class="ln"><span class="nm">${n}${pre ? `<small>${esc(pre)}</small>` : ""}</span>`
+    + `<span class="mm">${taille(o)}</span><span class="sw">${pct(o)}</span>${barre(o, c, "tr")}</div>`;
+  const groupe = (id, c, n, k, o, lignes, cl) =>
+    `<details class="grp${cl ? " " + cl : ""}" data-g="${esc(id)}"${ouverts.includes(id) ? " open" : ""}>`
+    + `<summary class="grp-h ln"><span class="nm"><span class="chev" aria-hidden="true"></span>`
+    + `<i style="background:${c}"></i><b>${esc(n)}</b>${k ? `<small>${k}</small>` : ""}</span>`
+    + `<span class="mm">${taille(o)}</span><span class="sw">${pct(o)}</span>`
+    + barre(o, c, "gb") + `</summary><div class="grp-l">${lignes}</div></details>`;
+  /* ⚠️ SOUS 100 MO, UNE SEULE LIGNE. Sur le vrai NAS, « Applications » alignait
+     quinze dossiers a 0 Go et les partages des fichiers de quelques Ko : du
+     bruit qui noyait ce qui prend vraiment la place (06/10/2026). Ce qui
+     partage des fichiers (`p`) reste toujours visible. */
+  const SEUIL = 100 * 1048576;
+  const tamis = (l) => {
+    const g = [], petits = { n: 0, o: 0 };
+    for (const x of l || []) {
+      if (x.o >= SEUIL || x.p) g.push(x);
+      else { petits.n += x.g ? (parseInt(x.n, 10) || 1) : 1; petits.o += x.o; }
+    }
+    return { g, petits };
+  };
+  /* Sous 1 Mo, la ligne de regroupement elle-meme disparait : « 1 petit
+     dossier · 0 Mo » n apprend rien. */
+  const ligneP = (p, c, mot) => p.n && p.o >= 1048576 ? ligne(`<s>${p.n} ${mot}</s>`, p.o, c) : "";
+  /* Dossiers internes d UGOS (vignettes, index, flux video) : leurs enfants
+     portent des noms hexadecimaux sans signification. On ne les deplie pas. */
+  const HEX = /^[0-9a-f]{2}$|^[0-9a-f-]{16,}(\.[\w.-]+)?$/i;
+  const codes = (l) => { const g = tamis(l).g; return g.length > 2 && g.filter(y => HEX.test(y.n)).length >= g.length * .6; };
+  /* Enfants d un dossier : une ligne chacun, avec ce qu il partage. */
+  const enfants = (l, c) => { const t = tamis(l);
+    return t.g.map(x => ligne(x.g ? `<s>${esc(x.n)}</s>` : nomD(x.n), x.o, c,
+        x.p ? "et " + taille(x.p) + " en commun avec un autre dossier" : "")).join("")
+      + ligneP(t.petits, c, t.petits.n > 1 ? "petits fichiers et dossiers" : "petit fichier ou dossier"); };
+
+  const parts = cats.map(([k, o]) => {
+    const t = tamis(det[k]);
+    return { k, o, ds: t.g, petits: t.petits, nu: nuances(cat(k)[1], Math.max(1, t.g.length)) };
+  });
+  /* « Autres », decompose par le collecteur d apres btrfs (06/10/2026). Un
+     GROUPE comme les autres categories, pour la meme hauteur de ligne. */
+  const AU = e.autres;
+  const autres = (o, c) => {
+    if (!AU) return groupe("c:autres", c, cat("autres")[0], "", o,
+      `<div class="note">Détail après la prochaine mesure de nuit</div>`);
+    const nu = nuances(c, 4);
+    const l = [
+      ["Métadonnées btrfs", AU.meta, "l'index des fichiers, gardé en double par sécurité"],
+      [AU.snap > 0 ? "Instantanés et blocs conservés" : "Blocs conservés par la copie sur écriture", AU.cow,
+       "fichiers réécrits par morceaux : disque iSCSI, torrents"],
+      ["Réserve du système de fichiers", AU.reserve, ""],
+    ].concat((AU.nc || []).map(x => [x.n, x.o, "dossier non classé"]))
+      .filter(([, v]) => v >= 1048576).sort((a, b) => b[1] - a[1]);
+    const dep = AU.depuis || 0;
+    return groupe("c:autres", c, cat("autres")[0], "", o,
+      l.map(([n, v, p], i) => ligne(esc(n), v, nu[Math.min(i, 3)], p)).join("")
+      /* Ce qui a bouge depuis la mesure de nuit : ecrit (positif) ou efface. */
+      + (Math.abs(dep) >= 104857600
+        ? dep > 0 ? ligne("Écrit depuis la mesure de nuit", dep, nu[3], "mesuré à nouveau cette nuit")
+          : `<div class="ln"><span class="nm">Effacé depuis la mesure de nuit<small>déjà retiré du total</small></span>`
+            + `<span class="mm">−${taille(-dep)}</span><span class="sw"></span></div>`
+        : ""));
+  };
+  /* Noms de partition du disque systeme, en clair. */
+  const nomPart = n => MONTAGES[n] ? `${esc(MONTAGES[n])}<small>${esc(n)}</small>` : nomD(n);
+  const corps = parts.map(({ k, o, ds, petits, nu }) => {
+    const c = cat(k)[1];
+    if (k === "autres") return autres(o, c);
+    if (!ds.length)
+      return ligne(`<i class="pt" style="background:${c}"></i><b>${esc(cat(k)[0])}</b>`, o, c);
+    /* Disque systeme : une ligne ou un groupe par partition. */
+    if (g.sys)
+      return groupe("s:" + k, c, cat(k)[0], ds.length > 1 ? ds.length + " parties" : "", o, ds.map((x, i) =>
+        tamis(x.l).g.length > 1
+          ? groupe("s:" + k + "/" + x.n, nu[i], MONTAGES[x.n] || x.n, esc(x.n), x.o, enfants(x.l, nu[i]), "sous")
+          : ligne(nomPart(x.n), x.o, nu[i])).join(""));
+    /* Un seul dossier (les medias : Jellyfin) : ses enfants directement, le
+       dossier en precision. Plusieurs : un groupe emboite par dossier. Un
+       dossier qui n a qu un enfant visible reste une simple ligne. */
+    if (ds.length === 1)
+      return groupe("c:" + k, c, cat(k)[0], esc(ds[0].n), o, enfants(ds[0].l, c));
+    return groupe("c:" + k, c, cat(k)[0], ds.length + " dossier" + (ds.length > 1 ? "s" : ""), o, ds.map((x, i) =>
+      tamis(x.l).g.length > 1 && !codes(x.l)
+        ? groupe("d:" + k + "/" + x.n, nu[i], NOMS_DOSSIER[x.n] || x.n, "", x.o, enfants(x.l, nu[i]), "sous")
+        : ligne(nomD(x.n), x.o, nu[i], codes(x.l) ? "données internes" : "")).join("")
+      + ligneP(petits, c, petits.n > 1 ? "petits dossiers" : "petit dossier"));
+  }).join("");
+
+  /* Barre de tete : chaque categorie decoupee en ses dossiers, puis le libre.
+     Survol : l infobulle commune (`data-lec="part"`). */
+  const seg = (titre, n, o, c) => `<i data-lec="part" data-t="${esc(titre)}" data-n="${esc(n)}"`
+    + ` data-v="${esc(taille(o) + " · " + pct(o))}" data-c="${c}" style="width:${(o / tot * 100).toFixed(2)}%;background:${c}"></i>`;
+  const LIBRE = "rgba(255,255,255,.14)";
+  const tete = `<div class="compo"><div class="cbar">`
+    + parts.map(({ k, o, ds, petits, nu }) => ds.length > 1 && k !== "autres"
+        ? ds.map((x, i) => seg(cat(k)[0], NOMS_DOSSIER[x.n] || x.n, x.o, nu[i])).join("")
+          + (petits.o > 0 ? seg(cat(k)[0], "petits dossiers", petits.o, cat(k)[1]) : "")
+        : seg(cat(k)[0], ds.length === 1 ? ds[0].n : "", o, cat(k)[1])).join("")
+    + seg("Libre", "place disponible", Math.max(0, tot - used), LIBRE)
+    + `</div><div class="clg">` + parts.map(({ k, o }) =>
+        `<span><i style="background:${cat(k)[1]}"></i>${esc(cat(k)[0])} <b>${taille(o)}</b></span>`).join("")
+    + `<span><i style="background:${LIBRE}"></i>Libre <b>${taille(Math.max(0, tot - used))}</b></span></div></div>`;
+
+  const quand = (t) => { if (!t) return ""; const j = new Date(t * 1000);
+    return "mesuré " + (j.toDateString() === new Date().toDateString() ? "aujourd'hui"
+      : j.toDateString() === new Date(Date.now() - 864e5).toDateString() ? "hier"
+      : "le " + j.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })) + " à " + hhmm(t); };
+  const entete = `<div class="ln lnh"><span class="nm">dossier</span><span class="mm">taille</span><span class="sw">part</span></div>`;
+  dl.innerHTML = `<h3>${esc(g.sys ? "Disque système" : g.nom)} · ce qui prend la place</h3>
+    <div class="sub">${esc([surTotal(used, tot), taille(Math.max(0, tot - used)) + " libres", quand(e.mesure)].filter(Boolean).join(" · "))}</div>
+    <div class="espw">${tete}${entete}<div class="scroll">${corps}${e.det ? ""
+      : `<div class="note">Détail par dossier après la prochaine mesure de nuit</div>`}</div></div>`;
+  dl.querySelectorAll("details.grp").forEach(el => el.addEventListener("toggle", () => {
+    const o = [...dl.querySelectorAll("details.grp[open]")].map(x => x.dataset.g);
+    try { localStorage.setItem("hl-pop-espace", JSON.stringify(o)); } catch (er) { /* navigation privee */ }
+  }));
+  dl.showModal();
+}
+
+/* Delegue : les lignes de disque et le bloc d espace sont redessines toutes les
+   deux secondes. */
+const ouvreStockage = (el) => el.dataset.disque ? popDisque(el.dataset.disque) : popEspace(el.dataset.espace);
+addEventListener("click", (e) => {
+  const el = e.target.closest && e.target.closest("[data-disque],[data-espace]");
+  if (el) ouvreStockage(el);
+});
+addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target.closest && e.target.closest("[data-disque],[data-espace]");
+  if (el) { e.preventDefault(); ouvreStockage(el); }
+});
 
 /* Repli de toutes les cartes sur leur en-tête : on garde le logo, le nom,
    l'adresse et la pastille d'état, on masque le widget et les mesures. Réglage
@@ -1061,6 +1897,7 @@ async function refresh() {
     ]);
     d.hist = h; d.cont = k; d.smart = sm;
       d.fin = await histFin();
+    fusionSysteme(d, await lireSysteme());
     // live.json prime sur data.json : ses valeurs sont rafraichies toutes les 2 s.
     if (l) {
       d.nas.cpu = l.cpu; d.nas.ram = l.ram; d.nas.net = l.net;
@@ -1069,12 +1906,14 @@ async function refresh() {
     }
     DATA = demo(d);
     fondre(document.getElementById("bar"), bar(DATA));
+    fondre(document.getElementById("soucis"), pastilles(DATA));
     fondre(document.getElementById("groups"), GROUPS.map((g, i) =>
       `<section class="sec" data-g="${i}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>
        <div class="grid">${g.s.map(s => card(s, DATA)).join("")}</div></section>`).join(""));
     document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
       if (ev.target.closest("a")) return;
       if (c.dataset.pop === "conteneurs") popConteneurs();
+      else if (c.dataset.pop === "acces") popAcces();
       else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
     });
     filters();
@@ -1217,6 +2056,19 @@ function majTexte(noeud, apres) {
    serait perdu à chaque redessin. Toute fenêtre future en hérite sans rien
    avoir à faire. */
 const CROIX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+/* FOCUS D OUVERTURE SUR LA FENETRE ELLE-MEME (06/10/2026). `showModal()` le
+   donnait au premier element cliquable (un groupe depliable, la zone defilante)
+   et, le focus venant du champ de recherche, le navigateur l entourait d un
+   contour a chaque ouverture. La fenetre le prend a sa place, sans contour
+   (`dialog.dlg:focus-visible`), et Tab entre ensuite dans son contenu.
+   ⚠️ Pose UNE FOIS sur l element : toutes les fenetres passent par lui. Une
+   fenetre qui veut son champ (l ajout de raccourci) le focalise APRES, ce qui
+   reste valable. */
+{
+  const d = dlg(), ouvre = d.showModal;
+  d.showModal = function () { ouvre.call(this); this.focus({ preventScroll: true }); };
+}
 
 new MutationObserver(() => {
   const d = dlg();
@@ -1377,6 +2229,32 @@ const ETATB = {
   nd: ["sans relevé", "#8a94a6"]
 };
 
+/* SONDES EN CAUSE SOUS UNE CASE DU RUBAN KUMA (05/10/2026). Le ruban disait
+   QU une sonde avait lache, jamais LAQUELLE. Le collecteur garde, sonde par
+   sonde, ses periodes hors ligne ou en attente sur 24 h (`kuma.inc`) ; on
+   retient celles qui chevauchent la case visee, avec le temps passe DANS la
+   case. Hors ligne d abord, puis par duree.
+   ⚠️ Au-dela de cinq on abrege : passe cinq, c est un groupe entier qui tombe,
+   pas une sonde qu on irait chercher par son nom. */
+const ENCAUSE = { 0: ["hors ligne", "#ff453a"], 2: ["en attente", "#ffb340"] };
+function sondesEnCause(a, b) {
+  const l = (((DATA || {}).kuma || {}).inc || [])
+    /* Le groupe suit le nom : « API » seul ne dit pas de quel service il s agit. */
+    .map(x => ({ n: x.g ? x.n + " · " + x.g : x.n, s: x.s, d: Math.min(b, x.t1) - Math.max(a, x.t0) }))
+    .filter(x => x.d > 0);
+  /* Une sonde peut avoir plusieurs periodes dans la meme case : on les cumule. */
+  const m = new Map();
+  for (const x of l) {
+    const k = x.n + "|" + x.s;
+    m.set(k, Object.assign(m.get(k) || { n: x.n, s: x.s, d: 0 }, { d: (m.get(k) || { d: 0 }).d + x.d }));
+  }
+  const t = [...m.values()].sort((p, q) => (p.s === 0 ? 0 : 1) - (q.s === 0 ? 0 : 1) || q.d - p.d);
+  const out = t.slice(0, 5).map(x => ({ n: x.n, c: (ENCAUSE[x.s] || ENCAUSE[0])[1],
+    v: (ENCAUSE[x.s] || ENCAUSE[0])[0] + " · " + duree(x.d / 60) }));
+  if (t.length > 5) out.push({ n: "et " + (t.length - 5) + " autres", c: "#8a94a6", v: "" });
+  return out;
+}
+
 function litBatt(svg, e) {
   const rs = [...svg.querySelectorAll("rect:not(.capt)")];
   if (!rs.length) return null;
@@ -1384,11 +2262,14 @@ function litBatt(svg, e) {
   if (x == null) return null;
   const k = Math.max(0, Math.min(rs.length - 1, Math.floor(x)));
   const t0 = +svg.dataset.t0, ps = +svg.dataset.ps;
-  const et = ETATB[rs[k].getAttribute("class") || ""] || ETATB[""];
+  const cl = rs[k].getAttribute("class") || "";
+  const et = ETATB[cl] || ETATB[""];
+  const enCause = svg.dataset.col === "kumaup" && (cl === "wn" || cl === "dn") && t0 && ps
+    ? sondesEnCause(t0 + k * ps, t0 + (k + 1) * ps) : [];
   return {
     vx0: k + 0.13, vx1: k + 0.87,
     titre: t0 && ps ? hhmm(t0 + k * ps) + " → " + hhmm(t0 + (k + 1) * ps) : "",
-    lignes: [{ n: et[0], c: et[1], v: "" }]
+    lignes: [{ n: et[0], c: et[1], v: "" }].concat(enCause)
   };
 }
 
@@ -1403,6 +2284,26 @@ function litRatio(el) {
   return {
     titre: (n ? n.textContent : "") + (v ? " · " + v.textContent : ""),
     lignes: [{ n: el.dataset.q || "", c: "#8a94a6", v: "" }]
+  };
+}
+
+/* Segment de la barre de la fenetre Memoire : tout est deja dans ses attributs.
+   Aucun repere a poser, comme pour les barres de visites. */
+function litPart(el) {
+  return { titre: el.dataset.t, lignes: [{ n: el.dataset.n, c: el.dataset.c, v: el.dataset.v }] };
+}
+
+/* Colonne de l histogramme des acces : qui s est connecte dans l heure, les
+   plus nombreux d abord. */
+function litAcc(el) {
+  const b = ACC_H[+el.dataset.i];
+  if (!b) return null;
+  const l = [...b.g.values()].sort((p, q) => q.c - p.c);
+  const lignes = l.slice(0, 6).map(x => ({ n: [x.s, x.u, x.n, x.r].join(" · "), c: x.col, v: "×" + nb(x.c) }));
+  if (l.length > 6) lignes.push({ n: "et " + (l.length - 6) + " autres", c: "#8a94a6", v: "" });
+  return {
+    titre: hhmm(b.t0) + " → " + hhmm(b.t1),
+    lignes: lignes.length ? lignes : [{ n: "Aucune connexion", c: "#8a94a6", v: "" }]
   };
 }
 
@@ -1423,8 +2324,16 @@ addEventListener("pointermove", (e) => {
   if (!el) return cacheTip();
   const t = el.dataset.lec;
   const r = t === "batt" ? litBatt(el, e) : t === "jour" ? litJour(el)
-    : t === "ratio" ? litRatio(el) : litGraphe(el, e);
+    : t === "ratio" ? litRatio(el) : t === "part" ? litPart(el) : t === "acc" ? litAcc(el) : litGraphe(el, e);
   if (!r || !r.lignes.length) return cacheTip();
+
+  /* ⚠️ UNE FENETRE OUVERTE PASSE AU-DESSUS DE TOUT (couche superieure du
+     navigateur), quel que soit le `z-index` : l infobulle, logee dans <body>,
+     resterait cachee derriere. Elle entre donc dans la fenetre le temps du
+     survol, et en ressort au premier survol de la page. `position: fixed` reste
+     relatif a l ecran : la fenetre n a ni transformation ni filtre. */
+  const hote = el.closest("dialog[open]") || document.body;
+  if (TIPP.parentNode !== hote) hote.append(TIPV, TIPP);
 
   TIPP.innerHTML = (r.titre ? `<b>${esc(r.titre)}</b>` : "")
     + r.lignes.map(l => `<span><i style="background:${l.c}"></i>${esc(l.n)}`
@@ -1445,7 +2354,7 @@ addEventListener("pointermove", (e) => {
      l'unité de lecture et où un trait se confondrait avec la gouttière.
      Les bornes du bloc reprennent celles du rectangle dessiné, 0,13 à 0,87
      d'unité, pour éclaircir la barre et pas la gouttière voisine. */
-  const cx = (t === "jour" || t === "ratio") ? null
+  const cx = (t === "jour" || t === "ratio" || t === "part" || t === "acc") ? null
     : cliX(el, r.vx0 != null ? r.vx0 : r.vx);
   if (cx == null) { TIPV.classList.remove("on"); return; }
   if (r.vx1 != null) {

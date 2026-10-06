@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" fill="none"
+     stroke="#ffffff" stroke-width="1.4167" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Cadenas, choisi le 05/10/2026 : le bouclier reste reserve au
+       titre de la section. Serrure EN CONTOUR, comme le reste des icones.
+       ⚠️ GRILLE DE 34, la taille d affichage, traits droits centres sur les
+       pixels (coordonnees en ,5) : voir memoire.svg. Le col de la serrure
+       garde 1 px de vide entre ses deux traits, sinon il se bouchait en gris. -->
+  <path d="M11.5 14.5v-4a5.5 5.5 0 0 1 11 0v4"/>
+  <rect x="7.5" y="14.5" width="19" height="14" rx="2.5"/>
+  <path d="M15.5 22.62 14.5 25.5h5l-1-2.88a2.6 2.6 0 1 0-3 0Z"/>
+</svg>

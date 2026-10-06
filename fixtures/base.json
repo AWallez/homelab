@@ -11,7 +11,10 @@
     "ramu": 4404019, "ramt": 8155136, "cores": 8,
     "net": 1524288, "disk": 63, "disktot": 7984990126080,
     "load": 0.74, "load5": 0.91, "load15": 1.12,
-    "dr": 486210, "dw": 1932544
+    "dr": 486210, "dw": 1932544,
+    "fans": [ { "n": "processeur", "rpm": 2566 },
+              { "n": "boîtier 1", "rpm": 1064 },
+              { "n": "boîtier 2", "rpm": 998 } ]
   },
 
   "site":   { "ms": 68, "cert": 74, "ok": true },
@@ -101,5 +104,55 @@
   },
 
   "pc": { "on": true, "vu": "@-1min" },
-  "backup": { "h": 4, "date": "14/03 a 06:00" }
+  "backup": { "h": 4, "date": "14/03 à 06:00", "t": "@-4h",
+              "add": 39845888, "dur": 160, "snap": 17,
+              "chk": { "t": "@-6j", "ok": true } },
+
+  "_reseau_securite": "Cartes ajoutees le 05/10/2026. Les adresses arrivent deja traduites en noms : le collecteur connait le reseau, la page non.",
+  "secu": { "fw": 21, "manq": [], "ouverts": [], "verifies": 12,
+            "refus": 3, "ext": 0, "ssh": true },
+  "acces": {
+    "now": [ { "t": "iSCSI", "n": "Poste", "c": 1 },
+             { "t": "SSH",   "n": "Poste", "c": 1 },
+             { "t": "SMB",   "n": "",      "c": 0 } ],
+    "_": "ev, log, n et ext sont DERIVES par outils/genere-fixtures.js d un emploi du temps des connexions : ce bloc est remplace dans data.json.",
+    "ev": [], "log": [], "n": 0, "ext": 0
+  },
+  "lan": { "up": 1, "vit": 10000, "mtu": 9000, "coup": 0, "err": 4 },
+  "wan": { "ok": 1, "v6": 1, "cd": 2000000, "cu": 900000,
+           "boxup": 4016838, "err": 0, "lat": 7 },
+  "_mem": "Memoire en Mo. tot = prog + zram + noyau + cache + libre. tasse = donnees d origine dans le zram, zcap = sa capacite, ssd = ce qui a deborde sur le SSD. g = qui la prend, groupe par groupe : mo = memoire anonyme (sans le cache), t = swap. La somme des mo vaut prog, celle des t vaut tasse + ssd : autres ramasse le reste.",
+  "mem": { "tot": 7964, "dispo": 3900, "prog": 2350, "zram": 420, "noyau": 650, "cache": 2950, "libre": 1594,
+           "tasse": 1150, "zcap": 3836, "ssd": 0, "psi": 0.2, "psi5": 0.1,
+           "ram": { "go": 8, "slots": 2, "libres": 1 },
+           "g": [ { "k": "conteneurs", "mo": 1300, "t": 348, "n": 26 },
+                  { "k": "systeme", "mo": 520, "t": 420, "l": [
+                      { "n": "interface-web", "mo": 140, "t": 90, "cpu": 1.2 },
+                      { "n": "indexation", "mo": 95, "t": 120, "cpu": 0.4 },
+                      { "n": "partage-fichiers", "mo": 80, "t": 60, "cpu": 0.3 },
+                      { "n": "serveur-web", "mo": 70, "t": 30, "cpu": 0.2 },
+                      { "n": "controle", "mo": 60, "t": 50, "cpu": 0.6 },
+                      { "n": "journaux", "mo": 40, "t": 40, "cpu": 0.1 },
+                      { "n": "planificateur", "mo": 35, "t": 30, "cpu": 0.1 } ] },
+                  { "k": "docker", "mo": 260, "t": 120, "l": [
+                      { "n": "containerd", "mo": 150, "t": 70, "cpu": 0.8 },
+                      { "n": "dockerd", "mo": 110, "t": 50, "cpu": 1.5 } ] },
+                  { "k": "photos", "mo": 40, "t": 180, "p": 330, "l": [
+                      { "n": "analyse-images", "mo": 25, "t": 130, "cpu": 0.2 },
+                      { "n": "albums", "mo": 15, "t": 50, "cpu": 0.1 } ] },
+                  { "k": "cameras", "mo": 110, "t": 20, "l": [
+                      { "n": "enregistreur", "mo": 70, "t": 12, "cpu": 4.1 },
+                      { "n": "flux-video", "mo": 40, "t": 8, "cpu": 6.3 } ] },
+                  { "k": "autres", "mo": 120, "t": 62, "l": [
+                      { "n": "sessions", "mo": 60, "t": 40 },
+                      { "n": "base-systeme", "mo": 45, "t": 15, "cpu": 0.2 },
+                      { "n": "init", "mo": 15, "t": 7 } ] } ],
+           "det": {
+             "zram": [ { "n": "zram0", "algo": "lz4", "orig": 287, "compr": 100, "used": 105, "cap": 959 },
+                       { "n": "zram1", "algo": "lz4", "orig": 288, "compr": 101, "used": 105, "cap": 959 },
+                       { "n": "zram2", "algo": "lz4", "orig": 287, "compr": 100, "used": 105, "cap": 959 },
+                       { "n": "zram3", "algo": "lz4", "orig": 288, "compr": 101, "used": 105, "cap": 959 } ],
+             "swaps": [ { "n": "ssd", "used": 0, "size": 2048 }, { "n": "fichier", "used": 0, "size": 4096 } ],
+             "noyau": { "slab_r": 140, "slab_u": 260, "pt": 90, "ks": 40 },
+             "cache": { "actif": 1700, "inactif": 1100, "shmem": 150 } } }
 }

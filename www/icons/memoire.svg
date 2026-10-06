@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" fill="none"
+     stroke="#ffffff" stroke-width="1.4167" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Barrette de RAM, d apres la reference fournie le 05/10/2026, simplifiee.
+       ⚠️ DESSINEE SUR UNE GRILLE DE 34, LA TAILLE D AFFICHAGE, et non de 24 comme
+       les autres icones : sur 24, chaque trait de 1,42 px tombait a cheval sur
+       deux pixels et l icone, chargee de details, paraissait floue. Ici chaque
+       trait droit est centre sur une colonne de pixels (coordonnees en ,5).
+       Meme epaisseur que les autres : 1,4167 = un trait de 1 sur 24, rendu a 34.
+       Trois puces au lieu de quatre et des encoches peu profondes : sans cela,
+       les traits se touchaient. -->
+  <path d="M5 9.5h24a1.5 1.5 0 0 1 1.5 1.5v2.9a.8 1.6 0 0 0 0 3.2V20a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 20v-2.9a.8 1.6 0 0 0 0-3.2V11A1.5 1.5 0 0 1 5 9.5Z"/>
+  <rect x="6.5" y="12.5" width="5" height="6" rx=".8"/>
+  <rect x="14.5" y="12.5" width="5" height="6" rx=".8"/>
+  <rect x="22.5" y="12.5" width="5" height="6" rx=".8"/>
+  <path d="M5.5 21.5V25M8.5 21.5V25M11.5 21.5V25M14.5 21.5V25M19.5 21.5V25M22.5 21.5V25M25.5 21.5V25M28.5 21.5V25"/>
+</svg>

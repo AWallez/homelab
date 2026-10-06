@@ -13,6 +13,7 @@
 <div class="aurora"></div>
 <main>
   <div id="bar" class="bar"></div>
+  <div id="soucis" class="soucis" aria-live="polite"></div>
   <div id="shortcuts" class="shortcuts"></div>
   <form class="search" action="https://www.google.com/search" method="get">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -21,7 +22,9 @@
   <div id="filters" class="filters"></div>
   <div id="groups"></div>
 </main>
-<dialog id="dlg" class="dlg"></dialog>
+<!-- `tabindex="-1"` : la fenetre peut recevoir le focus d ouverture elle-meme,
+     voir « focus d ouverture » dans app.js. -->
+<dialog id="dlg" class="dlg" tabindex="-1"></dialog>
 <script src="services.js"></script>
 <script src="app.js"></script>
 </body>

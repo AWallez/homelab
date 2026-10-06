@@ -483,6 +483,87 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 .grp-h i{width:9px;height:9px;border-radius:2px;flex:none}
 .grp-h b{font-size:.76rem;font-weight:600}
 .grp-h em{font-style:normal;font-size:.66rem;color:var(--mut);margin-left:auto;font-variant-numeric:tabular-nums}
+/* Groupe repliable de la fenetre des conteneurs : le titre est le bouton. */
+summary.grp-h{cursor:pointer;list-style:none;border-radius:6px;transition:background .2s}
+summary.grp-h::-webkit-details-marker{display:none}
+summary.grp-h:hover{background:rgba(255,255,255,.04)}
+/* Un fond plutot qu un cadre : le cadre restait visible apres un simple clic. */
+summary.grp-h:focus-visible{outline:none;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.grp-h .chev{width:7px;height:7px;flex:none;align-self:center;margin:0 1px 0 3px;
+  border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
+  transform:rotate(-45deg);transition:transform .2s}
+details.grp[open]>summary .chev{transform:rotate(45deg)}
+details.grp:not([open])>summary.grp-h{border-bottom-color:rgba(255,255,255,.07)}
+.grp-l{padding-top:2px}
+/* Segment survole de la barre de la fenetre Memoire : il s eclaire. */
+.cbar i[data-lec]{transition:filter .15s}
+.cbar i[data-lec]:hover{filter:brightness(1.3) saturate(1.1)}
+/* Titre de groupe en LIGNE DE COLONNES (classe `ln` sur le summary) : la grille
+   et les styles des valeurs viennent de `.ln`, on n ajuste que le nom et le
+   filet. Les valeurs du titre sont en gras : ce sont des totaux. */
+summary.grp-h.ln{padding:7px 2px 7px;align-items:center}
+.grp-h .nm{display:flex;align-items:center;gap:9px}
+.grp-h .nm small{font-size:.62rem;color:var(--mut);font-weight:400}
+.ln:not(summary) .nm small{font-size:.62rem;color:var(--mut);margin-left:7px}
+.grp-h .mm{font-weight:600}
+/* Sur telephone, colonnes et espacements resserres : a 353 px de fenetre, les
+   trois colonnes chiffrees ne laissaient que 145 px au nom, et « Services
+   systeme » finissait en « Services sy… ». */
+@media(max-width:560px){
+  .dlg .ln{grid-template-columns:minmax(0,1fr) 52px 50px 38px;gap:4px 6px}
+  .grp-h .nm{gap:6px}
+  .grp-h .chev{margin:0}
+  details.grp.sous>summary.grp-h{padding-left:12px}
+  details.grp.sous>summary .gb{margin-left:-10px;width:calc(100% + 10px)}
+}
+/* ---- Fenetre Memoire : la barre de defilement DANS LA MARGE (05/10/2026) ----
+   La gouttiere reservee dans la zone de lecture creait un decalage, et l en-tete
+   de colonnes devait le compenser (18 px dans `fond.css`). Elle est desormais
+   logee dans le rembourrage de la fenetre : la zone defilante deborde de 20 px a
+   droite (marge negative) et ne garde que 10 px de rembourrage, si bien que la
+   gouttiere de 10 px tombe dans la marge et que le contenu s arrete exactement
+   au bord de l en-tete. Quand la barre apparait, elle chevauche la marge sans
+   rien pousser.
+   ⚠️ 20 = 10 + 10, et 10 est la barre FINE (`scrollbar-width: thin`), que
+   Chrome prefere a la largeur de `::-webkit-scrollbar` (12 px, mesure le
+   05/10/2026). Changer l une ou le rembourrage de la fenetre oblige a refaire
+   cette somme. */
+.dlg.large .scroll{margin-right:-20px;padding-right:10px;scrollbar-gutter:stable}
+.dlg.large .ln.lnh{margin-right:0}
+@media (max-width:520px){ .dlg.large .scroll{margin-right:-16px;padding-right:6px} }
+/* Ecran tactile : la barre se superpose au contenu et ne reserve rien. On rend
+   donc tout le rembourrage, sinon le contenu deborderait de 10 px. */
+@media (pointer:coarse){ .dlg.large .scroll{padding-right:20px} }
+@media (pointer:coarse) and (max-width:520px){ .dlg.large .scroll{padding-right:16px} }
+/* Barre sous le titre d un groupe : meme echelle que les lignes, meme deux tons. */
+.grp-h .gb{grid-column:1/-1;display:flex;height:5px;margin:1px 0 0;border-radius:99px;overflow:hidden;
+  background:rgba(255,255,255,.06)}
+.grp-h .gb i,.grp-h .gb u{display:block;height:100%;min-width:2px;flex:none}
+.grp-h .gb u{opacity:.38}
+.ln .tr i{min-width:2px}
+/* Groupe emboite (une pile dans « Conteneurs ») : en retrait, titre plus discret. */
+/* ⚠️ LE RETRAIT EST SUR LES NOMS, PAS SUR LES BARRES : toutes les barres de la
+   fenetre partagent la meme origine et la meme largeur, sinon une pile tracee
+   sur une piste 16 px plus courte mentait de 3 % sur sa part. */
+details.grp.sous{margin:4px 0 0}
+details.grp.sous>summary.grp-h{padding-top:4px;padding-left:18px}
+details.grp.sous>summary .gb{margin-left:-16px;width:calc(100% + 16px)}
+details.grp.sous>summary.grp-h b{font-size:.72rem;font-weight:500}
+/* Les services d une pile sont decales sous elle : le nom seulement, pour que
+   les colonnes chiffrees et les barres restent alignees. */
+details.grp.sous .ln .nm{padding-left:16px}
+/* Intertitre de partie dans la fenetre de la memoire. */
+.psec{margin:20px 2px 0;font-size:.58rem;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+.psec:first-child{margin-top:4px}
+.psec+.grp{margin-top:8px}
+/* Ligne de fait (noyau, cache, zram) : la valeur occupe les colonnes chiffrees. */
+.ln.kv .vv{grid-column:2/-1;text-align:right;font-size:.7rem;color:var(--mut);white-space:nowrap}
+/* Sur telephone, la valeur passe sous le libelle : cote a cote, elle prenait
+   toute la largeur et tronquait « partition du SSD » en « parti… ». */
+@media(max-width:560px){
+  .ln.kv .nm{grid-column:1/-1;white-space:normal}
+  .ln.kv .vv{grid-column:1/-1;text-align:left;white-space:normal}
+}
 .ln{display:grid;grid-template-columns:1fr auto auto auto;gap:4px 10px;align-items:baseline;padding:7px 2px}
 .ln+.ln{border-top:1px solid rgba(255,255,255,.045)}
 .ln .nm{min-width:0;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1274,3 +1355,239 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
    bornee a 104 px, colonnes centrees, et centrage vertical dans la carte. */
 .vizb>.wgg{margin-block:auto;justify-content:center;
   grid-template-columns:repeat(auto-fit,minmax(68px,104px))}
+
+/* ================= Reseau et securite (05/10/2026) =================
+   Composants des cartes Securite, Acces, Memoire du NAS et Espace disque.
+   Memes matieres que le reste : fond voile a .035, filet a .07, pastilles
+   vertes et ambre aux teintes de `.past`. */
+
+/* ---- Liste de controles ---- */
+.chk{list-style:none;margin:13px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.chk li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:9px;align-items:center;
+  padding:7px 10px;border-radius:var(--rs);font-size:.74rem;line-height:1.3;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.chk .k{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;
+  font-size:.58rem;font-weight:700;font-style:normal;background:rgba(52,199,89,.16);color:#8ce8a4}
+.chk em{font-style:normal;font-size:.64rem;color:var(--mut);white-space:nowrap}
+.chk li.wn{background:rgba(255,179,64,.08);border-color:rgba(255,179,64,.28)}
+.chk li.wn .k{background:rgba(255,179,64,.22);color:#ffd08a}
+.chk li.in .k{background:rgba(77,151,238,.2);color:#a6cdf7}
+
+/* ---- Intertitre interne ---- */
+.sh{margin:13px 0 6px;font-size:.55rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut)}
+.vizb>.sh:first-child{margin-top:0}
+
+/* ---- Sessions ouvertes ---- */
+.ses{display:flex;flex-wrap:wrap;gap:6px}
+.ses span{display:flex;align-items:center;gap:6px;font-size:.68rem;padding:5px 9px;border-radius:var(--rs);
+  background:rgba(77,151,238,.10);border:1px solid rgba(77,151,238,.28);color:#d6e8fc}
+.ses i{width:6px;height:6px;border-radius:50%;flex:none;background:var(--sok)}
+.ses span.vide{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.07);color:var(--mut)}
+.ses span.vide i{background:rgba(255,255,255,.25)}
+
+/* ---- Journal ---- */
+.jr{display:flex;flex-direction:column}
+.jr>div{display:grid;grid-template-columns:38px 40px minmax(0,1fr) auto;gap:8px;align-items:baseline;
+  padding:5px 2px;font-size:.68rem;border-top:1px solid rgba(255,255,255,.06)}
+.jr>div:first-child{border-top:0}
+.jr .h{color:var(--mut)}
+.jr .s{font-size:.56rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.jr .q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jr .q small{color:var(--mut);font-size:.62rem}
+.jr .r{font-size:.6rem}
+.jr .r.ok{color:#8ce8a4}
+.jr .r.wn{color:#ffd08a}
+
+/* ---- Barres classees ---- */
+.rangs{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+.rg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:baseline}
+.rg span{font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rg small{font-size:.6rem;color:var(--mut);margin-left:6px}
+.rg b{font-size:.66rem;font-weight:500;color:var(--mut)}
+.rg i{grid-column:1/3;display:block;height:6px;border-radius:99px;min-width:3px}
+
+/* ---- Jauge empilee ---- */
+/* Elle ouvre une carte composee, au-dessus d une legende et d un detail : elle
+   ne doit pas s etirer comme une jauge seule, sinon le surplus de hauteur se
+   loge entre son titre et sa piste. */
+.vizb>.jauge.empilee{flex:none}
+/* Un poste non nul reste visible quelle que soit sa part : voir `blocsDisques`. */
+.jauge-b.pile i{min-width:4px}
+
+/* ---- Carte Memoire ---- */
+.verdict{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.verdict>b{font-size:2.2rem;font-weight:500;letter-spacing:-.045em;line-height:1}
+.verdict>span{font-size:.72rem;color:var(--mut);line-height:1.35}
+.verdict>em{margin-left:auto;font-style:normal;font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:99px;
+  color:#8ce8a4;background:rgba(52,199,89,.11);border:1px solid rgba(52,199,89,.30)}
+.verdict>em.wn{color:#ffd08a;background:rgba(255,179,64,.12);border-color:rgba(255,179,64,.32)}
+.verdict>em.cr{color:#ff8f88;background:rgba(255,69,58,.12);border-color:rgba(255,69,58,.34)}
+.jauge-b.ramc{height:9px;margin-top:2px}
+.vizb .leg.gauche{justify-content:flex-start;gap:4px 12px}
+.rg .p{grid-column:1/3;display:flex;height:6px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.06)}
+.rg .p i{border-radius:0;min-width:0;height:100%}
+.bv .wn{color:#ffd08a}
+
+/* ---- Carte Stockage : un bloc par grappe, ses disques dedans ---- */
+.blocs{display:flex;flex-direction:column;gap:9px;margin-top:13px}
+.dqb{display:flex;flex-direction:column;gap:7px;padding:10px 12px;border-radius:var(--rs);
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.gh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.gh>b{font-size:.8rem;font-weight:600;white-space:nowrap}
+.gh>span{font-size:.66rem;color:var(--mut)}
+.gh>.faits{margin-left:auto}
+.dqb .jauge-b{height:6px}
+.bv{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.68rem;color:var(--mut)}
+.bv b{color:var(--ink);font-weight:500}
+.dqb .leg{margin-top:0;justify-content:flex-start;gap:4px 12px}
+.dqs{display:flex;flex-direction:column;margin-top:2px}
+.dq{display:grid;grid-template-columns:7px minmax(0,1fr) auto auto auto;gap:10px;align-items:baseline;
+  padding:6px 0 0;border-top:1px solid rgba(255,255,255,.06);font-size:.72rem}
+.dq>i{width:7px;height:7px;border-radius:50%;align-self:center;background:var(--sok)}
+.dq>i.cr{background:var(--scr)}
+.dq .dn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dq .dn b{font-weight:600}
+.dq .dn small{font-size:.64rem;color:var(--mut);margin-left:6px}
+.dq em{font-style:normal;font-size:.66rem;color:var(--mut);white-space:nowrap}
+.dq em.ok{color:#8ce8a4}.dq em.wn{color:#ffd08a}.dq em.cr{color:#ff8f88}
+/* L emplacement libre : un contour en pointilles, la ou un disque viendrait. */
+.libre{padding:9px 12px;border-radius:var(--rs);border:1px dashed rgba(255,255,255,.16);
+  font-size:.68rem;color:var(--mut);text-align:center}
+.faits{display:flex;gap:4px;flex-wrap:wrap}
+.faits span{font-size:.6rem;padding:2px 7px;border-radius:99px;white-space:nowrap;color:var(--mut);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.faits span.ok{color:#8ce8a4;background:rgba(52,199,89,.10);border-color:rgba(52,199,89,.30)}
+.faits span.wn{color:#ffd08a;background:rgba(255,179,64,.10);border-color:rgba(255,179,64,.30)}
+.jauge-b.pile{display:flex}
+.jauge-b.pile i{border-radius:0;flex:none}
+.jauge-b.pile i:first-child{border-radius:99px 0 0 99px}
+
+/* ---- Fenetre Acces : les connexions des 24 h (05/10/2026) ---- */
+/* Histogramme : une colonne par heure, segments empiles par categorie. La
+   colonne survolee s eclaire, comme les segments de la fenetre Memoire. */
+.acx{margin:14px 0 0}
+.acx-m{text-align:right;font-size:.58rem;color:var(--mut);margin-bottom:4px}
+.acx-b,.acx-a{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:3px}
+.acx-b{height:64px;align-items:end;border-bottom:1px solid rgba(255,255,255,.1)}
+.acb{height:100%;display:flex;align-items:flex-end;border-radius:3px 3px 0 0}
+.acb i{display:flex;flex-direction:column-reverse;width:100%;border-radius:3px 3px 0 0;overflow:hidden;
+  transition:filter .15s}
+/* ⚠️ 3 PX MINIMUM PAR SEGMENT : une connexion UGOS dans une heure qui en
+   comptait 45 en SSH faisait moins d un pixel et disparaissait (05/10/2026). */
+.acb i b{display:block;min-height:3px}
+.acb:hover i{filter:brightness(1.3) saturate(1.1)}
+.acb.vide:hover{background:rgba(255,255,255,.05)}
+.acx-a{margin-top:4px;height:12px}
+.acx-a span{font-size:.56rem;color:var(--mut);white-space:nowrap;overflow:visible}
+/* Qui et comment, cote a cote. */
+.acc-duo{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;margin-bottom:8px}
+.acc-duo .rangs{margin-top:8px}
+/* Journal par rafales : heure ou plage, service, compte et machine, methode. */
+.acr{display:grid;grid-template-columns:9px 92px 40px minmax(0,1fr) auto;gap:8px;align-items:baseline;
+  padding:6px 2px;font-size:.7rem;border-top:1px solid rgba(255,255,255,.05)}
+.psec+.acr,.psec+.acj>.acr{border-top:0}
+.acr .h{color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
+.acr .s{font-size:.56rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.acr .q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acr .q small{color:var(--mut);font-size:.62rem}
+.acr .r{font-size:.62rem;white-space:nowrap}
+.acr .r.ok{color:#8ce8a4}.acr .r.wn{color:#ffd08a}.acr .r.cr{color:#ff8f88}
+summary.acr{cursor:pointer;list-style:none;border-radius:6px;transition:background .2s}
+summary.acr::-webkit-details-marker{display:none}
+summary.acr:hover{background:rgba(255,255,255,.04)}
+summary.acr:focus-visible{outline:none;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.acr .chev{width:6px;height:6px;align-self:center;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
+  transform:rotate(-45deg);transition:transform .2s}
+.acr.seul .chev{visibility:hidden}
+details.acj[open]>summary .chev{transform:rotate(45deg)}
+/* Les minutes d une rafale depliee, alignees sous la plage horaire. */
+.acm{display:flex;flex-wrap:wrap;gap:4px;padding:2px 2px 9px 19px}
+.acm span{font-size:.62rem;padding:2px 7px;border-radius:99px;color:var(--mut);font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.acm small{margin-left:4px;font-size:.56rem;opacity:.8}
+@media (max-width:520px){
+  .acc-duo{grid-template-columns:1fr}
+  .acc-duo>div+div>.psec{margin-top:16px}
+  .acx-b,.acx-a{gap:2px}
+  .acr{grid-template-columns:9px 78px 34px minmax(0,1fr) auto;gap:6px;font-size:.66rem}
+  .acm{padding-left:15px}
+}
+
+/* ---- Carte Memoire : un seul rythme d espacement (05/10/2026) ----
+   Demande : « harmoniser tous les espaces ». Trois pas seulement :
+   18 px entre deux parties, 8 px entre un titre et ce qu il annonce comme entre
+   une barre et sa legende, 12 px avant le bloc encadre du zram. Avant : 13, 8,
+   0, 6, 13 et 19 px, et la legende collait a sa barre.
+   ⚠️ CIBLEE PAR `:has(>.verdict)` : `.sh`, `.leg`, `.dqb` et `.rangs` servent
+   aussi aux cartes Acces, Stockage et Securite, qu on ne touche pas ici. */
+.vizb:has(>.verdict)>.sh{margin:18px 0 8px}
+.vizb:has(>.verdict)>.ramc{margin-top:0}
+.vizb:has(>.verdict)>.leg{margin:8px 0 0;gap:6px 14px}
+.vizb:has(>.verdict)>.dqb{margin-top:12px;gap:8px}
+.vizb:has(>.verdict)>.rangs{margin-top:0;gap:10px}
+.vizb:has(>.verdict) .rg{row-gap:5px}
+
+/* ---- Fenetre d un disque (05/10/2026) ---- */
+/* Dans la carte Stockage, chaque disque devient un bouton : fond au survol et
+   chevron en bout de ligne. Les marges negatives elargissent le fond sans
+   decaler le texte. */
+.dq{grid-template-columns:7px minmax(0,1fr) auto auto auto 8px}
+.dq[data-disque]{cursor:pointer;margin:0 -8px;padding:6px 8px 5px;border-radius:7px;transition:background .2s}
+.dq[data-disque]:hover{background:rgba(255,255,255,.06)}
+.dq[data-disque]:focus-visible{outline:none;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.dq .ouvre{width:6px;height:6px;align-self:center;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
+  transform:rotate(-45deg);opacity:.7}
+.dq[data-disque]:hover .ouvre{opacity:1}
+/* Quatre chiffres en tete de fenetre. */
+.dtus{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0 4px}
+.dtu{padding:10px 12px;border-radius:var(--rs);background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.dtu b{display:block;font-size:1.15rem;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.dtu span{display:block;margin-top:3px;font-size:.62rem;color:var(--mut)}
+.dtu.wn b{color:#ffd08a}.dtu.cr b{color:#ff8f88}
+/* Rythme interne : 8 px entre un intertitre et son contenu, comme la carte Memoire. */
+.disq .psec+*{margin-top:8px}
+.disq .chk{gap:5px}
+.disq .leg{justify-content:flex-start;margin:8px 0;gap:4px 14px}
+.disq .past{padding-top:0;justify-content:flex-start}
+.disq .leg+.past{margin-top:0}
+/* Lignes libelle / valeur. */
+.dkv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 16px;margin-top:8px}
+.dkv>span,.dkv>b{padding:6px 2px;border-top:1px solid rgba(255,255,255,.05);font-size:.72rem}
+.dkv>span:first-child,.dkv>span:first-child+b{border-top:0}
+.dkv>span{color:var(--mut)}
+.dkv>b{font-weight:500;text-align:right;overflow-wrap:anywhere}
+.dkv>b.wn{color:#ffd08a}
+/* Partitions : nom, taille, ce qu elle porte. */
+.dpt{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:0 14px;align-items:baseline}
+.dpt>*{padding:6px 2px;border-top:1px solid rgba(255,255,255,.05);font-size:.72rem}
+.dpt>:nth-child(-n+3){border-top:0}
+.dpt>span{color:var(--mut);font-variant-numeric:tabular-nums}
+.dpt>b{font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.dpt>em{font-style:normal;color:var(--ink);overflow-wrap:anywhere}
+@media (max-width:520px){
+  .dtus{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dkv{grid-template-columns:minmax(0,1fr)}
+  .dkv>b{text-align:left;border-top:0;padding-top:0}
+}
+
+/* ---- Fenetre de l espace d un volume (06/10/2026) ---- */
+/* Dans la carte : l en-tete et la barre du volume forment un bouton. */
+.vz{display:flex;flex-direction:column;gap:7px;margin:-6px -8px 0;padding:6px 8px 7px;border-radius:7px;
+  cursor:pointer;transition:background .2s}
+.vz:hover{background:rgba(255,255,255,.05)}
+.vz:focus-visible{outline:none;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
+.vz .gh .ouvre{width:6px;height:6px;align-self:center;margin-left:6px;border-right:1.5px solid var(--mut);
+  border-bottom:1.5px solid var(--mut);transform:rotate(-45deg);opacity:.7}
+.vz:hover .gh .ouvre{opacity:1}
+/* ⚠️ `.espw` ENVELOPPE LA ZONE DEFILANTE : il doit relayer la colonne flexible
+   de la fenetre (`flex:1; min-height:0`), sinon `.scroll` prend toute sa hauteur
+   et c est la fenetre entiere qui deborde, titre compris (mesure le 06/10/2026). */
+.espw{display:flex;flex-direction:column;flex:1;min-height:0}
+/* Dans la fenetre : trois colonnes, nom, taille, part du volume. */
+.dlg .espw .ln{grid-template-columns:minmax(0,1fr) 72px 50px}
+/* Pastille de « Autres », ligne sans chevron : alignee sur celles des groupes
+   (13 px, mesure dans la fenetre). */
+.espw .ln .pt{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 9px 0 13px;vertical-align:-1px}
+.espw .ln .nm s{text-decoration:none;color:var(--mut)}
+.espw .ln:not(summary) .nm small{white-space:normal}
+@media(max-width:560px){ .dlg .espw .ln{grid-template-columns:minmax(0,1fr) 62px 42px} }
