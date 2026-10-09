@@ -32,12 +32,12 @@ const HOTE = "nas";
 const ENVOIE = process.argv.includes("--envoie");
 
 /* La liste blanche. Un fichier absent d ici ne sera jamais deploye. */
-const FRONT = ["index.html", "app.js", "style.css", "fond.css"];
+const FRONT = ["index.html", "cartes.js", "app.js", "style.css", "fond.css", "manifest.json"];
 const DOSSIERS = ["icons"];
 
 /* Noms interdits, verifies malgre la liste blanche : deux garde-fous valent
    mieux qu un quand l erreur consiste a ecraser des mesures irremplacables. */
-const INTERDITS = /^(data|live|history|history-min|containers|containers-hist|smart|updates|ratios|versions|maj|systeme)\.json$|^fixtures\//;
+const INTERDITS = /^(data|live|history|history-min|containers|containers-hist|smart|updates|ratios|versions|maj|systeme)\.json$|^fixtures\/|^(site|services)\.js$/;
 
 /* ⚠️ LE CHEMIN DE `ssh` EST EXPLICITE SOUS WINDOWS. Git Bash embarque son
    propre `ssh`, qui ne sait PAS parler a l agent de Windows : la cle vit dans
@@ -75,21 +75,23 @@ if (fautifs.length) {
   process.exit(1);
 }
 
-/* ⚠️ `services.js` EST VOLONTAIREMENT ABSENT DE LA LISTE BLANCHE. Il porte la
-   configuration du site — adresse, ports, noms de services, liens — et la copie
-   du depot est ANONYMISEE : la deployer ecraserait la vraie configuration du
-   NAS par des donnees fictives. Il se copie donc une seule fois, a la main.
-   Mais `app.js` en depend : sans lui, `GROUPS` est indefini et la page reste
-   blanche. On refuse donc de deployer tant que le NAS ne l a pas. */
-function verifieServices() {
+/* ⚠️ `site.js` EST VOLONTAIREMENT ABSENT DE LA LISTE BLANCHE, ET INTERDIT. Il
+   porte la configuration de l installation — adresse, ports, liens, trackers,
+   raccourcis — et la copie du depot est ANONYMISEE : la deployer ecraserait la
+   vraie configuration du NAS par des donnees fictives. Il se copie une seule
+   fois, a la main. Mais `cartes.js` en depend : sans lui, `IP` et `PORTS` sont
+   indefinis et la page reste blanche. On refuse donc de deployer tant que le
+   NAS ne l a pas.
+   Avant le 08/10/2026, ce role revenait a `services.js`, qui melait la
+   configuration et le code des cartes : le code part desormais avec `cartes.js`. */
+function verifieSite() {
   try {
-    const r = ssh("test -f " + CIBLE + "/services.js && echo present || echo absent");
+    const r = ssh("test -f " + CIBLE + "/site.js && echo present || echo absent");
     if (r.trim() === "present") return;
   } catch (e) { return; }   // NAS injoignable : le message viendra plus bas
-  console.log("  ARRET : le NAS n a pas `services.js`, dont `app.js` depend.");
-  console.log("  A copier UNE FOIS, depuis le poste :");
-  console.log("      scp -O www/services.js nas:/tmp/ && ssh nas \\");
-  console.log("        \"sudo install -o root -g root -m 644 /tmp/services.js " + CIBLE + "/\"");
+  console.log("  ARRET : le NAS n a pas `site.js`, dont `cartes.js` depend.");
+  console.log("  A installer UNE FOIS, avec les VRAIES valeurs (pas la copie du depot) :");
+  console.log("      sudo install -o root -g root -m 644 <site.js du NAS> " + CIBLE + "/");
   process.exit(1);
 }
 
@@ -115,7 +117,7 @@ try {
   process.exit(1);
 }
 
-verifieServices();
+verifieSite();
 
 const change = [], neufs = [], egaux = [];
 for (const f of fichiers) {
@@ -160,8 +162,9 @@ SAUVE=/tmp/deploiement-sauvegarde-$(date +%Y%m%d-%H%M%S)
 if find "$DEPOT" -name 'scenarios.json' -o -name 'data.json' -o -name 'history*.json' \\
         -o -name 'live.json' -o -name 'containers*.json' -o -name 'smart.json' \\
         -o -name 'updates.json' -o -name 'ratios.json' -o -name 'maj.json' \\
-        -o -name 'versions.json' -o -name 'systeme.json' | grep -q .; then
-  echo "ARRET : le depot contient une fixture. Rien n a ete installe." >&2
+        -o -name 'versions.json' -o -name 'systeme.json' \\
+        -o -name 'site.js' -o -name 'services.js' | grep -q .; then
+  echo "ARRET : le depot contient une fixture ou la configuration. Rien n a ete installe." >&2
   exit 1
 fi
 

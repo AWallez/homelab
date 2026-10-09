@@ -1,0 +1,14 @@
+# Poste a reveiller, eteindre et sonder depuis la page (carte « PC fixe »).
+# A copier en `pc.conf`, a cote des scripts, avec les vraies valeurs.
+# Lu par `pc-watch.sh`, `reveille-pc.py` et `collect.sh`. Syntaxe shell : CLE=valeur.
+
+# Adresse du poste sur le reseau local : sonde du port 22 et extinction par SSH.
+PC_IP=192.168.1.20
+# Compte Windows vise par l extinction (cle restreinte a une commande forcee).
+PC_USER=utilisateur
+# Adresse MAC de la carte qui porte le Wake-on-LAN.
+# ⚠️ Celle de la carte INTEGREE a la carte mere : les cartes 10 Gb Intel en
+# PCIe ne prennent pas en charge le reveil.
+PC_MAC=00:11:22:33:44:55
+# Diffusion du sous-reseau, en plus de 255.255.255.255.
+PC_DIFFUSION=192.168.1.255

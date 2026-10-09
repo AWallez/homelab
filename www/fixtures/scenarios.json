@@ -1,59 +1,81 @@
 {
-  "_": "La PRESENCE de ce fichier active le mode demonstration. Le NAS ne l a pas, donc la production ignore la fonctionnalite entierement : pas de selecteur, pas de code actif, rien. Chaque entree designe un calque de fixtures/scenarios/ applique par-dessus base.json.",
-
-  "defaut": "sain",
-
-  "liste": [
-    { "id": "sain",
-      "nom": "Tout va bien",
-      "note": "L etat nominal. Aucun calque n est applique." },
-
-    { "id": "attention",
-      "nom": "Un point d attention",
-      "note": "Une sonde hors ligne : ligne ambre, une seule pastille nommee." },
-
-    { "id": "vpn-ko",
-      "nom": "Port entrant injoignable",
-      "note": "Le tunnel repond mais plus personne ne peut le joindre." },
-
-    { "id": "qbit-ko",
-      "nom": "Client torrent deconnecte",
-      "note": "Plus aucun pair, et trois torrents arretes avant d avoir rendu leurs trois jours de partage." },
-
-    { "id": "trackers-ko",
-      "nom": "Ratios sous le minimum",
-      "note": "Deux ratios passes sous le seuil exige, un troisieme sans releve. Exerce les trois etats de la ligne de tracker." },
-
-    { "id": "indexeurs-ko",
-      "nom": "Indexeurs en echec",
-      "note": "Deux indexeurs ne repondent plus, et cross-seed n en voit plus qu un sur trois." },
-
-    { "id": "mediatheque-ko",
-      "nom": "Mediatheque en retard",
-      "note": "Films et episodes manquants, sous-titres en attente, demandes non traitees. Ce sont des TACHES : elles ne font pas virer le fond." },
-
-    { "id": "sauvegarde-ko",
-      "nom": "Sauvegarde perimee",
-      "note": "Plus de 48 h sans copie : la jauge passe au rouge." },
-
-    { "id": "securite-ko",
-      "nom": "Securite compromise",
-      "note": "Fichiers sensibles ouverts, deux reseaux Docker sans regle, connexions depuis Internet." },
-
-    { "id": "reseau-ko",
-      "nom": "Reseau degrade",
-      "note": "Lien retombe a 1 Gb/s sans trames geantes, box redemarree, ventilateur arrete." },
-
-    { "id": "critique",
-      "nom": "Conteneurs arretes",
-      "note": "Trois services a l arret. Le rouge l emporte sur l ambre, et la ligne compte les services plutot que les points d attention." },
-
-    { "id": "demarrage",
-      "nom": "Premier demarrage",
-      "note": "Historique vide, aucune sauvegarde, aucun releve. Exerce les messages d attente et les series qui demarrent en cours de route." },
-
-    { "id": "tout-ko",
-      "nom": "Tout ce qui peut aller mal",
-      "note": "Toutes les conditions d alerte a la fois. Sert a verifier d un coup d oeil le retour a la ligne des pastilles et la lisibilite du fond rouge." }
-  ]
+ "_": "La PRESENCE de ce fichier active le mode demonstration. Le NAS ne l a pas, donc la production ignore la fonctionnalite entierement : pas de selecteur, pas de code actif, rien. Chaque entree designe un calque de fixtures/scenarios/ applique par-dessus base.json.",
+ "defaut": "sain",
+ "liste": [
+  {
+   "id": "sain",
+   "nom": "Tout va bien",
+   "note": "L etat nominal. Aucun calque n est applique."
+  },
+  {
+   "id": "attention",
+   "nom": "Un point d attention",
+   "note": "Une sonde hors ligne : ligne ambre, une seule pastille nommee."
+  },
+  {
+   "id": "vpn-ko",
+   "nom": "Port entrant injoignable",
+   "note": "Le tunnel repond mais plus personne ne peut le joindre."
+  },
+  {
+   "id": "qbit-ko",
+   "nom": "Client torrent deconnecte",
+   "note": "Plus aucun pair, et trois torrents arretes avant d avoir rendu leurs trois jours de partage."
+  },
+  {
+   "id": "trackers-ko",
+   "nom": "Ratios sous le minimum",
+   "note": "Un ratio frais passe sous le minimum exige par son tracker (alerte), et un releve fige depuis 31 h, grise avec son age."
+  },
+  {
+   "id": "indexeurs-ko",
+   "nom": "Indexeurs en echec",
+   "note": "Deux indexeurs ne repondent plus, et cross-seed n en voit plus qu un sur trois."
+  },
+  {
+   "id": "mediatheque-ko",
+   "nom": "Mediatheque en retard",
+   "note": "Films et episodes manquants, sous-titres en attente, demandes non traitees. Ce sont des TACHES : elles ne font pas virer le fond."
+  },
+  {
+   "id": "sauvegarde-ko",
+   "nom": "Sauvegarde perimee",
+   "note": "Plus de 48 h sans copie : la jauge passe au rouge."
+  },
+  {
+   "id": "securite-ko",
+   "nom": "Securite compromise",
+   "note": "Fichiers sensibles ouverts, deux reseaux Docker sans regle, connexions depuis Internet."
+  },
+  {
+   "id": "reseau-ko",
+   "nom": "Reseau degrade",
+   "note": "Lien retombe a 1 Gb/s sans trames geantes, box redemarree, ventilateur arrete."
+  },
+  {
+   "id": "critique",
+   "nom": "Conteneurs arretes",
+   "note": "Trois services a l arret. Le rouge l emporte sur l ambre, et la ligne compte les services plutot que les points d attention."
+  },
+  {
+   "id": "demarrage",
+   "nom": "Premier demarrage",
+   "note": "Historique vide, aucune sauvegarde, aucun releve. Exerce les messages d attente et les series qui demarrent en cours de route."
+  },
+  {
+   "id": "collecte-arretee",
+   "nom": "Collecte arretee",
+   "note": "Les collecteurs ne tournent plus : la page le dit au lieu d afficher des valeurs figees comme si de rien n etait."
+  },
+  {
+   "id": "services-muets",
+   "nom": "Services muets",
+   "note": "Radarr et Uptime Kuma ne repondent plus : leur carte le dit, et la page passe en alerte."
+  },
+  {
+   "id": "tout-ko",
+   "nom": "Tout ce qui peut aller mal",
+   "note": "Toutes les conditions d alerte a la fois. Sert a verifier d un coup d oeil le retour a la ligne des pastilles et la lisibilite du fond rouge."
+  }
+ ]
 }

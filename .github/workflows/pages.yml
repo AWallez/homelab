@@ -1,4 +1,8 @@
-# Publication de la demonstration sur GitHub Pages.
+# Verification du depot, puis publication de la demonstration sur GitHub Pages.
+#
+# ⚠️ LA PUBLICATION ATTEND LA VERIFICATION (09/10/2026) : une erreur de syntaxe
+# dans un script ou une fixture JSON cassee ne part plus en ligne. Sur une
+# demande de fusion, seule la verification tourne.
 #
 # ⚠️ SEUL `www/` EST PUBLIE. Pages ne sait servir qu une racine ou `/docs`, et le
 # front vit dans `www/` : c est ce workflow qui fait le pont, en televersant ce
@@ -15,6 +19,7 @@ name: Pages
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 # Le jeton n a que ce qu il faut pour publier, rien pour ecrire dans le depot.
@@ -25,11 +30,60 @@ permissions:
 
 # Deux poussees rapprochees ne doivent pas se depasser l une l autre.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntaxe JavaScript (page et outils)
+        run: for f in www/*.js outils/*.js; do node --check "$f"; done
+
+      # Fixtures, manifeste, donnees de demonstration : un JSON casse fige la
+      # demonstration sans autre message qu une page vide.
+      - name: JSON valides
+        run: |
+          node -e '
+            const fs = require("fs"), p = require("path");
+            const tous = (d) => fs.readdirSync(d, { withFileTypes: true })
+              .flatMap(x => x.isDirectory() ? tous(p.join(d, x.name)) : [p.join(d, x.name)]);
+            let n = 0;
+            for (const f of [...tous("fixtures"), ...tous("www")].filter(f => f.endsWith(".json"))) {
+              JSON.parse(fs.readFileSync(f, "utf8")); n++;
+            }
+            console.log(n + " fichiers JSON valides");'
+
+      # Le generateur doit tourner jusqu au bout : c est lui qui produit
+      # l historique de la demonstration.
+      - name: Generateur de fixtures
+        run: node outils/genere-fixtures.js
+
+      # Scripts du NAS : syntaxe, puis les ERREURS de shellcheck seulement. Les
+      # avertissements de style ne bloquent pas la publication.
+      - name: Scripts shell
+        run: |
+          for f in collecteurs/*.sh outils/*.sh; do bash -n "$f"; done
+          shellcheck -S error collecteurs/*.sh outils/*.sh
+
+      # Python : compilation, puis erreurs de syntaxe et noms indefinis.
+      - name: Scripts Python
+        run: |
+          python -m py_compile collecteurs/*.py
+          pip install --quiet ruff
+          ruff check --select E9,F63,F7,F82 collecteurs/
+
   publication:
+    needs: verification
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

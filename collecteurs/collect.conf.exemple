@@ -1,0 +1,40 @@
+# Ce qui identifie l installation pour les collecteurs : collect.sh,
+# collect-fast.sh, alerts.sh. A copier en `collect.conf`, a cote des scripts.
+# ⚠️ AUCUN SECRET ICI : mots de passe, cles et jetons restent dans
+# `homepage.env` (voir `.env.example`). Syntaxe shell : CLE=valeur.
+# Toute cle absente garde la valeur par defaut du script.
+
+# Adresse du NAS sur le reseau local
+NAS_IP=nas.local
+
+# Adresse de la page : toucher une notification d alerte ouvre la carte
+# concernee (alerts.sh). Vide, les notifications n ouvrent rien.
+PAGE_URL=http://nas.local:3000
+
+# Site public surveille (joignabilite, temps de reponse, certificat)
+SITE_URL=https://example.com
+SITE_HOTE=example.com
+
+# Domaines publics dont le certificat est surveille (carte Securite), separes
+# par des espaces. Absent : le seul SITE_HOTE.
+CERT_HOTES="example.com www.example.com media.example.com stats.example.com vault.example.com ntfy.example.com"
+
+# Identifiant du site dans Umami (statistiques de frequentation)
+UMAMI_SITE_ID=00000000-0000-0000-0000-000000000000
+
+# Ports locaux des services, quand ils different des valeurs par defaut
+PORT_QBIT=8080
+PORT_RADARR=7878
+PORT_SONARR=8989
+PORT_PROWLARR=9696
+PORT_BAZARR=6767
+PORT_JELLYFIN=8096
+PORT_SEERR=5055
+PORT_ADGUARD=3000
+PORT_KUMA=3001
+PORT_UMAMI=3002
+PORT_NTFY=8081
+
+# Hote d annonce -> nom du tracker, pour la carte qBittorrent. ECRITE A LA MAIN :
+# un tracker peut annoncer sous deux hotes. Un hote absent s affiche tel quel.
+TRACKERS_NOMS='{"tracker.orion.example":"Orion","vega.example":"Vega","tk.vega.example":"Vega","tk.altair.example":"Altair"}'

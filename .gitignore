@@ -8,6 +8,9 @@ desktop.ini
 
 # ---- dependances, si un outil en introduit un jour -----------------------
 node_modules/
+# Caches des verifications Python (compilation, ruff) lancees en local.
+__pycache__/
+.ruff_cache/
 
 # ⚠️ CACHE DE FAVICONS. Regenere sur le NAS par `favicons.py`, il contient les
 # adresses des raccourcis PERSONNELS de l installation : navigateur, boite
@@ -26,6 +29,15 @@ www/icons/sites/
 # ---- artefacts du deploiement --------------------------------------------
 outils/.installe.tmp
 
+# ⚠️ CONFIGURATIONS REELLES DES COLLECTEURS. Seuls les `.exemple` sont publies :
+# une copie de travail des vraies (adresses, MAC, trackers, identifiants de
+# site) posee ici par erreur ne doit jamais partir sur GitHub.
+collecteurs/collect.conf
+collecteurs/pc.conf
+collecteurs/systeme.conf
+collecteurs/nvme-serie.conf
+.env
+
 # ---- CE QUI EST VOLONTAIREMENT SUIVI, malgre les apparences --------------
 #
 # www/*.json         Les fixtures generees. GitHub Pages sert le depot TEL QUEL,
@@ -33,10 +45,10 @@ outils/.installe.tmp
 #                    Les regenerer produit un diff, c est normal et sans
 #                    gravite, les horodatages etant recales a l affichage.
 #
-# www/services.js    La configuration ANONYMISEE, celle du depot. La vraie vit
+# www/site.js        La configuration ANONYMISEE, celle du depot. La vraie vit
 #                    sur le NAS et n est jamais deployee depuis ici : c est
 #                    pourquoi ce fichier est absent de la liste blanche de
-#                    `outils/deploie.js`.
+#                    `outils/deploie.js`, qui le refuse meme explicitement.
 
 # Demandes deposees par la page, consommees puis effacees par les veilleurs du
 # NAS. Ce sont des artefacts d execution, pas des sources : `shortcuts.json`

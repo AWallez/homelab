@@ -25,7 +25,11 @@ page = mapage
 
 [securite]
 racine = /volume1/docker
-sensibles = */.env, */*.env, */*/.env, _backup/*, _system/nas-backup.sh
+# Motifs relatifs a `racine`, testes par `runuser -u nobody -- test -r`. Penser
+# aux COPIES : un script qui sauvegarde un `.env` avant de le modifier laisse un
+# secret de plus, que les motifs du fichier d origine ne voient pas.
+sensibles = */.env, */*.env, */*/.env, _backup/*, _system/nas-backup.sh,
+    homelab/htpasswd, */.sauvegardes/*env*, */.sauvegardes/*toml*, */.sauvegardes/*.key*
 script_parefeu = /usr/local/bin/firewall-docker-rules.sh
 
 [stockage]

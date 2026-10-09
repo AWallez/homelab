@@ -1,0 +1,48 @@
+# Taches planifiees du homelab, relevees sur le NAS le 09/10/2026.
+#
+# Le depot versionne les scripts, cron les lance : sans ce fichier, la cadence
+# de chaque collecteur n etait ecrite nulle part ailleurs que dans la crontab
+# du NAS. A reporter a la main en cas de reinstallation (ce fichier n est pas
+# lu par le systeme).
+#
+# ⚠️ DEUX CRONTABS. Les collecteurs tournent en root (lecture de /proc, de
+# Docker, des journaux systeme) ; les favicons et la rotation des journaux sous
+# le compte utilisateur. Piege UGOS : `crontab -` echoue pour l utilisateur,
+# installer par `sudo crontab -u <compte> <fichier>`.
+# ⚠️ Le PATH de cron ne contient pas /usr/sbin : chaque script pose le sien.
+# ⚠️ `flock -n` SANS `&` : detache, flock mourrait et liberait le verrou.
+
+# ---- crontab root (`sudo crontab -e`) ---------------------------------------
+# Collecte principale, deux fois par minute ; un passage lent est saute, jamais empile.
+* * * * * flock -n /tmp/collect.lock /volume1/docker/homelab/collect.sh >/dev/null 2>&1
+* * * * * sleep 30; flock -n /tmp/collect.lock /volume1/docker/homelab/collect.sh >/dev/null 2>&1
+# Valeurs vivantes toutes les 2 s (boucle interne de 57 s).
+* * * * * flock -n /tmp/fast.lock /volume1/docker/homelab/collect-fast.sh >/dev/null 2>&1
+# Historique : 24 h au pas de 10 min, et la serie fine a la minute.
+* * * * * /volume1/docker/homelab/history-build.sh >/dev/null 2>&1
+* * * * * /volume1/docker/homelab/history-min.sh >/dev/null 2>&1
+# Collecteur systeme (memoire, stockage, securite, acces, reseau…) et sa passe de nuit.
+* * * * * /usr/bin/python3 /volume1/docker/homelab/systeme.py >> /volume1/docker/homelab/systeme.log 2>&1
+30 3 * * * /usr/bin/python3 /volume1/docker/homelab/systeme.py --nuit >> /volume1/docker/homelab/systeme.log 2>&1
+# Conteneurs et alertes ntfy toutes les 5 min.
+*/5 * * * * /volume1/docker/homelab/containers.sh >/dev/null 2>&1
+*/5 * * * * /volume1/docker/homelab/alerts.sh >/dev/null 2>&1
+# Veilleurs des demandes deposees par la page (mises a jour, PC).
+* * * * * /volume1/docker/homelab/maj-watch.sh >/dev/null 2>&1
+* * * * * /bin/bash /volume1/docker/homelab/pc-watch.sh
+# SMART une fois par jour, inventaire des versions, base de localisation le 3 du mois.
+20 6 * * * /volume1/docker/homelab/smart.sh >/dev/null 2>&1
+7 8 * * * /volume1/docker/tools/versions.sh >/dev/null 2>&1
+40 4 3 * * /volume1/docker/homelab/maj-geoip.sh >> /var/log/maj-geoip.log 2>&1
+# Ratios chez les trackers, une fois par heure (script prive, hors depot).
+17 * * * * flock -n /tmp/ratios.lock /volume1/docker/homelab/ratios.sh >/dev/null 2>&1
+
+# ---- crontab utilisateur (`sudo crontab -u <compte> <fichier>`) -------------
+# Icones des raccourcis : veilleur inotify (relance toutes les 5 min s il est
+# tombe), filet a la minute, passe complete a 4 h 30.
+@reboot /usr/bin/flock -n /tmp/surveille-raccourcis.lock /bin/sh /volume1/docker/homelab/surveille-raccourcis.sh >> /volume1/docker/homelab/favicons.log 2>&1
+*/5 * * * * /usr/bin/flock -n /tmp/surveille-raccourcis.lock /bin/sh /volume1/docker/homelab/surveille-raccourcis.sh >> /volume1/docker/homelab/favicons.log 2>&1
+* * * * * [ /volume1/docker/homelab/www/data/shortcuts.json -nt /volume1/docker/homelab/www/icons/sites/index.json ] && /usr/bin/python3 /volume1/docker/homelab/favicons.py >> /volume1/docker/homelab/favicons.log 2>&1
+30 4 * * * /usr/bin/python3 /volume1/docker/homelab/favicons.py >> /volume1/docker/homelab/favicons.log 2>&1
+# Rotation des journaux, le dimanche a 5 h (voir rotation-journal.sh).
+0 5 * * 0 /volume1/docker/homelab/rotation-journal.sh

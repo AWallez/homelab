@@ -1,32 +1,33 @@
-/* CONFIGURATION DU SITE — la seule piece qui differe d une installation a
- * l autre. Chargee AVANT `app.js`, qui n en sait rien et reste identique partout.
+/* LES TRENTE CARTES — identiques sur toutes les installations, deployees comme
+ * `app.js`. Ce qui identifie une installation (adresse, ports, liens, trackers,
+ * raccourcis, piles, taches) est dans `site.js`, charge avant ce fichier.
+ * Separation du 08/10/2026 : voir l en-tete de `site.js`.
  *
  * ⚠️ L ORDRE COMPTE : la table appelle `go()` au moment ou elle se CONSTRUIT, pas
  * au rendu. Les aides de mise en forme (`hero`, `graphe`, `leg`…) ne sont
  * appelees qu a l interieur des fonctions flechees `r: d => …`, donc bien plus
  * tard, et vivent dans `app.js`.
- *
- * ⚠️ TOUT CE QUI IDENTIFIE L INSTALLATION EST ICI, et nulle part ailleurs :
- * adresse du serveur, ports, noms de services, liens internes et externes,
- * raccourcis, prefixes des piles de conteneurs, et la liste des cartes qui
- * portent une TACHE plutot qu un incident.
- * ⚠️ Le script de deploiement ne doit jamais ecraser ce fichier.
  */
 
-/* ---- IP et go --------------------------------------------------- */
-const IP = "nas.local";
-const go = (n) => `http://${IP}:${n}`;
+/* Compteurs sur 24 h quand le collecteur les donne, cumules sinon (08/10/2026). */
+const coup24 = (l) => l.coup24 != null ? l.coup24 : l.coup;
+const err24 = (w) => w.err24 != null ? w.err24 : w.err;
+/* Au-dela, un ratio de tracker est tenu pour fige (meme seuil que `ratios.sh`). */
+const RATIO_FIGE = 6 * 3600;
+
+/* Separateur des raisons d une carte. Espace INSECABLE avant le point median :
+   une raison qui passe a la ligne ne commence jamais par « · ». */
+const SEP = "\u00a0· ";
+
+/* Trackers dont le ratio FRAIS est sous le minimum qu ils exigent. */
+const ratiosBas = (q) => { const now = Date.now() / 1000;
+  return (q.tr || []).filter(x => { const v = x.vr, c = TRACKERS.seuils[x.n];
+    return !!v && !v.inf && !!c && !!v.ts && now - v.ts <= RATIO_FIGE && +v.r < c; }); };
+
+/* Lien local d une carte, d apres son port dans `site.js`. */
+const go = (n) => `http://${IP}:${PORTS[n]}`;
 
 /* ---- Reglages des cartes systeme -------------------------------- */
-/* Ce que le lien reseau du serveur DOIT negocier. En dessous, la carte passe
-   a l ambre : un lien retombe a 1 Gb/s ou des trames geantes perdues se
-   voient sinon seulement au debit, quand on s en sert. */
-const LIEN = { vit: 10000, mtu: 9000 };
-
-/* Ecart minimal entre deux sauvegardes, tel que le script de sauvegarde
-   l applique : sert a annoncer l heure de la prochaine copie. */
-const SAUVEGARDE_ECART_H = 20;
-
 /* Sous ce regime, un ventilateur est considere comme arrete ou mourant. */
 const VENTILO_MIN = 300;
 
@@ -70,6 +71,74 @@ const etatMemoire = (m) => {
   return ["À l'aise", "ok"];
 };
 
+/* Certificats de tous les domaines publics (`certs`, collect.sh, 09/10/2026) :
+   `j` jours restants, `v` duree de vie en jours, tous deux null si illisible.
+   ⚠️ EN RETARD SOUS LE QUART DE SA DUREE DE VIE, et non sous un nombre de jours
+   fixe : Caddy renouvelle au tiers, un certificat qui descend sous le quart a
+   donc rate son renouvellement depuis des jours. La regle suit la duree de vie
+   et tiendra quand les autorites raccourciront leurs certificats ; le plancher
+   de 7 jours couvre une duree de vie absurde. Expire (`j` <= 0) : rouge. */
+const etatCerts = (l) => {
+  const c = Array.isArray(l) ? l : [];
+  const retard = c.filter(x => x.j != null && x.j < Math.max(7, (x.v || 0) / 4));
+  return { tous: c, retard, expires: retard.filter(x => x.j <= 0),
+           illisibles: c.filter(x => x.j == null) };
+};
+/* Le moniteur UptimeRobot d un lien public (`ur`, collect.sh, 09/10/2026) :
+   celui dont l hote sonde est celui du lien. C est la seule mesure prise HORS
+   de la maison : le test du site par collect.sh part du NAS et n en sort pas.
+   null sans cle, sans moniteur pour ce lien, ou quand le releve a plus d une
+   heure : une vue perimee de l exterieur ne dit plus rien. */
+const dehors = (d, lien) => {
+  const u = d.ur;
+  if (!u || !Array.isArray(u.m) || !lien || Date.now() / 1000 - (u.t || 0) > 3600) return null;
+  const h = String(lien).replace(/^[a-z]+:\/\//, "").replace(/[/:?].*$/, "");
+  return u.m.find(m => m.h === h) || null;
+};
+/* 8 « semble hors ligne » et 9 « hors ligne » chez UptimeRobot. */
+const horsDehors = (m) => !!m && (m.s === 8 || m.s === 9);
+/* Les pastilles « vu d Internet » : l etat et la disponibilite sur 30 jours en
+   une seule, et une seconde PENDANT une coupure seulement (« coupé depuis… ») :
+   la carte Site est etroite, l historique des coupures est dans le pourcentage
+   et dans le journal. */
+const pastDehors = (m) => {
+  if (!m) return [];
+  const pc = (v) => v >= 99.995 ? "100 %" : vg(v.toFixed(2)) + " %";
+  const r30 = (m.r || [])[2];
+  const b = m.b && Date.now() / 1000 - m.b.t < 7 * 86400 ? m.b : null;
+  const etat = horsDehors(m) ? "injoignable vu d'Internet" : m.s === 2 ? "vu d'Internet" : "vu d'Internet : en pause";
+  return [[etat + (r30 != null ? " · " + pc(r30) + " sur 30 j" : ""),
+           horsDehors(m) || (r30 != null && r30 < 99.5) ? "wn" : m.s === 2 ? "ok" : ""],
+          b && horsDehors(m) ? ["coupé depuis " + duree((Date.now() / 1000 - b.t) / 60), "wn"] : null];
+};
+
+/* Le sous-domaine suffit dans une ligne de controle : « vault », pas
+   « vault.example.com ». Le domaine nu reste entier. */
+const hoteCourt = (h) => { const p = String(h).split("."); return p.length > 2 ? p[0] : h; };
+/* Les lignes de la carte Securite : une seule quand tout va bien, une par
+   probleme sinon. */
+const lignesCerts = (l) => {
+  const c = etatCerts(l);
+  if (!c.tous.length) return [];
+  const noms = (a) => a.map(x => hoteCourt(x.h)).slice(0, 3).join(", ") + (a.length > 3 ? "…" : "");
+  const r = [], proches = c.retard.filter(x => x.j > 0);
+  if (c.expires.length === 1) r.push(["wn", "Certificat de " + hoteCourt(c.expires[0].h) + " expiré", "domaine inaccessible"]);
+  else if (c.expires.length) r.push(["wn", pluriel(c.expires.length, "certificat expiré", "certificats expirés"), noms(c.expires)]);
+  if (proches.length === 1)
+    r.push(["wn", "Certificat de " + hoteCourt(proches[0].h) + " : expire dans " + pluriel(proches[0].j, "jour"),
+            "renouvellement en échec"]);
+  else if (proches.length)
+    r.push(["wn", pluriel(proches.length, "certificat", "certificats") + " bientôt expirés", noms(proches)]);
+  if (c.illisibles.length)
+    r.push(["wn", pluriel(c.illisibles.length, "certificat illisible", "certificats illisibles"), noms(c.illisibles)]);
+  if (!r.length) {
+    const min = Math.min(...c.tous.map(x => x.j));
+    r.push(["ok", "Certificats : " + pluriel(c.tous.length, "domaine", "domaines") + " à jour",
+            "échéance la plus proche : " + pluriel(min, "jour")]);
+  }
+  return r;
+};
+
 /* ---- GROUPS ----------------------------------------------------- */
 const GROUPS = [
   { n: "Portfolio", i: "briefcase", s: [
@@ -99,7 +168,7 @@ const GROUPS = [
        ⚠️ Un bloc qui grandit puis un bloc colle en bas : `.vizb` distribue son
        espace libre par `margin-top: auto`, et deux blocs qui le reclament se le
        partageraient en creusant un trou au milieu. */
-    { n: "Site", d: "Vitrine freelance", x: "https://example.com", ic: "portfolio",
+    { n: "Site", d: "Vitrine freelance", x: LIENS["Site"], ic: "portfolio",
       r: d => {
         const s = d.site || {};
         const ms = Hn(d, "site").filter(v => v > 0);
@@ -117,30 +186,41 @@ const GROUPS = [
         return (s.ok === false
                  ? hero("injoignable", "le site ne répond pas", "cr")
                  : hero((s.ms || 0) + " ms", "de temps de réponse"))
+          /* ⚠️ TROIS PASTILLES AU PLUS (09/10/2026) : la carte etroite en
+             portait six. Mediane et pointe sur une seule ; le CERTIFICAT est
+             parti dans la carte Securite, qui suit les huit domaines avec un
+             seuil plus juste (et un certificat proche de sa fin allumait les
+             deux cartes pour un seul probleme) ; la derniere coupure vue
+             d Internet ne s affiche que pendant la coupure (`pastDehors`). */
           + past([bilan,
-                  med ? ["médiane " + med + " ms"] : null,
-                  pic ? ["pointe " + pic + " ms", pic >= 1000 ? "wn" : ""] : null,
-                  [s.cert < 0 ? "certificat ?" : "certificat " + s.cert + " j",
-                   s.cert >= 0 && s.cert < 15 ? "wn" : ""]]);
+                  med ? ["médiane " + med + " ms" + (pic ? SEP + "pointe " + pic + " ms" : ""),
+                         pic >= 1000 ? "wn" : ""] : null,
+                  /* Vu d Internet par UptimeRobot (09/10/2026) : le temps de
+                     reponse ci-dessus est mesure depuis le NAS. */
+                  ...pastDehors(dehors(d, LIENS["Site"]))]);
       },
-      warn: d => (d.site || {}).ok === false
-              || ((d.site || {}).cert >= 0 && d.site.cert < 15) },
-    { n: "CRM", d: "Suivi des leads et prospects", u: go(8100), ic: "crm",
+      /* Injoignable : la vitrine est hors service, c est ROUGE. Injoignable VU
+         D INTERNET seulement (box, DNS, redirection de port) : ambre, le NAS le
+         sert encore mais plus personne dehors ne l atteint. */
+      warn: d => (d.site || {}).ok === false ? "crit" : horsDehors(dehors(d, LIENS["Site"])),
+      pourquoi: d => (d.site || {}).ok === false ? "le site ne répond pas" : "injoignable vu d'Internet" },
+    { n: "CRM", ko: "crm", d: "Suivi des leads et prospects", u: go("CRM"), ic: "crm",
       r: d => { const c = d.crm || {};
-        return hero(d.leads, "leads non lus<br>en attente de réponse", d.leads > 0 ? "wn" : "")
+        return hero(d.leads, (d.leads > 1 ? "leads non lus" : "lead non lu") + "<br>en attente de réponse", d.leads > 0 ? "ta" : "")
           + past([[(c.tot || 0) + " reçus"], [(c.traites || 0) + " traités"],
                   [c.age > 0 ? "il y a " + c.age + " j" : c.age === 0 ? "aujourd'hui" : "—"]]); },
-      warn: d => d.leads > 0 },
-    { n: "Statistiques", d: "Fréquentation du portfolio", u: go(3002),
-      x: "https://stats.example.com", ic: "stats", w: 2,
+      warn: d => d.leads > 0,
+      pourquoi: d => pluriel(d.leads, "lead non lu", "leads non lus") },
+    { n: "Statistiques", ko: "umami", d: "Fréquentation du portfolio", u: go("Statistiques"),
+      x: LIENS["Statistiques"], ic: "stats", w: 2,
       r: d => `<div class="stat7"><div class="s7n"><b>${d.umami.visitors}</b>`
             + `<span>visiteurs<br>sur 7 jours</span></div>`
             + jours(d.umami.serie) + `</div>`
             + past([[d.umami.visits + " visites"], [d.umami.views + " pages vues"]]) },
   ]},
   { n: "Médiathèque", i: "play", s: [
-    { n: "Jellyfin", d: "Films, séries et animés", u: go(8096),
-      x: "https://media.example.com", ic: "jellyfin", w: 2,
+    { n: "Jellyfin", ko: "jellyfin", d: "Films, séries et animés", u: go("Jellyfin"),
+      x: LIENS["Jellyfin"], ic: "jellyfin", w: 2,
       r: d => d.jellyfin.now
             ? calme("<b>" + esc(d.jellyfin.now) + "</b>", "bl")
               + past([[d.jellyfin.films + " films"], [d.jellyfin.series + " séries"],
@@ -148,14 +228,15 @@ const GROUPS = [
             : mesures([[d.jellyfin.films, "films"], [d.jellyfin.series, "séries"],
                        [d.jellyfin.episodes, "épisodes"]])
               + `<div class="note">Aucune lecture en cours</div>` },
-    { n: "Seerr", d: "Demandes de la famille", u: go(5055),
-      x: "https://demandes.example.com", ic: "seerr", w: 2,
+    { n: "Seerr", ko: "seerr", d: "Demandes de la famille", u: go("Seerr"),
+      x: LIENS["Seerr"], ic: "seerr", w: 2,
       r: d => (d.seerr.pending > 0
-            ? hero(d.seerr.pending, "demandes<br>en attente", "wn")
+            ? hero(d.seerr.pending, (d.seerr.pending > 1 ? "demandes" : "demande") + "<br>en attente", "ta")
             : calme("<b>Aucune demande en attente</b>"))
             + past([[d.seerr.done + " complétées", d.seerr.pending > 0 ? "" : "ok"]]),
-      warn: d => d.seerr.pending > 0 },
-    { n: "FanKarr", d: "Catalogue FanKai", u: go(9898), x: "https://catalogue.example.com",
+      warn: d => d.seerr.pending > 0,
+      pourquoi: d => pluriel(d.seerr.pending, "demande") },
+    { n: "FanKarr", d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
       ic: "fankarr.ico", mini: 1, w: 4,
       /* Ce que FanKarr a telecharge (06/10/2026, demande : « des
          pastilles comme Sonarr et Radarr »), lu par systeme.py dans ses fichiers
@@ -188,7 +269,7 @@ GROUPS.push(
 
        Les captures par indexeur remplacent le pourcentage — elles bougent tous
        les jours et disent quelle source alimente reellement la bibliotheque. */
-    { n: "Prowlarr", d: "Indexeurs et trackers", u: go(9696), ic: "prowlarr",
+    { n: "Prowlarr", ko: "prowlarr", d: "Indexeurs et trackers", u: go("Prowlarr"), ic: "prowlarr",
       r: d => {
         const p = d.prowlarr || {};
         const ix = p.ix || [];
@@ -202,31 +283,37 @@ GROUPS.push(
                         + nb(tot) + " captures")
                 : `<div class="note">Prowlarr ne répond pas</div>`)
           + past(ko > 0 && p.msg
-                 ? [[p.msg, "wn"]]
+                 ? [[prowlarrFr(p.msg), "wn"]]
                  : ix.map(x => [x.n + " " + nb(x.g)]));
       },
       warn: d => ((d.prowlarr || {}).sante || 0) > 0
-              || !(((d.prowlarr || {}).ix) || []).length },
-    { n: "Radarr", d: "Films — recherche et import", u: go(7878), ic: "radarr",
+              || !(((d.prowlarr || {}).ix) || []).length,
+      pourquoi: d => { const p = d.prowlarr || {};
+        if (!(p.ix || []).length) return "aucun indexeur actif";
+        return p.msg ? prowlarrFr(p.msg) : pluriel(p.sante, "problème signalé", "problèmes signalés"); } },
+    { n: "Radarr", ko: "radarr", d: "Films — recherche et import", u: go("Radarr"), ic: "radarr",
       r: d => (d.radarr.mis > 0
-            ? hero(d.radarr.mis, "films manquants<br>à retrouver", "wn")
+            ? hero(d.radarr.mis, (d.radarr.mis > 1 ? "films manquants" : "film manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun film manquant</b>"))
             + past([[d.radarr.q ? d.radarr.q + " en téléchargement" : "aucun téléchargement"],
                     [Go(d.radarr.size)]]),
-      warn: d => d.radarr.mis > 0 },
-    { n: "Sonarr", d: "Séries — recherche et import", u: go(8989), ic: "sonarr",
+      warn: d => d.radarr.mis > 0,
+      pourquoi: d => pluriel(d.radarr.mis, "film manquant", "films manquants") },
+    { n: "Sonarr", ko: "sonarr", d: "Séries — recherche et import", u: go("Sonarr"), ic: "sonarr",
       r: d => (d.sonarr.mis > 0
-            ? hero(d.sonarr.mis, "épisodes manquants<br>à retrouver", "wn")
+            ? hero(d.sonarr.mis, (d.sonarr.mis > 1 ? "épisodes manquants" : "épisode manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun épisode manquant</b>"))
             + past([[d.sonarr.q ? d.sonarr.q + " en téléchargement" : "aucun téléchargement"],
                     [Go(d.sonarr.size)]]),
-      warn: d => d.sonarr.mis > 0 },
-    { n: "Bazarr", d: "Sous-titres français", u: go(6767), ic: "bazarr",
+      warn: d => d.sonarr.mis > 0,
+      pourquoi: d => pluriel(d.sonarr.mis, "épisode manquant", "épisodes manquants") },
+    { n: "Bazarr", ko: "bazarr", d: "Sous-titres français", u: go("Bazarr"), ic: "bazarr",
       r: d => (d.bazarr.ep + d.bazarr.mv > 0
-            ? hero(d.bazarr.ep + d.bazarr.mv, "médias<br>sans sous-titre", "wn")
-              + past([[d.bazarr.ep + " épisodes"], [d.bazarr.mv + " films"]])
+            ? hero(d.bazarr.ep + d.bazarr.mv, (d.bazarr.ep + d.bazarr.mv > 1 ? "médias" : "média") + "<br>sans sous-titre", "ta")
+              + past([[pluriel(d.bazarr.ep, "épisode")], [pluriel(d.bazarr.mv, "film")]])
             : calme("<b>Tout est sous-titré</b> — 0 film, 0 épisode en attente")),
-      warn: d => d.bazarr.ep + d.bazarr.mv > 0 },
+      warn: d => d.bazarr.ep + d.bazarr.mv > 0,
+      pourquoi: d => nb(d.bazarr.ep + d.bazarr.mv) + " sans sous-titre" },
     /* La carte repond a quatre questions et delegue le detail a sa fenetre.
 
        EST-CE QUE CA MARCHE. Le bandeau porte `connection_status`.
@@ -255,8 +342,8 @@ GROUPS.push(
        COMBIEN, ET QUELLE TAILLE. La derniere pastille ; la repartition par
        categorie vit dans la fenetre, ou elle a la place de signifier quelque
        chose. */
-    { n: "qBittorrent", d: "Client torrent, sous VPN", u: go(8080), ic: "qbittorrent",
-      w: 2,
+    { n: "qBittorrent", d: "Client torrent, sous VPN", u: go("qBittorrent"), ic: "qbittorrent",
+      w: 2, per: 1,
       r: d => {
         const q = d.qbit || {};
         const E = {
@@ -267,12 +354,9 @@ GROUPS.push(
           disconnected: ["Hors ligne", "qBittorrent n'atteint pas le réseau", 0],
         }[q.etat] || ["État inconnu", "qBittorrent n'a pas répondu", 0];
 
-        /* SILHOUETTE et non graphique. Un debit n est pas une mesure qu on
-           vient lire ici, juste une activite qu on constate — la valeur du
-           moment est deja dans la legende. `aire()` n a ni axe ni etiquette,
-           et le CSS le plafonne a 88 px.
-           Bonus : plus d etiquettes, donc plus de probleme de lisibilite a
-           demi-largeur, ou elles seraient tombees a 8 px. */
+        /* GRAPHE ET NON PLUS SILHOUETTE depuis le 09/10/2026 :
+           la silhouette sans axe d avant ne se lisait pas comme les graphes
+           des cartes Systeme et Temperatures. Voir `act` plus bas. */
         const ul = Hn(d, "qbul"), dl = Hn(d, "qbdl");
           /* ⚠️ `ul` et `dl` RESTENT grossiers : `envoye` multiplie leur somme
              par 600, la duree d un creneau de 10 min. Lus fins sans changer
@@ -290,9 +374,14 @@ GROUPS.push(
            d un jour a l autre, une fenetre « depuis le demarrage » ne se compare a
            rien. Sous-estime le premier jour, comme tout ce qui lit l historique. */
         const envoye = ul.reduce((a, b) => a + b, 0) * 600;
-        const act = aire([{ v: ulf, c: "#34c759", n: "envoyé" }, { v: dlf, c: "#4d97ee", n: "reçu" }],
-                           null, { u: "dbt", ts: Hf(d, "t") })
-          || `<div class="note">Activité en cours d'enregistrement</div>`;
+        /* Le graphe des cartes Systeme et Temperatures (09/10/2026) : echelle chiffree, reperes, heures. Une heure sur trois
+           comme les autres graphes (09/10/2026, il y en avait une sur six). */
+        const act = ulf.length > 1 || dlf.length > 1
+          ? graphe([{ v: Hp(d, "qBittorrent", "qbdl"), c: "#4d97ee", n: "reçu" },
+                    { v: Hp(d, "qBittorrent", "qbul"), c: "#34c759", n: "envoyé" }],
+                   { f: MoAxe, u: "dbt", ts: Hp(d, "qBittorrent", "t"),
+                     alt: "Activité de qBittorrent " + surP("qBittorrent") })
+          : `<div class="note">Activité en cours d'enregistrement</div>`;
 
         /* UN RATIO EST UNE COMPARAISON DE DEUX VOLUMES, autant la dessiner
            telle quelle. Les deux barres partagent l echelle du plus grand
@@ -322,14 +411,13 @@ GROUPS.push(
            bruit ; au-dela c est l information principale, car un cookie de session
            expire sans prevenir et un chiffre mort ne doit pas passer pour frais. */
         const AGE = 3 * 3600;
-        const SEUIL = { Vega: 0.8 };
-        /* Ordre d affichage, du tracker le plus suivi au moins suivi.
-           ⚠️ CE N EST PAS L ORDRE ALPHABETIQUE, qui donnait Vega, Altair, Orion :
-           il classe sur une initiale, ce qui ne veut rien dire pour qui lit la
-           carte. Un tracker absent de cette liste passe APRES, par ordre
-           alphabetique — il apparait donc quand meme, au lieu de disparaitre ou
-           de squatter la premiere place. */
-        const ORDRE = ["Altair", "Vega", "Orion"];
+        const SEUIL = TRACKERS.seuils;
+        /* Ordre d affichage, du tracker le plus suivi au moins suivi (`site.js`).
+           ⚠️ CE N EST PAS L ORDRE ALPHABETIQUE : il classe sur une initiale, ce
+           qui ne veut rien dire pour qui lit la carte. Un tracker absent de cette
+           liste passe APRES, par ordre alphabetique — il apparait donc quand
+           meme, au lieu de disparaitre ou de squatter la premiere place. */
+        const ORDRE = TRACKERS.ordre;
         const rang = (x) => { const k = ORDRE.indexOf(x); return k < 0 ? ORDRE.length : k; };
         /* NI JAUGE NI BARRE, ET C EST VOULU. Une barre a besoin d une reference ; les
            trois ratios depassent la leur, donc les trois barres restaient pleines
@@ -341,38 +429,46 @@ GROUPS.push(
            ⚠️ L age REMPLACE le qualificatif au lieu de s y ajouter : les deux cote
            a cote faisaient passer la ligne sur deux hauteurs, et un releve perime
            rend son seuil accessoire. */
-        const lig = (n, v, cl, q) => `<div class="trk" data-lec="ratio" data-q="${esc(q)}"><span class="n">${esc(n)}</span>`
+        const lig = (n, v, cl, q, a) => `<div class="trk" data-lec="ratio" data-q="${esc(q)}"><span class="n">${esc(n)}</span>`
           + `<b${cl ? ` class="${cl}"` : ""}>${esc(v)}</b>`
+          + (a ? `<small class="age">${esc(a)}</small>` : "")
           + `</div>`;
         const trk = (t) => {
           const v = t.vr;
           if (!v) return lig(t.n, "—", "", "pas de relevé");
           const age = v.ts ? Math.max(0, Math.floor(Date.now() / 1000) - v.ts) : 0;
           const vu = age > AGE ? "relevé il y a " + duree(age / 60) : "";
+          /* ⚠️ AU-DELA DE 6 H, LA VALEUR EST GRISEE ET SON AGE ECRIT (08/10/2026).
+             Un tracker est reste « 159,30 » en vert pendant plus d une semaine, serveur
+             du tracker en panne : l age n etait que dans l infobulle, invisible au
+             doigt. 6 h comme l alerte de fraicheur de `ratios.sh`. */
+          if (age > RATIO_FIGE) return lig(t.n, v.inf ? "∞" : vg((+v.r).toFixed(2)), "vieux",
+            "relevé il y a " + anciennete(age) + " · valeur figée", "il y a " + anciennete(age));
           if (v.inf) return lig(t.n, "∞", "ok inf",
             vu || vol(v.up || 0) + " envoyés, rien reçu");
           const c = SEUIL[t.n] || 1;
+          /* Les volumes du tracker accompagnent la reference dans l infobulle :
+             un ratio se lit mieux avec ce qu il divise. */
+          const vols = (v.up != null && v.down != null)
+            ? vol(v.up) + " envoyés, " + vol(v.down) + " reçus" : "";
+          const ref = SEUIL[t.n] ? "minimum " + vg(c.toFixed(2))
+                                 : "cible " + vg(c.toFixed(2));
           return lig(t.n, vg((+v.r).toFixed(2)), v.r >= c ? "ok" : "wn",
-            vu || (SEUIL[t.n] ? "minimum " + vg(c.toFixed(2))
-                              : "cible " + vg(c.toFixed(2))));
+            vu || (vols ? vols + " · " + ref : ref));
         };
-        const trs = (q.tr || []).slice()
+        /* ⚠️ LES TRACKERS PUBLICS SONT ECARTES (09/10/2026) : sans compte, ils
+           n ont aucun ratio a relever et s affichaient en « — », deux a quatre
+           selon la passe, ce qui faisait varier la hauteur de la carte. Reste
+           un tracker suivi (`site.js`) ou qui a un releve. */
+        const trs = (q.tr || []).filter(t => t.vr || ORDRE.includes(t.n))
           .sort((a, b) => rang(a.n) - rang(b.n)
                          || (a.n || "").localeCompare(b.n || ""));
         return etatv(E[0], E[1], !!E[2])
           + `<div class="duo tro"><div>`
-            + `<div class="trkh">Activité sur 24 h</div>`
+            + `<div class="trkh">Activité ${surP("qBittorrent")}</div>`
             + leg([["envoi", "#34c759", Mo(q.ul || 0)],
                    ["réception", "#4d97ee", Mo(q.dl || 0)]])
             + act
-            /* ⚠️ MEME AXE QUE LA COURBE, et ce n est pas un hasard : `aire` etale les
-               145 points sur toute la largeur, `echelle` place ses reperes en
-               pourcentage de cette meme largeur, et les deux lisent la meme serie.
-               Aucune conversion, donc aucun decalage possible.
-               ⚠️ Pas de SIX heures ici, contre trois sur les rubans : la
-               silhouette occupe environ 256 px, ou huit reperes seraient espaces
-               de 32 px pour des etiquettes de 24. Le pas suit la largeur. */
-            + echelle(Hn(d, "t"), 6)
           + `</div><div>`
             + (trs.length ? `<div class="trkh">Ratio chez les trackers</div>`
                           + `<div class="trks">` + trs.map(trk).join("") + `</div>`
@@ -398,7 +494,20 @@ GROUPS.push(
                   pic > 0 ? ["pointe " + Mo(pic)] : null,
                   q.nb > 0 ? [nb(q.nb) + " torrents"] : null]);
       },
-      warn: d => ((d.qbit || {}).etat || "") !== "connected" },
+      /* Un ratio FRAIS sous le minimum exige par son tracker est une alerte
+         (08/10/2026) : c est lui qui menace le compte. Une cible (1,00 sans
+         minimum declare) ne l est pas, ni une valeur figee. */
+      warn: d => { const q = d.qbit || {};
+        /* Hors ligne : plus rien ne se telecharge ni ne se partage, ROUGE. */
+        if ((q.etat || "") === "disconnected") return "crit";
+        if ((q.etat || "") !== "connected") return true;
+        return ratiosBas(q).length > 0; },
+      pourquoi: d => { const q = d.qbit || {};
+        if (q.etat === "disconnected") return "hors ligne";
+        if (q.etat === "firewalled") return "port entrant injoignable";
+        if (q.etat !== "connected") return "le client n'a pas répondu";
+        return ratiosBas(q).map(x => "ratio " + x.n + " à " + vg((+x.vr.r).toFixed(2))
+          + ", minimum " + vg(TRACKERS.seuils[x.n].toFixed(2))).join(SEP); } },
     /* La carte etait VIDE — un en-tete, un voyant — et occupait la largeur entiere
        pour ne rien dire, alors que cross-seed tourne en permanence et qu un arret
        silencieux passerait inapercu.
@@ -433,7 +542,12 @@ GROUPS.push(
       },
       warn: d => { const c = d.cross || {};
         return (c.idxtot > 0 && c.idx < c.idxtot)
-            || (!!c.run && (Date.now() / 1000 - c.run) > 172800); } },
+            || (!!c.run && (Date.now() / 1000 - c.run) > 172800); },
+      pourquoi: d => { const c = d.cross || {}, l = [];
+        if (c.idxtot > 0 && c.idx < c.idxtot) l.push(pluriel(c.idx, "indexeur joignable", "indexeurs joignables") + " sur " + c.idxtot);
+        if (c.run && Date.now() / 1000 - c.run > 172800)
+          l.push("aucune recherche depuis " + anciennete(Date.now() / 1000 - c.run));
+        return l.join(SEP); } },
     /* Ruban de joignabilite du port entrant.
        La carte ne disait que l etat de L INSTANT. Or le port clignotait — Proton
        le reattribuait 264 fois en 24 heures, toujours sous le meme numero, avec un
@@ -456,8 +570,8 @@ GROUPS.push(
        ⚠️ `vpn.open` vient d un vrai test TCP vers l IP publique du tunnel, PAS du
        contenu de `/tmp/gluetun/forwarded_port`, qui annoncait un numero pendant
        que Proton ne routait plus rien. */
-    { n: "VPN", d: "Tunnel le fournisseur VPN du client torrent", ic: "proton-vpn", w: 4,
-      x: "https://example.com/vpn",
+    { n: "VPN", d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
+      x: LIENS["VPN"],
       r: d => {
         const up = Hn(d, "vpnup");
         const vus = up.filter(x => x > 0).length;   // créneaux de 10 min mesurés
@@ -481,9 +595,15 @@ GROUPS.push(
                      : "aucun port",
                    d.vpn.open ? "ok" : "wn"],
                   bilan,
-                  ["le fournisseur VPN · WireGuard"]]);
+                  [VPN.nom + " · WireGuard"]]);
       },
-      warn: d => d.vpn.health !== "healthy" || !d.vpn.ip || !d.vpn.open },
+      /* Tunnel tombe : qBittorrent n a plus de sortie, ROUGE. Port ferme : le
+         client marche mais ne partage plus, ambre. */
+      warn: d => d.vpn.health !== "healthy" || !d.vpn.ip ? "crit" : !d.vpn.open,
+      pourquoi: d => d.vpn.health === "starting" ? "tunnel en cours de démarrage"
+        : d.vpn.health !== "healthy" ? "tunnel en défaut"
+        : !d.vpn.ip ? "aucune adresse de sortie"
+        : d.vpn.port ? "port " + d.vpn.port + " injoignable" : "aucun port attribué" },
   ]},
 );
 
@@ -521,7 +641,7 @@ GROUPS.push(
         const base = (n) => /postgres|db$|broker/.test(n);
         return (u.total > 0
               ? hero(u.total, "conteneur" + (u.total > 1 ? "s" : "")
-                     + "<br>à mettre à jour", "wn")
+                     + "<br>à mettre à jour", "ta")
               : calme("<b>Tout est à jour</b> — "
                       + (u.verifies || 0) + " conteneurs vérifiés"))
           + past(att.slice(0, 4).map(x => [x.n + (base(x.n) ? " · base" : ""),
@@ -532,8 +652,16 @@ GROUPS.push(
                         : "contrôle du " + (u.maj || "?"),
                         vieux ? "wn" : ""]]));
       },
-      warn: d => (d.updates || {}).total > 0
-              || (d.updates || {}).age < 0 || (d.updates || {}).age > 36 },
+      /* ⚠️ « incident » ET NON « true » pour l outil arrete (08/10/2026) : la
+         carte est une TACHE (des versions attendent), et une tache ne fait pas
+         virer le fond. Un outil de mise a jour mort, lui, est un incident : sans
+         cette distinction, il n atteignait jamais la barre du haut. */
+      warn: d => { const u = d.updates || {};
+        return u.age < 0 || u.age > 36 ? "incident" : u.total > 0; },
+      pourquoi: d => { const u = d.updates || {};
+        return u.age < 0 ? "contrôle des versions introuvable"
+          : u.age > 36 ? "aucun contrôle des versions depuis " + duree(u.age * 60)
+          : nb(u.total) + " en attente"; } },
     /* L age seul disait DE QUAND date la copie, pas si elle est complete ni si
        elle se relira. Depuis le 05/10/2026 le script de sauvegarde laisse un
        compte rendu : ce qui est parti, la duree, les versions gardees, et le
@@ -578,7 +706,11 @@ GROUPS.push(
           + (on ? "" : ", si le PC est allumé");
       },
       warn: d => d.backup.h > 48 || d.backup.h < 0
-              || ((d.backup || {}).chk || {}).ok === false },
+              || ((d.backup || {}).chk || {}).ok === false,
+      pourquoi: d => { const b = d.backup || {};
+        return b.h < 0 ? "aucune sauvegarde enregistrée"
+          : b.h > 48 ? "dernière copie il y a " + anciennete(b.h * 3600)
+          : "contrôle d'intégrité en échec"; } },
     /* Fusion de « Systeme » et « Memoire et swap ».
        Les deux cartes pesaient 758 px pour repeter la barre du haut : trois
        anneaux donnaient processeur, memoire et temperature aux memes valeurs a la
@@ -594,15 +726,20 @@ GROUPS.push(
        seuil.
        Regle generale : toute condition de `warn` doit avoir de quoi s expliquer
        sur la carte, au moins au moment ou elle se declenche. */
-    { n: "Système", d: "Processeur, mémoire et swap sur 24 h", ic: "systeme", w: 2,
+    /* `per` : selecteur « 24 h · 7 j » dans l en-tete (voir `PERIODES`), d ou
+       une description sans duree. */
+    { n: "Système", d: "Processeur, mémoire et swap", ic: "systeme", w: 2, per: 1,
       r: d => leg([["processeur", "#4d97ee", pct(d.nas.cpu)],
                    ["mémoire", "#34c759", pct(d.nas.ram)],
                    ["swap", "#ffb340", pct(d.nas.swap)]])
-            + graphe([{ v: Hf(d, "cpu"), c: "#4d97ee", n: "processeur" },
-                      { v: Hf(d, "ram"), c: "#34c759", n: "mémoire" },
-                      { v: Hf(d, "swap"), c: "#ffb340", n: "swap" }],
-                     { max: 100, f: pct, seuil: 60, u: "%", ts: Hf(d, "t"),
-                       alt: "Processeur, mémoire et swap sur 24 h" })
+            + graphe([{ v: Hp(d, "Système", "cpu"), c: "#4d97ee", n: "processeur" },
+                      { v: Hp(d, "Système", "ram"), c: "#34c759", n: "mémoire" },
+                      { v: Hp(d, "Système", "swap"), c: "#ffb340", n: "swap" }],
+                     /* Le seuil de 60 % est celui du SWAP : trace dans sa couleur.
+                        En rouge, sous la memoire qui le depasse toute la journee,
+                        il faisait lire une alerte permanente (09/10/2026). */
+                     { f: pct, seuil: 60, seuilC: "#ffb340", u: "%", ts: Hp(d, "Système", "t"),
+                       alt: "Processeur, mémoire et swap " + surP("Système") })
             + past([["charge " + vg(d.nas.load) + " → " + vg(d.nas.load5 || d.nas.load)
                       + " → " + vg(d.nas.load15 || d.nas.load) + " / " + (d.nas.cores || 1),
                      d.nas.load >= (d.nas.cores || 1) ? "wn" : ""],
@@ -614,8 +751,8 @@ GROUPS.push(
                       ? [To(d.nas.disktot * d.nas.disk / 100) + " / "
                          + To(d.nas.disktot) + " To", d.nas.disk >= 92 ? "wn" : ""]
                       : null,
-                    d.nas.temp >= 70
-                      ? [Math.round(d.nas.temp) + " °C", d.nas.temp >= 85 ? "wn" : ""]
+                    tempCpu(d) >= SEUILS_T.cpu[0]
+                      ? [Math.round(tempCpu(d)) + " °C sur 5 min", "wn"]
                       : null,
                     /* ⚠️ AMBRE SOUS UNE HEURE, et c est tout l interet. La valeur
                        elle-meme n apprend rien — 24 jours ou 25, peu importe. Ce
@@ -629,8 +766,13 @@ GROUPS.push(
                             : Math.round(d.nas.uptime / 60) + " min"),
                          d.nas.uptime < 3600 ? "wn" : ""]
                       : null]),
-      warn: d => d.nas.ram >= 90 || d.nas.disk >= 92 || d.nas.temp >= 85
-              || d.nas.swap >= 60 },
+      /* La temperature n allume plus cette carte (08/10/2026) : 85 °C allumait
+         deux pastilles, celle-ci et Temperatures, pour un seul evenement. */
+      /* Volume plein a 97 % : les ecritures vont echouer, ROUGE. */
+      warn: d => d.nas.disk >= 97 ? "crit" : d.nas.ram >= 90 || d.nas.disk >= 92 || d.nas.swap >= 60,
+      pourquoi: d => [d.nas.disk >= 92 ? "volume plein à " + pct(d.nas.disk) : "",
+                      d.nas.ram >= 90 ? "mémoire à " + pct(d.nas.ram) : "",
+                      d.nas.swap >= 60 ? "swap à " + pct(d.nas.swap) : ""].filter(Boolean).join(SEP) },
     /* Temperatures des capteurs materiels.
        UNE CARTE A PART parce que l unite differe : des degres ne peuvent pas
        rejoindre l axe en pourcentage de la carte Systeme. C est le critere le plus
@@ -652,7 +794,7 @@ GROUPS.push(
        Son libelle vient de SMART : une capacite parle davantage que « nvme2 ».
        ⚠️ Les series ajoutees en cours de route n ont pas d historique anterieur :
        `d0` les fait demarrer la ou leurs donnees commencent. */
-    { n: "Températures", d: "Capteurs matériels sur 24 h", ic: "temp", w: 2,
+    { n: "Températures", d: "Capteurs matériels", ic: "temp", w: 2, per: 1,
       r: d => {
         const L = dern(d);
         const dg = v => v > 0 ? Math.round(v) + " °C" : "—";
@@ -671,13 +813,13 @@ GROUPS.push(
         return leg([["processeur", "#ff9f0a", dg(d.nas.temp)]]
               .concat(dq.map((n, i) => [nomDisque(n), TEINTES[i % TEINTES.length], dg(val(n))]))
               .concat([["réseau 10 GbE", "#c07bf0", dg(val("eth0"))]]))
-          + graphe([{ v: Hf(d, "temp"), c: "#ff9f0a", n: "processeur" }]
-              .concat(dq.map((n, i) => ({ v: Hf(d, n), c: TEINTES[i % TEINTES.length], d0: 1, n: nomDisque(n) })))
-              .concat([{ v: Hf(d, "eth0"), c: "#c07bf0", d0: 1, n: "réseau 10 GbE" }]),
-              { min: 30, max: 90, f: dg, u: "°C", ts: Hf(d, "t"),
-                alt: "Températures du NAS sur 24 h" })
-          + past([["pointe processeur " + mx("temp") + " °C", mx("temp") >= 85 ? "wn" : ""],
-                  ["pointe disques " + pd + " °C", pd >= 70 ? "wn" : ""],
+          + graphe([{ v: Hp(d, "Températures", "temp"), c: "#ff9f0a", n: "processeur" }]
+              .concat(dq.map((n, i) => ({ v: Hp(d, "Températures", n), c: TEINTES[i % TEINTES.length], d0: 1, n: nomDisque(n) })))
+              .concat([{ v: Hp(d, "Températures", "eth0"), c: "#c07bf0", d0: 1, n: "réseau 10 GbE" }]),
+              { min: 30, f: dg, u: "°C", ts: Hp(d, "Températures", "t"),
+                alt: "Températures du NAS " + surP("Températures") })
+          + past([["pointe processeur " + mx("temp") + " °C", mx("temp") >= SEUILS_T.cpu[1] ? "wn" : ""],
+                  ["pointe disques " + pd + " °C", pd >= SEUILS_T.nvme[0] ? "wn" : ""],
                   [val("eth0") > 0
                     ? "réseau ~" + Math.round(val("eth0")) + " °C · normal par conception"
                     : "réseau : relevé en cours"],
@@ -688,8 +830,21 @@ GROUPS.push(
       warn: d => {
         const L = dern(d);
         const val = n => { const i = col(d, n); return i < 0 ? 0 : (L[i] || 0); };
-        return d.nas.temp >= 85 || disquesHist(d).some(n => val(n) >= 70)
+        /* Au second seuil, le materiel se protege en ralentissant : ROUGE. */
+        if (tempCpu(d) >= SEUILS_T.cpu[1] || disquesHist(d).some(n => val(n) >= SEUILS_T.nvme[1])) return "crit";
+        return tempCpu(d) >= SEUILS_T.cpu[0] || disquesHist(d).some(n => val(n) >= SEUILS_T.nvme[0])
           || (d.nas.fans || []).some(f => f.rpm < VENTILO_MIN);
+      },
+      pourquoi: d => {
+        const L = dern(d);
+        const val = n => { const i = col(d, n); return i < 0 ? 0 : (L[i] || 0); };
+        const l = [];
+        if (tempCpu(d) >= SEUILS_T.cpu[0]) l.push("processeur à " + Math.round(tempCpu(d)) + " °C");
+        disquesHist(d).filter(n => val(n) >= SEUILS_T.nvme[0])
+          .forEach(n => l.push("disque " + n.slice(4) + " à " + Math.round(val(n)) + " °C"));
+        (d.nas.fans || []).filter(f => f.rpm < VENTILO_MIN)
+          .forEach(f => l.push("ventilateur à " + nb(f.rpm) + " tr/min"));
+        return l.join(SEP);
       } },
     /* LA CARTE DE LA MEMOIRE VIVE, refaite le 05/10/2026 sur maquette (melange
        des versions A et B retenu). Elle repond d abord a la question
@@ -715,7 +870,7 @@ GROUPS.push(
           restent dans la barre de composition.
        ⚠️ Ni courbe (la carte « Systeme » trace deja memoire et swap sur 24 h) ni
        liste des conteneurs : elle passe dans la fenetre, ouverte au clic.
-       ⚠️ RETIRES A LA DEMANDE D ALEXIS : la pastille de pression (elle compte
+       ⚠️ RETIRES VOLONTAIREMENT : la pastille de pression (elle compte
        toujours dans le verdict, sans s afficher) et le bandeau des redemarrages
        automatiques des conteneurs. */
     { n: "Mémoire", d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
@@ -755,9 +910,18 @@ GROUPS.push(
               return [k[0] + (x.n ? " (" + x.n + ")" : ""),
                       moGo(x.mo) + (x.t > 0 ? " + " + moGo(x.t) + " tassés" : ""),
                       x.mo / M * 100, (x.t || 0) / M * 100, k[2],
-                      x.p > x.mo * 1.3 ? "pointe " + moGo(x.p) : k[1]]; }));
+                      x.p > x.mo * 1.3 ? "pointe " + moGo(x.p) : k[1]]; }))
+          /* Processus tues faute de memoire sur 24 h (09/10/2026), avec leurs noms. */
+          + (m.oom ? past([m.oom.n24 > 0
+              ? [pluriel(m.oom.n24, "processus tué", "processus tués") + " faute de mémoire sur 24 h"
+                 + ((m.oom.ev || []).length ? " : " + [...new Set(m.oom.ev.map(e => e[1]))].slice(0, 3).join(", ") : ""), "wn"]
+              : ["aucun processus tué faute de mémoire sur 24 h", "ok"]]) : "");
       },
-      warn: d => !!d.mem && d.mem.tot > 0 && etatMemoire(d.mem)[1] === "cr" },
+      /* « Saturee » : le systeme attend la memoire, tout ralentit. ROUGE. */
+      warn: d => !!d.mem && d.mem.tot > 0 && (etatMemoire(d.mem)[1] === "cr" ? "crit"
+        : ((d.mem.oom || {}).n24 || 0) > 0),
+      pourquoi: d => etatMemoire(d.mem)[1] === "cr" ? "mémoire saturée, " + moGo(d.mem.dispo) + " disponibles"
+        : pluriel(d.mem.oom.n24, "processus tué", "processus tués") + " faute de mémoire sur 24 h" },
     /* FUSION de « Disques NVMe » et « Espace disque » le 05/10/2026, puis
        refonte sur maquette : l organisation du stockage, grappe par grappe,
        avec ses disques dedans. Voir `grappesDisques`.
@@ -770,10 +934,22 @@ GROUPS.push(
        « Systeme ». */
     { n: "Stockage", d: "Volumes et disques", ic: "ssd", w: 2,
       r: d => grappesDisques(d.smart, { ESPACE, ROLES }),
+      /* Disque en echec, miroir degrade, corruption detectee : ROUGE. L usure
+         seule laisse le temps de commander un disque : ambre. */
       warn: d => { const s = d.smart || {};
-        return (s.d || []).some(x => !x.ok || x.erreurs > 0 || x.usure >= 80)
-          || (s.grappes || []).some(g => g.err > 0 || (!g.sys && g.n < g.att)); } },
-    { n: "Uptime Kuma", d: "Sondes et alertes", u: go(3001), ic: "uptime-kuma", w: 4,
+        if ((s.d || []).some(x => !x.ok || x.erreurs > 0)
+            || (s.grappes || []).some(g => g.err > 0 || (!g.sys && g.n < g.att))) return "crit";
+        return (s.d || []).some(x => x.usure >= 80); },
+      pourquoi: d => { const s = d.smart || {}, l = [];
+        (s.d || []).forEach(x => {
+          if (!x.ok) l.push("disque " + x.n + " en échec");
+          else if (x.erreurs > 0) l.push("disque " + x.n + " : " + pluriel(x.erreurs, "erreur"));
+          else if (x.usure >= 80) l.push("disque " + x.n + " usé à " + x.usure + " %"); });
+        (s.grappes || []).forEach(g => {
+          if (g.err > 0) l.push(pluriel(g.err, "erreur") + " de données");
+          if (!g.sys && g.n < g.att) l.push("miroir dégradé, " + g.n + " disque sur " + g.att); });
+        return l.join(SEP); } },
+    { n: "Uptime Kuma", ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
       /* ⚠️ NI `calme` NI `hero` ICI, et c'est un retrait délibéré. Le bandeau
          vert répétait l'addition des trois lignes — « 28 sondes en ligne »
          quand elles disent 7, 10 et 11 — et n'apportait en propre que la
@@ -797,9 +973,32 @@ GROUPS.push(
                   d.kuma.pc ? ["stabilité " + vg(d.kuma.pc) + " %"] : null]);
       },
       warn: d => d.kuma.down > 0
-             || ((d.kuma.groupes || []).some(g => (+g.ko || 0) + (+g.att || 0) > 0)) },
-    { n: "ntfy", d: "Notifications push", u: go(8081),
-      x: "https://notifs.example.com", ic: "ntfy", mini: 1, w: 4 },
+             || ((d.kuma.groupes || []).some(g => (+g.ko || 0) + (+g.att || 0) > 0)),
+      pourquoi: d => { const gs = d.kuma.groupes || [];
+        const ko = gs.reduce((a, g) => a + (+g.ko || 0), 0) || (+d.kuma.down || 0);
+        const att = gs.reduce((a, g) => a + (+g.att || 0), 0);
+        return [ko ? pluriel(ko, "sonde") + " hors ligne" : "",
+                att ? pluriel(att, "sonde") + " en attente" : ""].filter(Boolean).join(SEP); } },
+    /* Ce qui s est passe sur 7 jours, toutes sources confondues (09/10/2026) :
+       mises a jour, conteneurs, sondes, site, VPN, reseau, sauvegardes,
+       connexions depuis Internet. Construit par `systeme.py` (`journal`). Les
+       cinq derniers ici, la semaine entiere au clic (`popJournal`).
+       ⚠️ PAS D ALERTE : chaque incident allume deja sa propre carte. Le journal
+       dit QUAND, pas QUOI faire. */
+    { n: "Journal", d: "Ce qui s'est passé sur 7 jours", ic: "journal", w: 4, pop: "journal",
+      r: d => (d.journal || []).length ? evts(d.journal, 5)
+        : `<div class="note">Journal en cours de constitution</div>`,
+      note: d => { const l = d.journal || [];
+        if (!l.length) return null;
+        const inc = l.filter(e => e[3] === "wn" || e[3] === "cr").length;
+        return pluriel(l.length, "événement") + " sur 7 jours · "
+          + (inc ? pluriel(inc, "incident") : "aucun incident"); } },
+    /* Injoignable vu d Internet (UptimeRobot) : le telephone ne recoit plus
+       rien, puisqu il vient chercher chaque message sur ce domaine. */
+    { n: "ntfy", d: "Notifications push", u: go("ntfy"),
+      x: LIENS["ntfy"], ic: "ntfy", mini: 1, w: 4,
+      warn: d => horsDehors(dehors(d, LIENS["ntfy"])),
+      pourquoi: () => "injoignable vu d'Internet, les notifications n'arrivent plus" },
   ]},
   /* Ajoute le 05/10/2026, inspire de deux applications de l App Center essayees
      puis retirees. Quatre cartes de meme largeur, donc deux rangees pleines. */
@@ -826,13 +1025,29 @@ GROUPS.push(
              plutot que d afficher « null regles en place ». */
           : s.fw == null ? ["in", "Pare-feu : contrôle en attente", ""]
           : ["ok", "Pare-feu : " + s.fw + " règles en place", "liste blanche"],
+          ...lignesCerts(d.certs),
           [s.refus > 20 ? "wn" : "ok", nb(s.refus) + " connexion" + pl(s.refus, "s") + " refusée" + pl(s.refus, "s"), "sur 24 h"],
-          s.ext > 0 ? ["wn", s.ext + " connexion" + pl(s.ext, "s") + " depuis Internet", "sur 24 h"]
+          s.ext > 0 ? ["in", s.ext + " connexion" + pl(s.ext, "s") + " depuis Internet", "voir la carte Accès"]
                     : ["ok", "Aucun accès depuis Internet", "réseau local et VPN"],
           s.ssh ? ["in", "SSH ouvert", "se referme seul"] : ["ok", "SSH fermé", ""]]);
       },
-      warn: d => { const s = d.secu || {};
-        return (s.ouverts || []).length > 0 || (s.manq || []).length > 0 || s.ext > 0 || s.refus > 20; } },
+      warn: d => { const s = d.secu || {}, c = etatCerts(d.certs);
+        /* Un certificat EXPIRE coupe le domaine pour tous ses visiteurs : rouge. */
+        if (c.expires.length) return "crit";
+        /* `ext` n allume plus cette carte (08/10/2026) : un meme evenement allumait
+           Securite ET Acces. C est Acces qui le porte, avec d ou il vient. */
+        return (s.ouverts || []).length > 0 || (s.manq || []).length > 0 || s.refus > 20
+          || c.retard.length > 0 || c.illisibles.length > 0; },
+      pourquoi: d => { const s = d.secu || {}, o = (s.ouverts || []).length, m = (s.manq || []).length;
+        const c = etatCerts(d.certs);
+        return [c.expires.length ? pluriel(c.expires.length, "certificat expiré", "certificats expirés") : "",
+                c.retard.length - c.expires.length > 0
+                  ? pluriel(c.retard.length - c.expires.length, "certificat non renouvelé", "certificats non renouvelés") : "",
+                c.illisibles.length ? pluriel(c.illisibles.length, "certificat illisible", "certificats illisibles") : "",
+                o ? pluriel(o, "fichier sensible lisible", "fichiers sensibles lisibles") + " par tous" : "",
+                m ? pluriel(m, "réseau Docker", "réseaux Docker") + " sans règle de pare-feu" : "",
+                s.refus > 20 ? pluriel(s.refus, "connexion refusée", "connexions refusées") + " sur 24 h" : ""]
+          .filter(Boolean).join(SEP); } },
     /* Qui est connecte maintenant, et les dernieres connexions. Les adresses
        arrivent TRADUITES EN NOMS par le collecteur (« PC fixe », le nom d un
        client WireGuard) ; une adresse hors du reseau local et du VPN passe a
@@ -841,7 +1056,7 @@ GROUPS.push(
     { n: "Accès", d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
       r: d => { const a = d.acces;
         if (!a) return `<div class="note">Relevé des connexions en attente</div>`;
-        return intertitre("Connectés maintenant") + sessions(a.now || [])
+        return depuisInternet(a) + intertitre("Connectés maintenant") + sessions(a.now || [])
           + intertitre("Dernières connexions")
           + ((a.log || []).length ? journal(a.log, 4) : `<div class="note">Aucune connexion enregistrée</div>`);
       },
@@ -850,13 +1065,14 @@ GROUPS.push(
         return nb(a.n) + " connexion" + (a.n > 1 ? "s" : "") + " sur 24 h · "
           + (a.ext > 0 ? a.ext + " depuis Internet" : "toutes depuis le réseau local ou le VPN");
       },
-      warn: d => (d.acces || {}).ext > 0 },
+      warn: d => (d.acces || {}).ext > 0,
+      pourquoi: d => pluriel(d.acces.ext, "connexion") + " depuis Internet sur 24 h" },
     /* Le lien du serveur vers le switch. Il passe a l ambre s il negocie moins
        que prevu, s il perd ses trames geantes, ou s il est TOMBE ET REMONTE
        depuis le demarrage : c est ce que produit un switch qui se fige.
        La courbe est la colonne `reseau`, collectee depuis l origine et jamais
        affichee jusqu ici : recu et envoye confondus. */
-    { n: "Réseau local", d: "Lien du serveur vers le switch", ic: "reseau", w: 2,
+    { n: "Réseau local", d: "Lien du serveur vers le switch", ic: "reseau", w: 2, per: 1,
       r: d => { const l = d.lan;
         if (!l) return `<div class="note">Relevé du lien en attente</div>`;
         const v = Hf(d, "reseau"), red = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
@@ -866,47 +1082,79 @@ GROUPS.push(
                                                                        : "trames de " + l.mtu + " octets"),
                             lent || petit ? "wn" : "")
                      : hero("Coupé", "le serveur n'a plus de lien réseau", "cr"))
-          + (aire([{ v, c: "#4d97ee", n: "trafic" }], null, { u: "dbt", ts: Hf(d, "t") })
-             || `<div class="note">Trafic en cours d'enregistrement</div>`)
+          /* LEGENDE ET GRAPHE DES CARTES SYSTEME ET TEMPERATURES (09/10/2026) : la valeur du moment dans la legende, une
+             echelle chiffree a gauche, des lignes de repere, les heures dessous.
+             La silhouette d avant n avait que son sommet et zero. */
+          /* La legende et les pastilles restent sur 24 h, seul le trace suit
+             la periode choisie. */
+          + (v.length > 1
+             ? leg([["reçu et envoyé", "#4d97ee", Mo(v[v.length - 1])]])
+               + graphe([{ v: Hp(d, "Réseau local", "reseau"), c: "#4d97ee", n: "trafic" }],
+                        { f: MoAxe, u: "dbt", ts: Hp(d, "Réseau local", "t"),
+                          alt: "Trafic du lien " + surP("Réseau local") })
+             : `<div class="note">Trafic en cours d'enregistrement</div>`)
           + past([v.length ? ["moyenne " + Mo(red)] : null,
                   v.length ? ["pointe " + Mo(Math.max(...v))] : null,
-                  [l.coup > 0 ? l.coup + " coupure" + (l.coup > 1 ? "s" : "") + " depuis le démarrage"
-                              : "lien stable depuis le démarrage", l.coup > 0 ? "wn" : "ok"],
+                  /* Sur 24 h (`coup24`) : compte depuis le demarrage, une seule coupure
+                     gardait la carte ambre jusqu au redemarrage suivant. */
+                  coup24(l) > 0 ? [coup24(l) + " coupure" + (coup24(l) > 1 ? "s" : "") + " sur 24 h", "wn"]
+                              : ["lien stable sur 24 h", "ok"],
                   [nb(l.err) + " erreur" + (l.err > 1 ? "s" : "") + " reçue" + (l.err > 1 ? "s" : ""),
                    l.err > 10000 ? "wn" : ""]]);
       },
       warn: d => { const l = d.lan;
-        return !!l && (!l.up || (l.vit > 0 && l.vit < LIEN.vit) || l.mtu < LIEN.mtu || l.coup > 0); } },
+        if (l && !l.up) return "crit";
+        return !!l && ((l.vit > 0 && l.vit < LIEN.vit) || l.mtu < LIEN.mtu || coup24(l) > 0); },
+      pourquoi: d => { const l = d.lan;
+        if (!l.up) return "le serveur n'a plus de lien réseau";
+        return [l.vit > 0 && l.vit < LIEN.vit ? "lien négocié à " + (l.vit >= 1000 ? vg(l.vit / 1000) + " Gb/s" : l.vit + " Mb/s") : "",
+                l.mtu < LIEN.mtu ? "trames de " + l.mtu + " octets" : "",
+                coup24(l) > 0 ? pluriel(coup24(l), "coupure") + " sur 24 h" : ""].filter(Boolean).join(SEP); } },
     /* La premiere question d une panne : le serveur, la box ou l operateur ?
        Le debit est celui de TOUTE LA MAISON, puisque c est la box qui le mesure.
        ⚠️ LE REDEMARRAGE DE LA BOX EST AMBRE MAIS NE DECLENCHE RIEN. Il explique
        une panne du port du VPN, qui en suit souvent un, mais c est la carte VPN
        qui porte cette alerte : le dire deux fois teindrait la page pour un
        evenement deja passe. */
-    { n: "Internet", d: "Fibre et box de la maison", ic: "internet", w: 2,
+    { n: "Internet", d: "Fibre et box de la maison", ic: "internet", w: 2, per: 1,
       r: d => { const w = d.wan;
         if (!w) return `<div class="note">Relevé de la box en attente</div>`;
         const gb = k => k >= 1000000 ? vg(k / 1000000) + " Gb/s" : Math.round(k / 1000) + " Mb/s";
         const recent = w.boxup >= 0 && w.boxup < 86400;
+        const h = (w.h || []).filter(x => Array.isArray(x) && x.length >= 3);
+        const rx = h.map(x => +x[1] || 0), tx = h.map(x => +x[2] || 0);
+        /* Sur 7 jours : `wan.h7`, une ligne par heure close, meme forme. */
+        const g = sept("Internet") ? (w.h7 || []).filter(x => Array.isArray(x) && x.length >= 3) : h;
         return (w.ok ? hero("En ligne", "fibre · " + (w.v6 ? "IPv4 et IPv6" : "IPv4 seul")
                                         + "<br>abonnement " + gb(w.cd) + " ↓ · " + gb(w.cu) + " ↑")
                      : hero("Hors ligne", "la box n'a plus de connexion Internet", "cr"))
-          + (aire([{ v: Hf(d, "wantx"), c: "#34c759", n: "envoyé" },
-                   { v: Hf(d, "wanrx"), c: "#4d97ee", n: "reçu" }], null, { u: "dbt", ts: Hf(d, "t") })
-             || `<div class="note">Débit en cours d'enregistrement</div>`)
+          /* ⚠️ LA COURBE VIENT DE `wan.h` (09/10/2026), releve par systeme.py :
+             [debut du creneau de 10 min, recu, envoye], en octets par seconde.
+             Elle lisait des colonnes `wanrx`/`wantx` de l historique qui
+             n existaient qu en demonstration : en production, la carte n a
+             jamais affiche de courbe. */
+          + (h.length > 1
+             ? leg([["reçu", "#4d97ee", Mo(rx[rx.length - 1])], ["envoyé", "#34c759", Mo(tx[tx.length - 1])]])
+               + graphe([{ v: g.map(x => +x[1] || 0), c: "#4d97ee", n: "reçu" },
+                         { v: g.map(x => +x[2] || 0), c: "#34c759", n: "envoyé" }],
+                        { f: MoAxe, u: "dbt", ts: g.map(x => x[0]), alt: "Débit de la box " + surP("Internet") })
+             : `<div class="note">Débit en cours d'enregistrement</div>`)
           + past([w.lat > 0 ? ["latence " + w.lat + " ms", w.lat > 40 ? "wn" : ""] : ["latence : sans réponse", "wn"],
                   ["box en service depuis " + anciennete(w.boxup), recent ? "wn" : ""],
-                  [w.err > 0 ? nb(w.err) + " erreurs fibre" : "0 erreur fibre", w.err > 0 ? "wn" : "ok"]]);
+                  [err24(w) > 0 ? nb(err24(w)) + " erreurs fibre sur 24 h" : "aucune erreur fibre sur 24 h",
+                   err24(w) > 0 ? "wn" : "ok"]]);
       },
-      warn: d => { const w = d.wan; return !!w && (!w.ok || w.err > 0); } },
+      warn: d => { const w = d.wan; if (w && !w.ok) return "crit"; return !!w && err24(w) > 0; },
+      pourquoi: d => !d.wan.ok ? "la box n'a plus de connexion Internet"
+        : pluriel(err24(d.wan), "erreur fibre", "erreurs fibre") + " sur 24 h" },
   ]},
   { n: "Bureau et infrastructure", i: "server", s: [
-    { n: "AdGuard Home", d: "DNS filtrant du réseau", u: go(3000), ic: "adguard-home", w: 2,
+    { n: "AdGuard Home", ko: "adguard", d: "DNS filtrant du réseau", u: go("AdGuard Home"), ic: "adguard-home", w: 2,
       r: d => { const t = d.adguard.q ? d.adguard.b / d.adguard.q * 100 : 0;
         return jauge(vg(t.toFixed(1)) + " %", "des requêtes bloquées", t, "var(--swn)")
           + past([[nb(d.adguard.q) + " req."], [nb(d.adguard.b) + " bloq."],
                   [d.adguard.lat + " ms", d.adguard.lat <= 20 ? "ok" : "wn"]]); } },
-    { n: "WireGuard", d: "VPN d'accès distant", u: go(51821), ic: "wireguard", w: 2,
+    { n: "WireGuard", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
       // Tuiles plutôt que lignes : dix appareils tiennent sur deux rangées au
       // lieu de dix. Grille calibrée à 68 px pour conserver au moins deux
       // colonnes même dans une carte étroite — à 84 px elle tombait à une seule
@@ -960,27 +1208,13 @@ GROUPS.push(
                    p.on ? "ok" : perdu ? "wn" : ""]]);
       },
       warn: d => { const p = d.pc || {};
-        return !p.on && (!p.vu || Math.floor(Date.now() / 1000) - p.vu > 86400); } },
+        return !p.on && (!p.vu || Math.floor(Date.now() / 1000) - p.vu > 86400); },
+      pourquoi: d => { const p = d.pc || {};
+        return !p.vu ? "jamais vu sur le réseau"
+          : "injoignable depuis " + anciennete(Math.floor(Date.now() / 1000) - p.vu); } },
     { n: "Vaultwarden", d: "Coffre-fort de mots de passe",
-      x: "https://coffre.example.com", ic: "vaultwarden", mini: 1, w: 2 },
-    { n: "Dockge", d: "Gestion des stacks Docker", u: go(5001), ic: "dockge", mini: 1, w: 2 },
+      x: LIENS["Vaultwarden"], ic: "vaultwarden", mini: 1, w: 2 },
+    { n: "Dockge", d: "Gestion des stacks Docker", u: go("Dockge"), ic: "dockge", mini: 1, w: 2 },
   ]},
 );
-
-/* ---- DEF -------------------------------------------------------- */
-const DEF = [{ name: "Documentation", url: "https://developer.mozilla.org/fr/" },
-  { name: "Forge",      url: "https://github.com/" },
-  { name: "Conteneurs", url: "https://hub.docker.com/" },
-  { name: "Veille",     url: "https://news.ycombinator.com/" }];
-
-/* ---- PILES et AUTRES -------------------------------------------- */
-const PILES = [
-  { k: "arr-",       n: "Stack *arr", c: "#3987e5" },
-  { k: "umami",      n: "Umami",      c: "#c98500" },
-  { k: "portfolio-", n: "Portfolio",  c: "#d55181" }
-];
-const AUTRES = { n: "Infrastructure", c: "#d95926" };
-
-/* ---- TACHES ----------------------------------------------------- */
-const TACHES = ["CRM", "Seerr", "Radarr", "Sonarr", "Bazarr", "Mises à jour"];
 

@@ -1,61 +1,86 @@
 #!/bin/bash
 # Purge l historique au-dela de 7 jours et genere www/history.json, sous-echantillonne.
-# Le CSV brut n est JAMAIS servi a la page : elle ne lit que le resume (~5 Ko).
+# Le CSV brut n est JAMAIS servi a la page : elle ne lit que le resume.
 set -uo pipefail
 SRC=/volume1/docker/homelab/history.csv
 OUT=/volume1/docker/homelab/www/history.json
+VERROU=/var/lock/homelab-history.lock
 NOW=$(date +%s)
 [ -s "$SRC" ] || exit 0
 
-# Rotation : awk sur du CSV traite 20 000 lignes en quelques millisecondes.
-awk -F, -v c=$((NOW - 604800)) '$1+0 >= c' "$SRC" > "$SRC.tmp" && mv "$SRC.tmp" "$SRC"
+# ⚠️ PURGE UNE FOIS PAR JOUR, PLUS A CHAQUE MINUTE (08/10/2026). Reecrire les
+# 2 Mo du CSV chaque minute faisait 2,8 Go d ecritures par jour, pour retirer
+# deux lignes a chaque fois. On ne purge plus que lorsque la plus vieille ligne
+# depasse 8 jours : environ une fois par jour. La page, elle, ne lit que 7 jours.
+# ⚠️ SOUS VERROU, partage avec `collect.sh` qui AJOUTE a ce fichier : une ligne
+# ecrite entre la lecture d awk et le `mv` etait perdue sans bruit.
+PREM=$(head -c 32 "$SRC" | cut -d, -f1)
+case "$PREM" in ''|*[!0-9]*) PREM=0;; esac
+if [ "$PREM" -lt $((NOW - 691200)) ]; then
+  (
+    flock -w 10 9 || exit 0
+    awk -F, -v c=$((NOW - 604800)) '$1+0 >= c' "$SRC" > "$SRC.tmp" && mv "$SRC.tmp" "$SRC"
+  ) 9>"$VERROU"
+fi
 
 # Deux resolutions : 24 h au pas de 10 min, 7 jours au pas d une heure.
-# ⚠️ NC et la liste `champs` sont a tenir a jour quand collect.sh ajoute une
-# colonne. Le commentaire d origine promettait le contraire, a tort.
-# NC est passe de 13 a 16, puis a 18 le 24/08/2026 (nvme0, nvme1, eth0 PHY,
-# puis nvme2 et nvme3 pour les deux emplacements M.2 encore libres), puis a
-# 20 le meme jour (`site` et `siteup`, la sonde du site public), puis a 22
-# (`qbdl` et `qbul`, les debits de qBittorrent), puis a 23 (`vpnup`, la
-# joignabilite du port entrant du VPN, meme convention 1/2 que `siteup`).
+#
+# ⚠️ SEULES LES COLONNES QUE LA PAGE TRACE SONT PUBLIEES (08/10/2026). Le fichier
+# portait les 24 colonnes du CSV ; six n etaient lues par personne (disque,
+# charge et ses moyennes, lectures, ecritures), et la serie de 7 jours, 54 % du
+# fichier, ne sert qu a `siteup` et aux disques. Les nombres passent aussi a
+# quatre chiffres significatifs : un debit en octets n a pas besoin de ses
+# centimes.
+# ⚠️ LA SERIE DE 7 JOURS PORTE AUSSI LES COURBES DES CARTES (09/10/2026) :
+# processeur, memoire, swap, temperatures, reseau et qBittorrent, pour le
+# bouton « 7 j » de chaque graphe. Environ 8 Ko de plus.
+# ⚠️ `J` et `S` sont les NUMEROS DE COLONNE du CSV (1 = l heure), dans l ordre
+# d ecriture de collect.sh ; `NJ` et `NS` leurs noms, dans le meme ordre. La page
+# lit chaque serie PAR NOM (`champs`, `champs_s`) : ajouter une colonne ici ne
+# deplace rien. Toute colonne ajoutee a collect.sh doit etre ajoutee ICI pour
+# atteindre la page.
 #
 # ⚠️ Contrairement a `site`, ZERO EST UNE VALEUR LEGITIME pour un debit :
 # elle veut dire que rien ne transitait. Impossible donc de distinguer un
-# creneau sans mesure d un creneau au repos, et la courbe affichera une
-# ligne plate pendant les 24 heures qui precedent sa mise en service. Le
-# probleme se resorbe seul et ne se represente jamais ; il ne justifiait pas
-# la convention detournee retenue pour `siteup`.
-#
-# ⚠️ `siteup` vaut 1 (joignable) ou 2 (injoignable), jamais 0. La moyenne
-# d un creneau se lit donc a l envers de l intuition : 1,00 signifie que
-# tout allait bien, 2,00 que rien ne repondait, et 0 que la colonne n avait
-# AUCUNE mesure sur ce creneau. C est cette troisieme valeur qui justifie de
-# ne pas avoir choisi 0 pour la panne : la page ne pourrait pas les separer,
-# et peindrait en rouge les 24 heures precedant la mise en service.
+# creneau sans mesure d un creneau au repos.
+# ⚠️ `siteup` vaut 1 (joignable) ou 2 (injoignable), jamais 0 : la moyenne d un
+# creneau se lit 1,00 tout va bien, 2,00 rien ne repondait, et 0 AUCUNE mesure.
 awk -F, -v now="$NOW" '
-BEGIN { J=600; S=3600; NC=25 }
+BEGIN {
+  P=600; Q=3600
+  nj = split("2 3 5 7 12 13 14 15 16 17 18 19 20 21 22 23 24 25", J, " ")
+  split("cpu ram reseau temp swap nvme nvme0 nvme1 eth0 nvme2 nvme3 site siteup qbdl qbul vpnup kumaup nvme4", NJ, " ")
+  ns = split("14 15 17 18 20 25 2 3 5 7 12 16 21 22", S, " ")
+  split("nvme0 nvme1 nvme2 nvme3 siteup nvme4 cpu ram reseau temp swap eth0 qbdl qbul", NS, " ")
+}
 {
   t=$1+0
-  # Comptage PAR COLONNE et non global. Les lignes anterieures a l ajout d une
-  # mesure n ont pas le champ : les compter au denominateur diluerait la
-  # moyenne vers zero pendant 24 h. Meme protection le jour ou un capteur
-  # disparait — un disque retire ne doit pas fausser les autres series.
-  if (t >= now-86400) { b=int(t/J); for (i=2; i<=NC; i++) if ($i != "") { Jv[b,i]+=$i; Jn[b,i]++ } }
-  b=int(t/S); for (i=2; i<=NC; i++) if ($i != "") { Sv[b,i]+=$i; Sn[b,i]++ }
+  # Comptage PAR COLONNE et non global : les lignes anterieures a l ajout d une
+  # mesure n ont pas le champ, et diluer la moyenne vers zero fausserait 24 h.
+  # Un creneau existe s il a au moins une ligne avec la colonne 2 (cpu) : `Je`
+  # et `Se` les comptent A PART. ⚠️ Compter l existence dans `Sn[b,2]`, comme
+  # avant, doublait le compte du processeur des qu il est entre dans `S`, et
+  # sa moyenne sur 7 jours tombait de moitie.
+  if (t >= now-86400) { b=int(t/P); if ($2 != "") Je[b]++; for (k=1; k<=nj; k++) { i=J[k]; if ($i != "") { Jv[b,i]+=$i; Jn[b,i]++ } } }
+  b=int(t/Q); if ($2 != "") Se[b]++
+  for (k=1; k<=ns; k++) { i=S[k]; if ($i != "") { Sv[b,i]+=$i; Sn[b,i]++ } }
 }
-function bloc(nb, val, pas, deb, fin,   b, i, first) {
+function bloc(ex, nb, val, cols, n, pas, deb, fin,   b, k, i, first) {
   first=1
   for (b=deb; b<=fin; b++) {
-    if (nb[b,2] < 1) continue          # la colonne 2 (cpu) atteste du bloc
+    if (ex[b] < 1) continue
     if (!first) printf ","
     printf "[%d", b*pas
-    for (i=2; i<=NC; i++) printf ",%.2f", (nb[b,i] > 0 ? val[b,i]/nb[b,i] : 0)
+    for (k=1; k<=n; k++) { i=cols[k]; printf ",%.4g", (nb[b,i] > 0 ? val[b,i]/nb[b,i] : 0) }
     printf "]"
     first=0
   }
 }
+function noms(l, n,   k) { printf "[\"t\""; for (k=1; k<=n; k++) printf ",\"%s\"", l[k]; printf "]" }
 END {
-  printf "{\"j\":"; printf "["; bloc(Jn, Jv, J, int((now-86400)/J), int(now/J)); printf "]"
-  printf ",\"s\":"; printf "["; bloc(Sn, Sv, S, int((now-604800)/S), int(now/S)); printf "]"
-  printf ",\"champs\":[\"t\",\"cpu\",\"ram\",\"disque\",\"reseau\",\"charge\",\"temp\",\"lecture\",\"ecriture\",\"charge5\",\"charge15\",\"swap\",\"nvme\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"site\",\"siteup\",\"qbdl\",\"qbul\",\"vpnup\",\"kumaup\",\"nvme4\"]}\n"
+  printf "{\"j\":["; bloc(Je, Jn, Jv, J, nj, P, int((now-86400)/P), int(now/P)); printf "]"
+  printf ",\"s\":["; bloc(Se, Sn, Sv, S, ns, Q, int((now-604800)/Q), int(now/Q)); printf "]"
+  printf ",\"champs\":"; noms(NJ, nj)
+  printf ",\"champs_s\":"; noms(NS, ns)
+  printf "}\n"
 }' "$SRC" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" && chmod 644 "$OUT"

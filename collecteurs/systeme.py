@@ -25,14 +25,17 @@ Reglages propres a l installation : `systeme.conf`, a cote du script (voir
 """
 import calendar
 import configparser
+import datetime
 import fcntl
 import glob
 import ipaddress
 import json
+import mmap
 import os
 import re
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import time
@@ -250,12 +253,19 @@ def cgroups(etat):
     dt = MAINTENANT - prec.get("t", 0)
     neuf = {"t": MAINTENANT}
     feuilles = []
+    ooms = {}
     for d, sous, fichiers in os.walk(racine):
         if "memory.stat" not in fichiers:
             continue
         if any(os.path.exists(os.path.join(d, s, "memory.stat")) for s in sous):
             continue
         rel = os.path.relpath(d, racine)
+        # Processus tues faute de memoire dans ce groupe, depuis sa creation.
+        for l in lire(d + "/memory.events").splitlines():
+            if l.startswith("oom_kill "):
+                if int(l.split()[1]):
+                    ooms[rel] = int(l.split()[1])
+                break
         anon = 0
         for l in lire(d + "/memory.stat").splitlines():
             if l.startswith("anon "):
@@ -274,6 +284,18 @@ def cgroups(etat):
         if anon or sw:
             feuilles.append((rel, anon, sw, cpu))
     etat["cpu"] = neuf
+    # ⚠️ QUI A ETE TUE FAUTE DE MEMOIRE (09/10/2026). Le compteur de chaque groupe
+    # ne fait que monter : une hausse entre deux passages est un processus tue
+    # dans la minute, et le groupe dit lequel. Seuls les compteurs non nuls sont
+    # gardes : un groupe absent vaut zero s il existait deja au passage precedent
+    # (`prec`, qui les liste tous). Un groupe neuf avec un compteur deja positif
+    # n est pas date : il est ignore.
+    avant = etat.get("oomk", {})
+    ev = [e for e in etat.get("oom_ev", []) if MAINTENANT - e[0] < 7 * 86400]
+    for rel, v in ooms.items():
+        if rel in prec and v > avant.get(rel, 0):
+            ev.append([int(MAINTENANT), nom_feuille(rel, categorie(rel), conteneurs), v - avant.get(rel, 0)])
+    etat["oomk"], etat["oom_ev"] = ooms, ev
     groupes = {}
     for rel, anon, sw, cpu in feuilles:
         k = categorie(rel)
@@ -324,6 +346,12 @@ def pression():
     return (float(some.group(1)), float(some.group(2))) if some else (0.0, 0.0)
 
 
+def oom_total():
+    """Processus tues faute de memoire depuis le demarrage, tout le systeme."""
+    m = re.search(r"^oom_kill (\d+)", lire("/proc/vmstat"), flags=re.M)
+    return int(m.group(1)) if m else 0
+
+
 def memoire(etat):
     m = meminfo()
     z = zram()
@@ -341,6 +369,10 @@ def memoire(etat):
         "tasse": sum(x["orig"] for x in z), "zcap": sum(x["cap"] for x in z),
         "ssd": sum(x["used"] for x in sw), "psi": psi, "psi5": psi5,
         "ram": barrettes(etat), "g": g, "anon": anon,
+        # Sur 24 h : le compte du noyau (tous les processus), et les noms releves
+        # dans les groupes (voir `cgroups`).
+        "oom": {"n24": ecart24(etat, "oom", oom_total()),
+                "ev": [e for e in etat.get("oom_ev", []) if MAINTENANT - e[0] < 86400]},
         "det": {"zram": z, "swaps": [{k: v for k, v in x.items() if k != "chemin"} for x in sw],
                 "noyau": {"slab_r": mo(m.get("SReclaimable", 0)), "slab_u": mo(m.get("SUnreclaim", 0)),
                           "pt": mo(m.get("PageTables", 0)), "ks": mo(m.get("KernelStack", 0))},
@@ -369,19 +401,38 @@ def ventilateurs():
     return l
 
 
+# ---------------------------------------------------------------- compteurs cumules
+def ecart24(etat, cle, v):
+    """Ce qu un compteur CUMULE a pris sur les dernieres 24 h (08/10/2026).
+    Les coupures du lien comptent depuis le demarrage du NAS, les erreurs de la
+    fibre depuis celui de la box : une seule coupure gardait la carte ambre
+    jusqu au redemarrage suivant, des semaines plus tard. Un releve par heure
+    est garde dans l etat ; un compteur qui recule (redemarrage) repart de zero."""
+    h = etat.setdefault("cumul", {}).setdefault(cle, [])
+    if h and v < h[-1][1]:
+        h.clear()
+    if not h or MAINTENANT - h[-1][0] >= 3600:
+        h.append([int(MAINTENANT), v])
+    while len(h) > 1 and MAINTENANT - h[1][0] >= 86400:
+        h.pop(0)
+    return max(0, v - h[0][1])
+
+
 # ---------------------------------------------------------------- reseau local
-def lien():
+def lien(etat):
     i = CONF.get("reseau", "interface", fallback="eth0")
     d = "/sys/class/net/" + i
     if not os.path.isdir(d):
         note("lien : interface %s introuvable" % i)
         return None
     cc = entier(d + "/carrier_changes")
+    # Une montee au demarrage compte 1 ; chaque coupure ajoute une descente et
+    # une remontee.
+    coup = max(0, (cc - 1) // 2)
     return {"up": 1 if lire(d + "/operstate").strip() == "up" else 0,
             "vit": entier(d + "/speed"), "mtu": entier(d + "/mtu"),
-            # Une montee au demarrage compte 1 ; chaque coupure ajoute une
-            # descente et une remontee.
-            "coup": max(0, (cc - 1) // 2), "err": entier(d + "/statistics/rx_errors")}
+            "coup": coup, "coup24": ecart24(etat, "lan.coup", coup),
+            "err": entier(d + "/statistics/rx_errors")}
 
 
 # ---------------------------------------------------------------- internet
@@ -444,32 +495,241 @@ def internet(etat):
     except (KeyError, IndexError, TypeError):
         note("internet : reponse de la box inattendue")
         return None
+    # Adresses publiques de la maison, pour `securite_acces` : voir `maison()`.
+    wip = w.get("ip", {})
+    etat["maison"] = {"v4": wip.get("address", ""),
+                      "v6": [p["prefix"] for p in wip.get("ip6prefix") or [] if p.get("prefix")]}
     rx, tx = int(s["rx"]["bytes"]), int(s["tx"]["bytes"])
-    # Debit entre deux passages, puis moyenne par creneau de 10 min sur 24 h.
+    err = int(s["rx"].get("packetserrors", 0)) + int(s["tx"].get("packetserrors", 0))
+    # Debit entre deux passages, puis moyenne par creneau de 10 min sur 24 h,
+    # et par heure sur 7 jours (`h7`, bouton « 7 j » de la carte, 09/10/2026).
     # ⚠️ Les compteurs de la box ne bougent pas a chaque seconde : un debit
     # instantane vaudrait souvent 0, la moyenne du creneau lisse ces paliers.
     h = etat.setdefault("wan", {"prec": None, "creneau": None, "h": []})
+    if "h7" not in h:
+        # Premier passage : les heures closes se reconstruisent des creneaux de
+        # 10 min deja releves, plutot que d attendre une semaine. L heure en
+        # cours est laissee a l accumulateur, qui l ajoutera a sa cloture.
+        par, now_h = {}, int(MAINTENANT // 3600) * 3600
+        for t, r, e in h.get("h", []):
+            if t // 3600 * 3600 < now_h:
+                par.setdefault(t // 3600 * 3600, []).append((r, e))
+        h["h7"] = [[t, round(sum(x[0] for x in v) / len(v)), round(sum(x[1] for x in v) / len(v))]
+                   for t, v in sorted(par.items())]
     p = h.get("prec")
     if p and rx >= p[1] and tx >= p[2] and 0 < MAINTENANT - p[0] < 600:
-        c = int(MAINTENANT // 600) * 600
-        cr = h.get("creneau")
-        if not cr or cr[0] != c:
-            if cr and cr[3] > 0:
-                h["h"].append([cr[0], round(cr[1] / cr[3]), round(cr[2] / cr[3])])
-            cr = [c, 0, 0, 0]
-        cr[1] += rx - p[1]
-        cr[2] += tx - p[2]
-        cr[3] += MAINTENANT - p[0]
-        h["creneau"] = cr
-        h["h"] = h["h"][-144:]
+        for cle, serie, pas, garde in (("creneau", "h", 600, 144), ("heure", "h7", 3600, 168)):
+            c = int(MAINTENANT // pas) * pas
+            cr = h.get(cle)
+            if not cr or cr[0] != c:
+                if cr and cr[3] > 0:
+                    h.setdefault(serie, []).append([cr[0], round(cr[1] / cr[3]), round(cr[2] / cr[3])])
+                cr = [c, 0, 0, 0]
+            cr[1] += rx - p[1]
+            cr[2] += tx - p[2]
+            cr[3] += MAINTENANT - p[0]
+            h[cle] = cr
+            h[serie] = h.get(serie, [])[-garde:]
     h["prec"] = [MAINTENANT, rx, tx]
     return {
         "ok": 1 if w.get("ip", {}).get("state") == "Up" and w.get("link", {}).get("state") == "Up" else 0,
         "v6": 1 if w.get("ip", {}).get("ip6state") == "Up" else 0,
         "cd": s["rx"].get("contractualBandwidth", 0), "cu": s["tx"].get("contractualBandwidth", 0),
-        "boxup": int(d.get("uptime", -1)), "err": int(s["rx"].get("packetserrors", 0)) + int(s["tx"].get("packetserrors", 0)),
-        "lat": latence(), "h": h["h"],
+        "boxup": int(d.get("uptime", -1)), "err": err, "err24": ecart24(etat, "wan.err", err),
+        "lat": latence(), "h": h["h"], "h7": h.get("h7", []),
     }
+
+
+# ---------------------------------------------------------------- geolocalisation
+class Mmdb:
+    """Lecteur minimal du format MaxMind DB (`.mmdb`), en bibliotheque standard.
+    Pourquoi pas le module `maxminddb` : ce script n a aucune dependance, et le
+    format est simple, un arbre binaire sur les bits de l adresse puis une zone
+    de donnees (https://maxmind.github.io/MaxMind-DB/).
+    ⚠️ LE FICHIER EST PROJETE EN MEMOIRE (mmap), JAMAIS LU EN ENTIER : la base des
+    villes pese 127 Mo, ce NAS n a pas de RAM disponible. Une recherche ne touche
+    que quelques pages, que le noyau reprend quand il veut."""
+
+    def __init__(self, chemin):
+        with open(chemin, "rb") as f:
+            self.m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        meta = self.m.rfind(b"\xab\xcd\xefMaxMind.com")
+        if meta < 0:
+            raise ValueError("%s : pas une base mmdb" % chemin)
+        meta += 14
+        m = self._lit(meta, meta)[0]
+        self.noeuds, self.taille = m["node_count"], m["record_size"]
+        self.arbre = self.taille * 2 // 8 * self.noeuds
+        self.base = self.arbre + 16          # seize octets nuls separent l arbre des donnees
+        self.v6 = m["ip_version"] == 6
+        # Dans une base IPv6, les adresses IPv4 sont rangees sous ::/96.
+        n = 0
+        if self.v6:
+            for _ in range(96):
+                if n >= self.noeuds:
+                    break
+                n = self._fils(n, 0)
+        self.depart4 = n
+
+    def _fils(self, n, bit):
+        m, t = self.m, self.taille
+        if t == 24:
+            o = n * 6 + bit * 3
+            return int.from_bytes(m[o:o + 3], "big")
+        if t == 28:
+            o = n * 7
+            if bit:
+                return ((m[o + 3] & 0x0F) << 24) | int.from_bytes(m[o + 4:o + 7], "big")
+            return ((m[o + 3] & 0xF0) << 20) | int.from_bytes(m[o:o + 3], "big")
+        o = n * 8 + bit * 4
+        return int.from_bytes(m[o:o + 4], "big")
+
+    def _lit(self, o, base):
+        """Decode la valeur rangee a `o` ; rend (valeur, position suivante).
+        `base` : origine des pointeurs (zone de donnees, ou metadonnees)."""
+        m = self.m
+        c = m[o]
+        o += 1
+        t = c >> 5
+        if t == 1:                           # pointeur vers une valeur partagee
+            ss, v = (c >> 3) & 3, c & 7
+            k = ss + 1
+            p = int.from_bytes(m[o:o + k], "big")
+            p = (p if ss == 3 else (v << (8 * k)) | p) + (0, 2048, 526336, 0)[ss]
+            return self._lit(base + p, base)[0], o + k
+        if t == 0:                           # type etendu, dans l octet suivant
+            t = 7 + m[o]
+            o += 1
+        n = c & 0x1F
+        if n >= 29:
+            k = n - 28
+            n = (29, 285, 65821)[k - 1] + int.from_bytes(m[o:o + k], "big")
+            o += k
+        if t == 2:
+            return m[o:o + n].decode("utf-8", "replace"), o + n
+        if t == 7:
+            d = {}
+            for _ in range(n):
+                cle, o = self._lit(o, base)
+                d[cle], o = self._lit(o, base)
+            return d, o
+        if t == 11:
+            l = []
+            for _ in range(n):
+                v, o = self._lit(o, base)
+                l.append(v)
+            return l, o
+        if t == 3:
+            return struct.unpack(">d", m[o:o + 8])[0], o + 8
+        if t == 15:
+            return struct.unpack(">f", m[o:o + 4])[0], o + 4
+        if t == 14:
+            return bool(n), o
+        if t == 8:
+            return int.from_bytes(m[o:o + n], "big", signed=n == 4), o + n
+        if t in (5, 6, 9, 10):
+            return int.from_bytes(m[o:o + n], "big"), o + n
+        return bytes(m[o:o + n]), o + n
+
+    def cherche(self, ip):
+        a = ipaddress.ip_address(ip)
+        if a.version == 6 and a.ipv4_mapped:
+            a = a.ipv4_mapped
+        if a.version == 6 and not self.v6:
+            return None
+        n, bits = (self.depart4, 32) if a.version == 4 else (0, 128)
+        v = int(a)
+        for i in range(bits - 1, -1, -1):
+            if n >= self.noeuds:
+                break
+            n = self._fils(n, (v >> i) & 1)
+        if n <= self.noeuds:                 # == noeuds : adresse absente de la base
+            return None
+        return self._lit(self.arbre + n - self.noeuds, self.base)[0]
+
+
+GEO = {}
+# Operateurs qui louent des serveurs ou vendent du VPN. Une connexion depuis
+# l un d eux n est pas un telephone ni une box : elle merite un second regard.
+# Simple indice, affiche comme tel, jamais une condition d alerte.
+HEBERGEUR = re.compile(
+    r"(?i)\b(m247|datacamp|cdn77|ovh|hetzner|digitalocean|amazon|google|microsoft|oracle|linode|"
+    r"akamai|vultr|choopa|contabo|scaleway|leaseweb|clouvider|zenlayer|hostinger|ionos|proton|"
+    r"mullvad|packethub|tefincom|private layer|torservers|tor exit|cloudflare|g-?core|worldstream|"
+    r"nforce|ipxo|hosting|hoster|servers?|cloud|"
+    r"data ?cent(er|re)|vpn)\b")
+
+
+def bases_geo():
+    """Les deux bases DB-IP Lite (villes, operateurs), ouvertes une fois par
+    passage. Gratuites, licence CC BY 4.0, refaites chaque mois par
+    `maj-geoip.sh`. Absentes : la carte se passe de localisation."""
+    if "b" not in GEO:
+        GEO["b"] = []
+        for cle, defaut in (("ville", "dbip-city-lite.mmdb"), ("asn", "dbip-asn-lite.mmdb")):
+            chemin = CONF.get("geoip", cle, fallback=os.path.join(ICI, "geoip", defaut))
+            try:
+                GEO["b"].append(Mmdb(chemin))
+            except (OSError, ValueError, KeyError) as e:
+                note("geolocalisation : %s" % e)
+                GEO["b"].append(None)
+    return GEO["b"]
+
+
+def nom_fr(x):
+    n = (x or {}).get("names") or {}
+    return n.get("fr") or n.get("en") or ""
+
+
+def localiser(ip, etat):
+    """Adresse publique -> [code pays, pays, ville, operateur, hebergeur 0/1].
+    Gardee 30 jours dans l etat : une adresse revient souvent (meme telephone,
+    meme attaquant), et la base ne change qu une fois par mois.
+    ⚠️ La ville d une adresse MOBILE est souvent celle du coeur de reseau de
+    l operateur, pas celle du telephone : le pays et l operateur sont fiables,
+    la ville est un indice."""
+    cache = etat.setdefault("geo", {})
+    c = cache.get(ip)
+    if c and MAINTENANT - c["t"] < 30 * 86400:
+        return c["v"]
+    ville, asn = bases_geo()
+    if not ville and not asn:
+        return None
+    try:
+        g = (ville.cherche(ip) if ville else None) or {}
+        o = (asn.cherche(ip) if asn else None) or {}
+    except (ValueError, IndexError, KeyError, TypeError, struct.error) as e:
+        note("geolocalisation de %s : %s" % (ip, e))
+        return None
+    org = o.get("autonomous_system_organization", "")
+    v = [(g.get("country") or {}).get("iso_code", ""), nom_fr(g.get("country")), nom_fr(g.get("city")),
+         org, int(bool(org and HEBERGEUR.search(org)))]
+    cache[ip] = {"t": int(MAINTENANT), "v": v}
+    return v
+
+
+def maison(etat):
+    """Adresses publiques de la maison, relevees sur la box par `internet()`.
+    ⚠️ UNE CONNEXION VENUE DE LA MAISON PEUT ARRIVER AVEC CETTE ADRESSE : l appli
+    UGREEN qui passe par son relais (UGREENlink) depuis le Wi-Fi, ou un service
+    publie appele depuis le reseau local. Comptee « depuis Internet », elle
+    allumait Securite et Acces pour rien (08/10/2026)."""
+    m = etat.get("maison") or {}
+    v6 = []
+    for p in m.get("v6") or []:
+        try:
+            v6.append(ipaddress.ip_network(p, strict=False))
+        except ValueError:
+            pass
+    return m.get("v4") or "", v6
+
+
+def de_la_maison(ip, v4, v6):
+    try:
+        a = ipaddress.ip_address(ip.replace("::ffff:", ""))
+    except ValueError:
+        return False
+    return (v4 and str(a) == v4) or any(a in r for r in v6)
 
 
 # ---------------------------------------------------------------- securite et acces
@@ -481,13 +741,61 @@ EVENEMENTS = [
 ]
 
 
-def journal_ssh():
+VUS_INODES = set()
+
+
+def lignes_nouvelles(etat, chemin):
+    """Lignes AJOUTEES a un journal depuis le passage precedent (08/10/2026).
+    Les journaux etaient relus EN ENTIER chaque minute, archives comprises :
+    31,7 Mo passes aux expressions regulieres, et un pic de 93 Mo de memoire
+    sur un NAS qui n en a pas. Sans compter que la supervision fabrique elle-meme
+    les trois quarts d `auth.log` (sessions de ses taches cron).
+    ⚠️ LA POSITION EST RETENUE PAR INODE, pas par nom : quand `auth.log` est
+    archive en `auth.log.1`, il garde son inode, et la lecture reprend la ou
+    elle en etait, sans relire ni compter deux fois. Le nouveau `auth.log` est un
+    nouvel inode, lu depuis le debut. Un fichier tronque sur place repart aussi
+    du debut. Une archive non modifiee depuis 24 h n est meme pas ouverte."""
+    try:
+        st = os.stat(chemin)
+    except OSError:
+        return []
+    if st.st_mtime < MAINTENANT - 86400:
+        return []
+    cle = str(st.st_ino)
+    pos = etat.setdefault("journaux", {})
+    debut = pos.get(cle, 0)
+    if debut > st.st_size:
+        debut = 0
+    try:
+        with open(chemin, "rb") as f:
+            f.seek(debut)
+            data = f.read()
+    except OSError:
+        return []
+    # Une ligne en cours d ecriture, sans fin de ligne, attendra le passage suivant.
+    fin = data.rfind(b"\n") + 1
+    pos[cle] = debut + fin
+    VUS_INODES.add(cle)
+    return data[:fin].decode("utf-8", "replace").splitlines()
+
+
+def evenements(etat, cle, nouveaux):
+    """Ajoute les connexions lues a celles deja gardees dans l etat, et oublie ce
+    qui a plus de 24 h. Bornees aux 5 000 plus recentes : une force brute ne doit
+    pas faire gonfler l etat. Rend des COPIES, que l appelant peut modifier."""
+    debut = MAINTENANT - 86400
+    l = [e for e in etat.get(cle, []) if e["t"] >= debut] + [e for e in nouveaux if e["t"] >= debut]
+    etat[cle] = l[-5000:]
+    return [dict(e) for e in etat[cle]]
+
+
+def journal_ssh(etat):
     """Connexions SSH des dernieres 24 h, lues dans `auth.log` (et l archive de
     la veille). Horodatage ISO, comme UGOS l ecrit."""
     debut = MAINTENANT - 86400
     ev = []
     for f in ("/var/log/auth.log.1", "/var/log/auth.log"):
-        for l in lire(f).splitlines():
+        for l in lignes_nouvelles(etat, f):
             m = JOURNAL.match(l)
             if not m:
                 continue
@@ -508,14 +816,14 @@ def journal_ssh():
                     ev.append({"t": int(t), "s": "SSH", "u": e.group(1), "ip": e.group(2), "ok": False,
                                "r": "refusée"})
                 break
-    return ev
+    return evenements(etat, "ev_ssh", ev)
 
 
 UGOS = re.compile(r"\s(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d+\s+\S+\s+insertLog login User \[([^\]]*)\]"
                   r" from \[([^\]]*)\]\s*(.*)$")
 
 
-def journal_ugos():
+def journal_ugos(etat):
     """Connexions a l interface UGOS des dernieres 24 h, lues dans le journal
     de `log_serv` (root seulement). Forme reperee le 05/10/2026 :
     « insertLog login User [admin] from [192.168.1.10] logged in successfully. »,
@@ -526,7 +834,7 @@ def journal_ugos():
     debut = MAINTENANT - 86400
     ev = []
     for f in ("/var/ugreen/log/log_serv.slog.1", "/var/ugreen/log/log_serv.slog"):
-        for l in lire(f).splitlines():
+        for l in lignes_nouvelles(etat, f):
             m = UGOS.search(l)
             if not m:
                 continue
@@ -539,7 +847,7 @@ def journal_ugos():
             ok = "successfully" in m.group(4)
             ev.append({"t": int(t), "s": "UGOS", "u": m.group(2), "ip": m.group(3), "ok": ok,
                        "r": ("biométrie" if "biometric" in m.group(4) else "mot de passe") if ok else "refusée"})
-    return ev
+    return evenements(etat, "ev_ugos", ev)
 
 
 def sessions(noms):
@@ -630,15 +938,31 @@ def fichiers_ouverts(etat):
 
 def securite_acces(etat):
     noms = noms_adresses()
-    ev = journal_ssh() + journal_ugos()
+    ev = journal_ssh(etat) + journal_ugos(etat)
+    # Les positions des fichiers disparus (archives purgees) sont oubliees.
+    etat["journaux"] = {k: v for k, v in (etat.get("journaux") or {}).items() if k in VUS_INODES}
     # L adresse devient un nom quand on la connait ; une adresse inconnue reste
     # affichee telle quelle, c est justement elle qu il faut remarquer.
+    # Celle de la box est la maison, pas Internet (voir `maison()`).
+    v4, v6 = maison(etat)
     ext = 0
+    geo = {}
     for e in ev:
         ip = e.pop("ip")
-        e["x"] = not local(ip)
+        chez_soi = de_la_maison(ip, v4, v6)
+        e["x"] = not chez_soi and not local(ip)
         ext += e["x"]
-        e["n"] = noms.get(ip, ip)
+        e["n"] = noms.get(ip, "maison (IP publique)" if chez_soi else ip)
+        # D ou vient une connexion exterieure : pays, ville, operateur. C est ce
+        # qui dit si elle est inquietante (un telephone en 5G en France, ou un
+        # hebergeur a l autre bout du monde). Cle : le nom affiche.
+        if e["x"] and e["n"] not in geo:
+            g = localiser(ip, etat)
+            if g:
+                geo[e["n"]] = g
+    cache = etat.get("geo") or {}
+    if len(cache) > 400:                  # une force brute ne doit pas faire gonfler l etat
+        etat["geo"] = dict(sorted(cache.items(), key=lambda kv: -kv[1]["t"])[:400])
     refus = sum(1 for e in ev if not e["ok"])
     fw, manq = regles_parefeu()
     ouverts, verifies = fichiers_ouverts(etat) if os.geteuid() == 0 else (None, 0)
@@ -664,7 +988,7 @@ def securite_acces(etat):
     # vrai total, la fenetre dit quand la liste est coupee.
     tous = [[e["t"], e["s"], e["u"], e["n"], e["r"], int(e["ok"]), int(e["x"])]
             for e in sorted(ev, key=lambda e: -e["t"])[:600]]
-    acces = {"now": sessions(noms), "log": groupes[:8], "ev": tous, "n": len(ev), "ext": ext}
+    acces = {"now": sessions(noms), "log": groupes[:8], "ev": tous, "n": len(ev), "ext": ext, "geo": geo}
     return secu, acces
 
 
@@ -699,6 +1023,138 @@ def occupe(point):
     except OSError:
         return 0, 0
     return s.f_blocks * s.f_frsize, (s.f_blocks - s.f_bfree) * s.f_frsize
+
+
+def alloue(chemin):
+    """Place reellement allouee sous un dossier, sous-volumes btrfs compris (a la
+    difference de `du -x`). Pour les quelques gros fichiers des disques iSCSI."""
+    t = 0
+    for d, _, fichiers in os.walk(chemin):
+        for f in fichiers:
+            try:
+                t += os.lstat(os.path.join(d, f)).st_blocks * 512
+            except OSError:
+                pass
+    return t
+
+
+def ntfs_occupation(chemin):
+    """Ce que Windows occupe dans un disque iSCSI, lu dans le fichier qui le porte.
+
+    ⚠️ LECTURE SEULE, ET SEULEMENT DES STRUCTURES DE NTFS (09/10/2026) : la table
+    des partitions (GPT, sinon MBR), le secteur de demarrage NTFS, puis deux
+    enregistrements de la MFT : $Volume pour le nom du volume, $Bitmap pour la
+    carte des amas occupes, dont on compte les bits a 1. Aucun fichier de
+    l utilisateur n est lu. Le resultat suit Windows a quelques secondes pres :
+    NTFS n ecrit sa carte sur le disque qu apres coup.
+    Rend {nom, tot, used} en octets, ou None si aucun volume NTFS n est trouve."""
+    with open(chemin, "rb") as f:
+        def lit(pos, n):
+            f.seek(pos)
+            return f.read(n)
+
+        debuts = []
+        if lit(512, 8) == b"EFI PART":
+            tete = lit(512, 92)
+            lba, nb, taille = struct.unpack_from("<QII", tete, 72)
+            table = lit(lba * 512, nb * taille)
+            for i in range(nb):
+                e = table[i * taille:(i + 1) * taille]
+                if len(e) == taille and e[:16] != b"\0" * 16:
+                    debuts.append(struct.unpack_from("<Q", e, 32)[0] * 512)
+        else:
+            mbr = lit(0, 512)
+            for i in range(4):
+                e = mbr[446 + 16 * i:462 + 16 * i]
+                if len(e) == 16 and e[4] == 0x07:
+                    debuts.append(struct.unpack_from("<I", e, 8)[0] * 512)
+        for p in debuts:
+            boot = lit(p, 512)
+            if boot[3:11] != b"NTFS    ":
+                continue
+            bps = struct.unpack_from("<H", boot, 0x0B)[0]
+            spc = boot[0x0D] if boot[0x0D] <= 0x80 else 1 << (256 - boot[0x0D])
+            amas = bps * spc
+            total = struct.unpack_from("<Q", boot, 0x28)[0] // spc
+            mft = struct.unpack_from("<Q", boot, 0x30)[0]
+            cpr = struct.unpack_from("<b", boot, 0x40)[0]
+            taille_rec = cpr * amas if cpr > 0 else 1 << (-cpr)
+
+            def enregistrement(n):
+                r = bytearray(lit(p + mft * amas + n * taille_rec, taille_rec))
+                if r[:4] != b"FILE":
+                    return b""
+                # Correctifs de fin de secteur (« update sequence ») a remettre.
+                ofs, nb_usa = struct.unpack_from("<HH", r, 4)
+                for i in range(1, nb_usa):
+                    r[i * bps - 2:i * bps] = r[ofs + 2 * i:ofs + 2 * i + 2]
+                return bytes(r)
+
+            def attributs(r):
+                pos = struct.unpack_from("<H", r, 0x14)[0] if len(r) > 0x16 else len(r)
+                while pos + 8 <= len(r):
+                    typ, lg = struct.unpack_from("<II", r, pos)
+                    if typ == 0xFFFFFFFF or lg == 0:
+                        return
+                    yield typ, r[pos:pos + lg]
+                    pos += lg
+
+            nom = ""
+            for typ, a in attributs(enregistrement(3)):           # $Volume
+                if typ == 0x60 and a[8] == 0:                     # $VOLUME_NAME, residant
+                    lg, ofs = struct.unpack_from("<IH", a, 0x10)
+                    nom = a[ofs:ofs + lg].decode("utf-16-le", "replace")
+            for typ, a in attributs(enregistrement(6)):           # $Bitmap
+                if typ != 0x80 or a[8] != 1:                      # $DATA, non residant
+                    continue
+                i = struct.unpack_from("<H", a, 0x20)[0]
+                reel = struct.unpack_from("<Q", a, 0x30)[0]
+                lcn, utilises, lus = 0, 0, 0
+                while i < len(a) and a[i] and lus < reel:
+                    nl, no = a[i] & 0x0F, a[i] >> 4
+                    longueur = int.from_bytes(a[i + 1:i + 1 + nl], "little")
+                    lcn += int.from_bytes(a[i + 1 + nl:i + 1 + nl + no], "little", signed=True)
+                    i += 1 + nl + no
+                    reste, pos = min(longueur * amas, reel - lus), p + lcn * amas
+                    while reste > 0:
+                        bloc = lit(pos, min(reste, 1 << 20))
+                        if not bloc:
+                            break
+                        utilises += int.from_bytes(bloc, "little").bit_count()
+                        pos, reste, lus = pos + len(bloc), reste - len(bloc), lus + len(bloc)
+                return {"nom": nom, "tot": total * amas, "used": utilises * amas}
+    return None
+
+
+def disques_iscsi(point, etat):
+    """Chaque disque iSCSI du volume (un fichier « LUN » sous @iscsi) : sa taille,
+    la place qu il prend sur le volume, et ce que Windows y occupe (voir
+    `ntfs_occupation`). La carte de NTFS d un disque de 3 To pese 100 Mo : elle
+    est relue au plus une fois par heure, ou des que le disque change de taille."""
+    cache = etat.setdefault("iscsi", {})
+    res = []
+    for f in sorted(glob.glob(os.path.join(point, "@iscsi", "LUN", "*", "*", "LUN"))):
+        try:
+            st = os.stat(f)
+        except OSError:
+            continue
+        c = cache.get(f) or {}
+        if c.get("taille") != st.st_size or MAINTENANT - c.get("t", 0) >= 3600:
+            try:
+                o = ntfs_occupation(f)
+            except (OSError, struct.error, ValueError, IndexError) as e:
+                note("iscsi : disque %s illisible (%s)" % (os.path.basename(os.path.dirname(f))[:8], e))
+                o = None
+            c = {"t": int(MAINTENANT), "taille": st.st_size, "o": o}
+            cache[f] = c
+        o = c.get("o") or {}
+        res.append({"id": os.path.basename(os.path.dirname(f))[:8],
+                    "type": os.path.basename(os.path.dirname(os.path.dirname(f))),
+                    "tot": st.st_size, "alloc": st.st_blocks * 512,
+                    "nom": o.get("nom", ""), "fs": o.get("tot"), "used": o.get("used")})
+    for f in [f for f in cache if not os.path.exists(f)]:
+        del cache[f]
+    return res
 
 
 def btrfs_erreurs(point, etat):
@@ -1026,6 +1482,16 @@ def stockage(etat):
         _, fs = montage(point)
         tot, used = occupe(point)
         parts = {k: v for k, v in nuit.items() if v > 0}
+        principal = point == CONF.get("stockage", "volume", fallback="/volume1")
+        luns = disques_iscsi(point, etat) if principal else []
+        # ⚠️ LE POSTE iSCSI EST MESURE EN DIRECT (09/10/2026) : quelques gros
+        # fichiers, lus en un instant. Pris a la mesure de nuit, un disque cree
+        # dans la journee passait jusqu au lendemain dans « autres » (1,5 To le
+        # 09/10), et un disque supprime y laissait un trou.
+        if nuit and principal and "iscsi" in nuit:
+            parts["iscsi"] = sum(alloue(os.path.join(point, d)) for d in liste("espace", "iscsi"))
+            if not parts["iscsi"]:
+                del parts["iscsi"]
         if nuit:
             # ⚠️ LES MEDIAS SONT MESURES, PLUS DEDUITS. Calcules comme le reste
             # de l occupation, ils absorbaient tout ce qu un autre poste
@@ -1041,9 +1507,11 @@ def stockage(etat):
              "raid": lire(md + "/level").strip(), "fs": fs, "n": n, "att": att,
              "disques": membres, "err": btrfs_erreurs(point, etat) if fs == "btrfs" else None,
              "esp": {"tot": tot, "used": used, "parts": parts}}
+        if luns:
+            g["esp"]["iscsi"] = luns
         # Le detail dossier par dossier, pour la fenetre de l espace : seulement
         # pour le volume que mesure la nuit.
-        if nuit_j.get("det") and point == CONF.get("stockage", "volume", fallback="/volume1"):
+        if nuit_j.get("det") and principal:
             g["esp"]["det"] = nuit_j["det"]
             g["esp"]["mesure"] = int(nuit_j.get("t") or 0)
             # « Autres », decompose (06/10/2026). Ce que `du` ne voit pas, d apres
@@ -1256,6 +1724,195 @@ def sauvegarde():
         return None
 
 
+# ---------------------------------------------------------------- journal
+JOURNAL_JOURS = 7
+JOURNAL_MAX = 400          # une rafale ne doit pas faire gonfler le fichier
+WWW = os.path.join(ICI, "www")
+
+
+def lire_json(chemin):
+    try:
+        return json.loads(lire(chemin) or "null")
+    except ValueError:
+        return None
+
+
+def duree_fr(s):
+    m = int(round(s / 60))
+    if m < 1:
+        return "moins d'une minute"
+    if m < 60:
+        return "%d min" % m
+    return "%d h %02d" % (m // 60, m % 60)
+
+
+def taille_fr(o):
+    return ("%.1f Go" % (o / 1e9)).replace(".", ",") if o >= 1e9 else "%d Mo" % round(o / 1e6)
+
+
+def journal(etat, out):
+    """Les evenements des 7 derniers jours, pour la carte Journal (09/10/2026).
+
+    DEUX SORTES DE SOURCES. Celles qui GARDENT LEUR HISTOIRE (mises a jour,
+    conteneurs relances, processus tues, sondes Kuma, connexions depuis
+    Internet, sauvegarde, demarrage du NAS) sont relues a chaque passage : chaque
+    evenement porte une CLE, une cle deja connue n est pas ajoutee deux fois,
+    seulement mise a jour (la duree d une coupure en cours, le compte d une
+    rafale). Le journal se remplit donc des le premier passage.
+    Les autres ne donnent qu un ETAT (site, VPN, Internet, lien, vue
+    d UptimeRobot, conteneurs en marche) : on note leurs CHANGEMENTS d un
+    passage a l autre, et le premier passage ne fait que les relever.
+
+    Un evenement : [heure, categorie, texte, niveau], niveau `ok` (retour a la
+    normale, reussite), `in` (information), `wn` (incident) ou `cr` (panne).
+    """
+    garde = JOURNAL_JOURS * 86400
+    j = {e["k"]: e for e in etat.get("journal", []) if MAINTENANT - e["t"] < garde}
+    prec = etat.setdefault("jprec", {})
+
+    def ev(cle, t, cat, texte, niv="in", cpt=None):
+        if t is None or MAINTENANT - t >= garde:
+            return
+        # Un compte qui baisse est une fenetre de 24 h qui glisse, pas une
+        # rafale qui diminue : on garde le plus grand.
+        if cpt is not None and cle in j and j[cle].get("m", 0) >= cpt:
+            return
+        j[cle] = {"k": cle, "t": int(t), "c": cat, "x": texte, "n": niv}
+        if cpt is not None:
+            j[cle]["m"] = cpt
+
+    def bascule(nom, val, cat, panne, retour, niv_panne="cr"):
+        """Un etat vrai (en marche) ou faux (en panne) : evenement au changement."""
+        if val is None:
+            return
+        val = bool(val)
+        avant = prec.get(nom)
+        prec[nom] = val
+        if avant is None or avant == val:
+            return
+        if val:
+            ev("%s:%d" % (nom, MAINTENANT), MAINTENANT, cat, retour, "ok")
+        else:
+            ev("%s:%d" % (nom, MAINTENANT), MAINTENANT, cat, panne, niv_panne)
+
+    # --- Demarrage du NAS : l heure de demarrage du noyau.
+    m = re.search(r"^btime (\d+)", lire("/proc/stat"), flags=re.M)
+    if m:
+        ev("boot:" + m.group(1), int(m.group(1)), "nas", "Le NAS a démarré", "wn")
+
+    # --- Processus tues faute de memoire (voir `cgroups`).
+    for t, nom, n in etat.get("oom_ev", []):
+        ev("oom:%d:%s" % (t, nom), t, "memoire",
+           "Processus tué faute de mémoire : %s%s" % (nom, " (×%d)" % n if n > 1 else ""), "wn")
+
+    # --- Conteneurs relances par Docker apres un arret (containers.sh, 24 h).
+    for e in (lire_json(os.path.join(WWW, "containers.json")) or {}).get("ev") or []:
+        if e.get("t") and e.get("n"):
+            ev("rs:%d:%s" % (e["t"], e["n"]), e["t"], "conteneur", "%s a redémarré après un arrêt" % e["n"], "wn")
+
+    # --- Conteneurs arretes ou demarres d un passage a l autre. Au-dela de
+    # cinq a la fois (Docker relance, redemarrage), une seule ligne.
+    vivants = sorted(x for x in cmd(["docker", "ps", "--format", "{{.Names}}"]).split() if x)
+    if vivants:                           # Docker muet : rien a comparer
+        a = prec.get("conts")
+        if a is not None:
+            for l, mot, niv in ((sorted(set(a) - set(vivants)), "arrêté", "wn"),
+                                (sorted(set(vivants) - set(a)), "démarré", "ok")):
+                if len(l) > 5:
+                    ev("%s:%d" % (mot, MAINTENANT), MAINTENANT, "conteneur",
+                       "%d conteneurs %ss : %s…" % (len(l), mot, ", ".join(l[:3])), niv)
+                for n in (l if len(l) <= 5 else []):
+                    ev("%s:%d:%s" % (mot, MAINTENANT, n), MAINTENANT, "conteneur", "%s %s" % (n, mot), niv)
+        prec["conts"] = vivants
+
+    # --- Mises a jour : l historique de compose-auto-update (`maj.json`).
+    def iso(s):
+        try:
+            return datetime.datetime.fromisoformat(s).timestamp()
+        except (ValueError, TypeError):
+            return None
+    maj = lire_json(os.path.join(WWW, "maj.json")) or {}
+    for nom, c in (maj.get("conteneurs") or {}).items():
+        for h in (c or {}).get("historique") or []:
+            t, quoi, det = iso(h.get("date")), h.get("evenement") or "", h.get("detail") or ""
+            if quoi == "mis_a_jour":
+                ev("maj:%s:%s" % (nom, h.get("date")), t, "maj", "%s mis à jour%s" % (nom, " (%s)" % det if det else ""), "ok")
+            elif quoi:
+                ev("maj:%s:%s" % (nom, h.get("date")), t, "maj",
+                   "%s : %s%s" % (nom, quoi.replace("_", " "), " (%s)" % det if det else ""), "wn")
+    dp = maj.get("derniere_passe") or {}
+    if dp.get("fin"):
+        ev("passe:" + dp["fin"], iso(dp["fin"]), "maj", "Passe des mises à jour : %s" % (dp.get("bilan") or "terminée"))
+
+    # --- Sondes Kuma : chaque periode hors ligne (voir `kuma`).
+    for p in (out.get("kuma") or {}).get("inc") or []:
+        if p.get("s") != 0:
+            continue
+        en_cours = MAINTENANT - p["t1"] < 120
+        ev("kuma:%s:%d" % (p["n"], p["t0"]), p["t0"], "sonde",
+           "Sonde « %s » hors ligne %s %s" % (p["n"], "depuis" if en_cours else "pendant",
+                                               duree_fr(p["t1"] - p["t0"])), "wn")
+
+    # --- Site, port du VPN et vue d UptimeRobot, lus dans data.json.
+    d = lire_json(os.path.join(WWW, "data.json")) or {}
+    bascule("site", (d.get("site") or {}).get("ok"), "site", "Le site ne répond plus", "Le site répond de nouveau")
+    bascule("vpn", (d.get("vpn") or {}).get("open"), "vpn",
+            "Le port du VPN est injoignable", "Le port du VPN est de nouveau joignable")
+    for mo in ((d.get("ur") or {}).get("m") or []):
+        s = mo.get("s")
+        bascule("ur:" + str(mo.get("h")), True if s == 2 else False if s in (8, 9) else None, "site",
+                "%s injoignable vu d'Internet" % mo.get("h"), "%s de nouveau joignable vu d'Internet" % mo.get("h"))
+
+    # --- Internet et lien local (sections de ce passage).
+    w = out.get("wan")
+    if w:
+        bascule("wan", w.get("ok"), "reseau", "Connexion Internet coupée", "Connexion Internet rétablie")
+        bu = w.get("boxup", -1)
+        if bu >= 0 and prec.get("boxup", -1) > bu:
+            ev("box:%d" % (MAINTENANT - bu), MAINTENANT - bu, "reseau", "La box a redémarré", "wn")
+        prec["boxup"] = bu
+    l = out.get("lan")
+    if l:
+        bascule("lan", l.get("up"), "reseau", "Lien réseau du NAS coupé", "Lien réseau du NAS rétabli")
+        if prec.get("coup") is not None and l.get("coup", 0) > prec["coup"]:
+            ev("coup:%d" % MAINTENANT, MAINTENANT, "reseau", "Le lien réseau est tombé puis remonté", "wn")
+        prec["coup"] = l.get("coup", 0)
+
+    # --- Sauvegarde et sa verification (compte rendu de nas-backup.sh).
+    b = out.get("backup") or {}
+    if b.get("t"):
+        ev("bk:%d" % b["t"], b["t"], "sauvegarde", "Sauvegarde : %s ajoutés en %s"
+           % (taille_fr(b.get("add") or 0), duree_fr(b.get("dur") or 0) if (b.get("dur") or 0) >= 60
+              else "%d s" % (b.get("dur") or 0)), "ok")
+    chk = b.get("chk") or {}
+    if chk.get("t"):
+        ev("chk:%d" % chk["t"], chk["t"], "sauvegarde", "Vérification des sauvegardes : %s"
+           % ("réussie" if chk.get("ok") else "en échec"), "ok" if chk.get("ok") else "cr")
+
+    # --- Connexions depuis Internet, par heure, machine, service et issue : une
+    # force brute fait UNE ligne qui compte, pas six cents.
+    a = out.get("acces") or {}
+    geo = a.get("geo") or {}
+    paquets = {}
+    for t, s, u, n, r, ok, x in a.get("ev") or []:
+        if not x:
+            continue
+        k = "acc:%d:%s:%s:%d" % (t // 3600, n, s, ok)
+        p = paquets.setdefault(k, [t, s, n, ok, 0])
+        p[0] = min(p[0], t)
+        p[4] += 1
+    for k, (t, s, n, ok, c) in paquets.items():
+        g = geo.get(n)
+        ou = " (%s)" % ", ".join(v for v in (g[2], g[1]) if v) if g and len(g) > 2 else ""
+        ev(k, t, "acces", "%s %s depuis %s%s · %s" % (
+            "%d connexions" % c if c > 1 else "Connexion", ("acceptées" if c > 1 else "acceptée") if ok
+            else ("refusées" if c > 1 else "refusée"), n, ou, s), "wn" if ok else "in", cpt=c)
+
+    l = sorted(j.values(), key=lambda e: -e["t"])[:JOURNAL_MAX]
+    etat["journal"] = l
+    return [[e["t"], e["c"], e["x"], e["n"]] for e in l]
+
+
 # ---------------------------------------------------------------- ecriture
 def ecrire(chemin, obj):
     """Ecriture ATOMIQUE : la page relit le fichier sans cesse, elle ne doit
@@ -1297,7 +1954,7 @@ def main():
         return                            # un passage tourne encore
     etat = charger_etat()
     out = {"t": int(MAINTENANT)}
-    for cle, f in (("mem", lambda: memoire(etat)), ("fans", ventilateurs), ("lan", lien),
+    for cle, f in (("mem", lambda: memoire(etat)), ("fans", ventilateurs), ("lan", lambda: lien(etat)),
                    ("wan", lambda: internet(etat)), ("stock", lambda: stockage(etat)),
                    ("disq", lambda: disques(etat)), ("fankarr", lambda: fankarr(etat)),
                    ("backup", sauvegarde), ("kuma", lambda: kuma(etat))):
@@ -1309,6 +1966,11 @@ def main():
         out["secu"], out["acces"] = securite_acces(etat)
     except Exception as e:
         note("securite : %s" % e)
+    # En DERNIER : le journal lit les sections de ce passage.
+    try:
+        out["journal"] = journal(etat, out)
+    except Exception as e:
+        note("journal : %s" % e)
     out["problemes"] = PROBLEMES
     if ESSAI:
         print(json.dumps(out, ensure_ascii=False, indent=1)[:20000])

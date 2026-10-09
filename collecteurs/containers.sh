@@ -40,7 +40,13 @@ docker stats --no-stream --format '{{.Name}};{{.CPUPerc}};{{.MemPerc}}' 2>/dev/n
       BEGIN { while ((getline l < swf) > 0) { split(l, a, ";"); sw[a[1]] = a[2] } }
       { gsub("%","",$2); gsub("%","",$3); print t";"$1";"$2";"$3";"(sw[$1]+0) }' >> "$SRC"
 [ -s "$SRC" ] || exit 0
-awk -F';' -v c=$((NOW - 604800)) '$1+0 >= c' "$SRC" > "$SRC.tmp" && mv "$SRC.tmp" "$SRC"
+# ⚠️ 25 H ET UNE PURGE PAR HEURE (08/10/2026). La page ne lit plus que les
+# dernieres 24 h (la moyenne `mem24`) ; garder 7 jours et tout reecrire toutes
+# les 5 min faisait 0,55 Go d ecritures par jour pour une fenetre que plus rien
+# ne lisait. La purge se fait au premier passage de chaque heure.
+if [ "$(date +%-M)" -lt 5 ]; then
+  awk -F';' -v c=$((NOW - 90000)) '$1+0 >= c' "$SRC" > "$SRC.tmp" && mv "$SRC.tmp" "$SRC"
+fi
 
 # --- Journal des redemarrages automatiques, sur 24 h ---
 # ⚠️ POURQUOI UN JOURNAL ET PAS UN SIMPLE `age < 24 h`. `age` mesure le dernier
@@ -87,27 +93,6 @@ awk -F';' -v last="$LAST" -v c=$((NOW - 86400)) -v rsf="$RS" '
   && jq -c --argjson ev "$EVJ" '. + {ev: $ev}' "$OUT.raw" > "$OUT.tmp" \
   && rm -f "$OUT.raw" && mv "$OUT.tmp" "$OUT" && chmod 644 "$OUT"
 
-# --- Historique par conteneur : 7 jours au pas de 2 h ---
-# Fichier SEPARE, charge uniquement a l ouverture de la fenetre : inutile de le
-# transporter toutes les 5 s avec containers.json.
-# La fenetre demarre au premier releve reel, pas a J-7 : sinon la serie est
-# une longue plaine de zeros suivie d un saut, illisible et tronquee au bord.
-FIRST=$(head -1 "$SRC" | cut -d';' -f1); DEB=$((NOW - 604800))
-case "$FIRST" in ''|*[!0-9]*) FIRST=0;; esac
-[ "$FIRST" -gt "$DEB" ] && DEB=$FIRST
-awk -F';' -v deb="$DEB" -v P=1800 '
-  $1+0 >= deb { b=int(($1-deb)/P); s[$2 SUBSEP b]+=$4; n[$2 SUBSEP b]++; noms[$2]=1; if (b>mx) mx=b }
-  END {
-    printf "{\"pas\":%d,\"n\":%d,\"c\":{", P, mx+1
-    first=1
-    for (k in noms) {
-      if (!first) printf ","
-      printf "\"%s\":[", k
-      for (b=0; b<=mx; b++) printf "%s%.2f", (b ? "," : ""), (n[k,b] ? s[k,b]/n[k,b] : 0)
-      printf "]"
-      first=0
-    }
-    printf "}}\n"
-  }' "$SRC" > /volume1/docker/homelab/www/containers-hist.json.tmp \
-  && mv /volume1/docker/homelab/www/containers-hist.json.tmp /volume1/docker/homelab/www/containers-hist.json \
-  && chmod 644 /volume1/docker/homelab/www/containers-hist.json
+# --- Historique par conteneur : RETIRE le 08/10/2026 ---
+# `containers-hist.json` (7 jours au pas de 30 min) n etait plus lu par la page
+# depuis le 05/10 : la fenetre des conteneurs s appuie sur `containers.json`.

@@ -1,8 +1,8 @@
 # Tableau de bord de homelab
 
-Supervision d'une infrastructure auto-hébergée de vingt-six conteneurs, écrite à la main : pas de framework, pas de base de données, pas de processus permanent. Un serveur web statique, quelques scripts shell, et un fichier JSON.
+Supervision d'une infrastructure auto-hébergée de vingt-six conteneurs, écrite à la main : pas de framework, pas de base de données, pas de processus permanent. Un serveur web statique, quelques scripts shell et Python, et des fichiers JSON.
 
-**[▶ Démonstration en ligne](https://awallez.github.io/homelab/)** · les données y sont fictives, et un sélecteur permet de rejouer onze états du système, du fonctionnement nominal à la panne généralisée.
+**[▶ Démonstration en ligne](https://awallez.github.io/homelab/)** · les données y sont fictives, et un sélecteur permet de rejouer quinze états du système, du fonctionnement nominal à la panne généralisée.
 
 ---
 
@@ -14,7 +14,7 @@ Je les ai remplacés par une page que j'ai écrite.
 
 ## Ce que ça fait
 
-Un collecteur interroge dix-sept sources (API des services, `/proc`, `/sys`, `docker`, SMART) et écrit **un seul fichier JSON**. Une page statique le lit et se redessine. C'est tout.
+Des collecteurs lancés par cron interrogent les API des services, `/proc`, `/sys`, `docker`, SMART et les journaux du système. Chacun écrit **son propre fichier JSON**, à sa cadence. Une page statique les lit et se redessine. C'est tout.
 
 - **Latence de 4 secondes** sur les valeurs vivantes, contre 80 au départ
 - **Historique maison** sur 24 heures et 7 jours, avec alertes et notifications sur téléphone
@@ -68,17 +68,19 @@ Le tout tourne sur un **UGREEN DXP480T Plus**, une machine **tout NVMe** : Intel
 Ces 7,5 Gio gouvernent le reste. C'est la contrainte qui a fait retirer les deux outils de supervision, et c'est elle aussi qui explique pourquoi la page distingue partout la mémoire **résidente** de ce que le noyau a **compressé en zram** : sur cette machine, la moitié de la mémoire des conteneurs est évacuée, et un outil qui additionne les deux ne décrit plus rien.
 
 ```
-collecteurs (cron)          page statique              serveur
-────────────────────        ─────────────────          ───────
-collect-fast.sh   2 s  ──>  live.json      ──┐
-collect.sh       30 s  ──>  data.json      ──┤
-history-build.sh  1 min ──> history.json   ──┼──>  index.html   ──>  nginx
-containers.sh     5 min ──> containers.json ─┤     app.js
-smart.sh          1 j  ──>  smart.json     ──┤     style.css + fond.css
-compose-auto-update 1 j ──> maj.json       ──┘
+collecteurs (cron)             fichiers servis             page statique
+───────────────────────        ────────────────            ─────────────
+collect-fast.sh       2 s  ──>  live.json        ──┐
+collect.sh           30 s  ──>  data.json        ──┤        index.html
+systeme.py          1 min  ──>  systeme.json     ──┤        site.js   (l'installation)
+history-min.sh      1 min  ──>  history-min.json ──┼──>     cartes.js (les cartes)
+history-build.sh    1 min  ──>  history.json     ──┤        app.js    (la page)
+containers.sh       5 min  ──>  containers.json  ──┤        style.css + fond.css
+smart.sh              1 j  ──>  smart.json       ──┤
+compose-auto-update   1 j  ──>  maj.json         ──┘        servis par nginx
 ```
 
-Aucune écriture concurrente : **chaque script écrit son propre fichier**. Toutes les écritures sont atomiques, fichier temporaire puis renommage, ce qui garantit que le serveur ne sert jamais un JSON à moitié écrit.
+Aucune écriture concurrente : **chaque script écrit son propre fichier**, et la page les assemble. Toutes les écritures sont atomiques, fichier temporaire puis renommage, ce qui garantit que le serveur ne sert jamais un JSON à moitié écrit.
 
 ## Faire tourner en local
 
@@ -109,11 +111,13 @@ Le tirage est déterministe : la même graine rend les mêmes courbes, avec un r
 | Dossier | Contenu |
 |---|---|
 | `www/` | le front et les données servies. Autonome, publiable tel quel |
-| `collecteurs/` | les scripts shell qui alimentent le tableau de bord, et celui qui exécute les demandes de la page |
-| `fixtures/` | les sources écrites à la main : un état nominal et onze calques |
+| `collecteurs/` | les scripts shell et Python qui alimentent le tableau de bord, et les veilleurs qui exécutent les demandes de la page |
+| `fixtures/` | les sources écrites à la main : un état nominal et quatorze calques |
 | `outils/` | générateur, serveur de développement, déploiement |
 
-Les collecteurs attendent leur configuration dans des variables d'environnement, listées et commentées dans `.env.example`. Ils ne citent jamais un secret autrement que par le nom de sa variable, et n'en affichent aucun : c'est ce qui permet de les publier tels quels.
+La page ne connaît qu'un seul fichier propre à l'installation, `www/site.js` : adresse du serveur, ports, liens publics, raccourcis par défaut. Le code des cartes (`www/cartes.js`) et celui de la page (`www/app.js`) sont identiques partout, et c'est tout ce que le script de déploiement envoie : il refuse `site.js`, dont la version publiée ici est anonymisée.
+
+Les collecteurs suivent le même partage : ce qui identifie l'installation sans être secret vit dans `collect.conf` (modèle : `collect.conf.exemple`), et les secrets dans des variables d'environnement listées dans `.env.example`. Ils ne citent jamais un secret autrement que par le nom de sa variable, et n'en affichent aucun : c'est ce qui permet de les publier tels quels.
 
 Le mode démonstration **s'active par la présence d'un fichier**. En production ce fichier n'existe pas : le sélecteur n'est jamais construit et le code correspondant devient une fonction identité. Rien à désactiver avant un déploiement, donc rien à oublier de désactiver.
 

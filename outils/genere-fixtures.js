@@ -110,7 +110,7 @@ function mesure(t) {
   return {
     cpu,
     ram:      borne(51 + 7 * r + bruit(1.6), 40, 96),
-    disque:   63,
+    disque:   75.7,                                   // = volume de smart.json
     reseau:   rafale(r, 9_500_000),
     charge:   arr2(borne(cpu / 100 * 8 * 0.85 + bruit(0.15), 0.05, 9)),
     temp:     borne(53 + 13 * r + cpu * 0.06 + bruit(1.2), 45, 92),
@@ -131,6 +131,8 @@ function mesure(t) {
     qbul:     rafale(r, 2_400_000),
     vpnup:    enPanne("vpnup", t)  ? 2 : 1,
     kumaup:   enPanne("kumaup", t) ? 2 : 1,
+    /* Debits de la box : PAS dans l historique, comme en production, ou
+       `systeme.py` les range dans `wan.h` (voir plus bas). */
     wanrx:    debitBox(r, 30_000_000),
     wantx:    debitBox(r, 4_000_000)
   };
@@ -138,8 +140,7 @@ function mesure(t) {
 
 const CHAMPS = ["t", "cpu", "ram", "disque", "reseau", "charge", "temp", "lecture",
   "ecriture", "charge5", "charge15", "swap", "nvme", "nvme0", "nvme1", "eth0",
-  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup",
-  "wanrx", "wantx"];
+  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup"];
 const CHAMPS_MIN = ["t", "cpu", "ram", "temp", "swap", "nvme0", "nvme1", "eth0",
   "nvme2", "nvme3", "qbdl", "qbul"];
 
@@ -178,16 +179,25 @@ for (let k = 0; k < N_J; k++) {
 
 /* ---- 7 jours au pas d une heure ---------------------------------------- */
 const PAS_S = 3600, N_S = 169;
-const s = [];
+const s = [], wanH7 = [];
 for (let k = 0; k < N_S; k++) {
   const t = FIN - (N_S - 1 - k) * PAS_S;
   /* Le remplissage du disque monte lentement sur la semaine : c est la seule
      serie dont la tendance se lit a cette echelle. */
   const av = (N_S - 1 - k) / N_S;
   const m = mesure(t);
-  m.disque = Math.round((63 - av * 2.4) * 100) / 100;
+  /* ⚠️ LES HEURES COUVERTES PAR LA MINUTE EN SONT LA MOYENNE (09/10/2026),
+     comme en production. Avec le bouton « 7 j », le dernier jour se lit dans
+     les deux vues : tire a part, il aurait dessine une autre journee. Le
+     tirage `mesure(t)` est fait quand meme, pour ne pas decaler la suite. */
+  const lot = minutes.filter(x => x.t >= t && x.t < t + PAS_S);
+  if (lot.length) for (const c of CHAMPS.concat(["wanrx", "wantx"])) if (c !== "t")
+    m[c] = lot.reduce((a, x) => a + x[c], 0) / lot.length;
+  m.disque = Math.round((75.7 - av * 2.4) * 100) / 100;
   s.push([t].concat(CHAMPS.slice(1).map(c =>
     Number.isInteger(m[c]) ? m[c] : Math.round(m[c] * 100) / 100)));
+  /* `wan.h7` : le debit de la box par heure close, comme `systeme.py`. */
+  if (t < FIN) wanH7.push([t, Math.round(m.wanrx), Math.round(m.wantx)]);
 }
 
 ecrit("history.json", { j, s, champs: CHAMPS });
@@ -248,7 +258,11 @@ ecrit("smart.json", {
      poste est celle du VOLUME, en octets. */
   grappes: [
     { nom: "Volume 1", raid: "raid1", fs: "btrfs", n: 1, att: 1, err: 0, disques: ["nvme1"],
-      esp: { tot: 7984990126080, used: OCCUPE, parts: PARTS, det: DET, mesure: "@-19h", autres: AUTRES } },
+      esp: { tot: 7984990126080, used: OCCUPE, parts: PARTS, det: DET, mesure: "@-19h", autres: AUTRES,
+             /* Le disque iSCSI vu de l interieur (09/10/2026) : ce que Windows y
+                occupe, lu dans sa table NTFS par systeme.py. */
+             iscsi: [{ id: "0f3c9a21", type: "thick", tot: 3298534883328, alloc: 3298534883328,
+                       nom: "Jeux", fs: 3298516004864, used: 1211889528832 }] } },
     { nom: "Système", sys: true, disques: ["nvme0"],
       esp: { tot: 128035676160, parts: SYSP, det: SYS, mesure: "@-19h" } }
   ],
@@ -307,19 +321,13 @@ ecrit("containers.json", {
   ev: [{ n: "veille-images", t: FIN - 5.4 * 3600 }]
 });
 
-const PAS_H = 1800, N_H = 337;                        // 7 jours au pas de 30 min
-const hist = {};
-for (const c of conteneurs) {
-  const v = [];
-  for (let k = 0; k < N_H; k++)
-    v.push(enPct(Math.round(c.mem24 * (0.82 + 0.36 * rythme(FIN - (N_H - 1 - k) * PAS_H)) + bruit(6))));
-  hist[c.n] = v;
-}
-ecrit("containers-hist.json", { pas: PAS_H, n: N_H, c: hist });
+/* `containers-hist.json` n est plus produit (08/10/2026) : la page ne le lit
+   plus depuis le 05/10, et `containers.sh` a cesse de l ecrire. */
 
 /* ---- petits fichiers ---------------------------------------------------- */
 const der = minutes[minutes.length - 1];
 ecrit("live.json", {
+  t: "@-0.1min",
   cpu: Math.round(der.cpu), ram: Math.round(der.ram), net: der.reseau,
   qbit: { dl: der.qbdl, ul: der.qbul }, jnow: ""
 });
@@ -441,7 +449,48 @@ const rel = (s) => "@-" + Math.round(-s / 60) + "min";
    valeurs que smart.json. Le disque systeme tourne en x2 sur un emplacement
    qui en accepte x4, comme sur le vrai NAS : la fenetre doit le dire. */
 const H = (o) => ({ cw: 0, spare: 100, spare_min: 10, err_journal: 0, t_alerte: 0, t_crit: 0, ...o });
+/* `wan.h` : les debits de la box, une ligne par creneau de 10 min CLOS sur 24 h,
+   [debut, recu, envoye] en octets par seconde, exactement comme `systeme.py`.
+   ⚠️ Les colonnes `wanrx`/`wantx` de l historique, que la demonstration
+   inventait, n existaient pas en production : la courbe Internet s affichait
+   ici et jamais sur le NAS (09/10/2026). Moyennees depuis la minute, comme
+   l historique, pour decrire la meme journee. */
+const wanH = [];
+for (let k = 0; k < 144; k++) {
+  const t0 = FIN - (144 - k) * 600;
+  const lot = minutes.filter(m => m.t >= t0 && m.t < t0 + 600);
+  if (!lot.length) continue;
+  const moy = (c) => Math.round(lot.reduce((x, m) => x + m[c], 0) / lot.length);
+  wanH.push([t0, moy("wanrx"), moy("wantx")]);
+}
 ecrit("systeme.json", {
+  /* Heure du passage et sections en echec (08/10/2026) : la page les lit pour
+     dire quand ses donnees sont figees. */
+  t: "@-0.4min", problemes: [],
+  /* Le journal des 7 jours (09/10/2026), comme `journal()` de systeme.py.
+     Les coupures du site, du VPN et de la sonde sont CELLES DE L HISTORIQUE
+     (`INCIDENTS`) : le journal et les rubans racontent la meme semaine. */
+  journal: [
+    ["@-2.2h", "maj", "Passe des mises à jour : 1 mise(s) à jour, 0 erreur(s), 0 en attente, 0 nouveau(x)", "in"],
+    ["@-2.2h", "maj", "serveur-media mis à jour (10.9.10 → 10.9.11)", "ok"],
+    ["@-6.2h", "vpn", "Le port du VPN est de nouveau joignable", "ok"],
+    ["@-6.4h", "vpn", "Le port du VPN est injoignable", "cr"],
+    ["@-10.9h", "site", "Le site répond de nouveau", "ok"],
+    ["@-11.2h", "site", "Le site ne répond plus", "cr"],
+    [rel(ik.debut), "sonde", "Sonde « serveur-media » hors ligne pendant " + Math.round(ik.duree / 60) + " min", "wn"],
+    ["@-18.4h", "vpn", "Le port du VPN est de nouveau joignable", "ok"],
+    ["@-19h", "vpn", "Le port du VPN est injoignable", "cr"],
+    ["@-22h", "sauvegarde", "Sauvegarde : 912 Mo ajoutés en 31 s", "ok"],
+    ["@-1.9j", "maj", "indexeurs mis à jour (2.6.4 → 2.6.5)", "ok"],
+    ["@-2.1j", "conteneur", "client-torrent a redémarré après un arrêt", "wn"],
+    ["@-2.9j", "sauvegarde", "Sauvegarde : 1,2 Go ajoutés en 48 s", "ok"],
+    ["@-3j", "sauvegarde", "Vérification des sauvegardes : réussie", "ok"],
+    ["@-3.4j", "reseau", "La box a redémarré", "wn"],
+    ["@-4.2j", "nas", "Le NAS a démarré", "wn"],
+    ["@-5j", "maj", "coffre-fort mis à jour (1.37.3 → 1.37.4)", "ok"],
+    ["@-6j", "memoire", "Processus tué faute de mémoire : indexation", "wn"]
+  ],
+  wan: Object.assign({}, BASE.wan, { h: wanH, h7: wanH7 }),
   /* Ce que FanKarr a telecharge (06/10/2026), lu en production dans ses fichiers
      de suivi : episodes importes, place, telechargements en cours. */
   fankarr: { ep: 147, o: 354619441774, absents: 0, series: ["Série Kaï"], cours: 1, dernier: "@-14j" },

@@ -1,0 +1,7 @@
+{
+ "_": "Deux services dont l API ne repond plus : leur carte le dit, au lieu d afficher des zeros en vert.",
+ "ko": [
+  "radarr",
+  "kuma"
+ ]
+}

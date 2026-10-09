@@ -1,0 +1,39 @@
+# Le portail en PRODUCTION : /volume1/docker/homelab/docker-compose.yml.
+# (Le `compose.yml` a la racine du depot sert la demonstration en local.)
+#
+# ⚠️ `www/` EST EN LECTURE SEULE, sauf `data/` : la page n ecrit que dans
+# `data/` (en PUT, voir nginx.conf), et un nginx compromis ne doit pas pouvoir
+# reecrire la page ni les donnees des collecteurs. Ceux-ci ecrivent dans `www/`
+# depuis l hote, ce montage ne les concerne pas.
+# ⚠️ `htpasswd` : le mot de passe des ecritures, cree une fois sur le NAS par
+#   sudo sh -c 'h=$(openssl passwd -apr1) && printf "homelab:%s\n" "$h" > htpasswd'
+# (saisi au clavier, jamais ecrit en clair), proprietaire root, groupe 101
+# (nginx dans le conteneur), droits 640. L utilisateur `homelab` est celui que
+# la page envoie : on ne tape que le mot de passe, dans une fenetre de la page.
+# ⚠️ Journal plafonne : sans `max-size`, le pilote json-file de Docker garde
+# tout, et chaque onglet ouvert ajoutait des centaines de milliers de lignes
+# par jour.
+
+services:
+  web:
+    image: nginx:alpine
+    container_name: homelab
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./www:/usr/share/nginx/html:ro
+      - ./www/data:/usr/share/nginx/html/data
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./htpasswd:/etc/nginx/htpasswd:ro
+    environment:
+      - TZ=Europe/Brussels
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: homelab_default

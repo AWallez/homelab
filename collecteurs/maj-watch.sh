@@ -18,10 +18,15 @@ cau() { (cd "$OUTIL" && python3 -m compose_auto_update --config "$OUTIL/config.t
 
 # ⚠️ jq et non printf : un message contenant un guillemet produisait un JSON
 # invalide, et la page restait bloquée sur « en attente du démarrage ».
+# ⚠️ Fichier temporaire puis `mv -T` (08/10/2026) : `data/` appartient à nginx
+# et ce script tourne en root. Écrire directement dans `maj-status.json`
+# suivrait un lien symbolique qui y aurait été posé, et le `chown` donnerait à
+# nginx le fichier visé. `mv -T` remplace le lien sans le suivre.
 st() {
+  local t; t=$(mktemp "$D/.maj-status.XXXXXX") || return 0
   jq -nc --arg s "$1" --arg a "$(date '+%H:%M:%S')" --arg m "$2" --argjson ok "${3:-true}" \
-     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$ST"
-  chown 101:101 "$ST" 2>/dev/null; chmod 664 "$ST"
+     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$t"
+  chown 101:101 "$t" 2>/dev/null; chmod 664 "$t"; mv -fT "$t" "$ST"
 }
 
 nom_valide() { [[ "$1" =~ ^[a-z0-9][a-z0-9_.-]{0,62}$ ]]; }

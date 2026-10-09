@@ -1,5 +1,38 @@
 /* ===== Homelab — tableau de bord maison ===== */
-/* IP et go : deplace dans `services.js`, charge avant ce fichier. */
+/* IP : dans `site.js` ; go : dans `cartes.js`, charges avant ce fichier. */
+
+/* NOM DES FENETRES (09/10/2026). Un lecteur d ecran annoncait « boite de
+   dialogue » sans dire laquelle. Toute fenetre ouverte prend son titre (son
+   premier `<h3>`) pour nom. Pose sur le PROTOTYPE, avant tout le reste : les
+   fenetres creees a la volee (mot de passe, PC) en heritent comme `#dlg`. */
+{
+  const ouvre = HTMLDialogElement.prototype.showModal;
+  let n = 0;
+  HTMLDialogElement.prototype.showModal = function () {
+    const t = this.querySelector("h3");
+    if (t) { if (!t.id) t.id = "titre-fenetre-" + (++n); this.setAttribute("aria-labelledby", t.id); }
+    else this.removeAttribute("aria-labelledby");
+    return ouvre.call(this);
+  };
+}
+
+/* Defilement doux, sauf si le systeme demande de reduire les animations. */
+const defilementDoux = () => matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+
+/* LE FOND DU DERNIER ETAT CONNU, DES LE CHARGEMENT (08/10/2026). Le fond
+   partait du bleu « tout va bien » et ne virait qu une fois data.json lu, en
+   2,4 s de fondu : chaque rechargement montrait un faux « tout va bien ».
+   L etat garde dans le navigateur est pose tout de suite, SANS fondu ; le vrai
+   le remplace a la premiere lecture. C est un confort d affichage : sans
+   stockage, la page se comporte comme avant. */
+(() => {
+  let e = null;
+  try { e = localStorage.getItem("homelab.sante"); } catch (x) { /* stockage refuse */ }
+  if (!e) return;
+  document.body.classList.add("sans-fondu");
+  document.body.dataset.sante = e;
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove("sans-fondu")));
+})();
 const Go = (o) => (o / 1073741824).toFixed(1).replace(".", ",") + " Go";
 const Mo = (o) => o > 1048576 ? (o / 1048576).toFixed(1).replace(".", ",") + " Mio/s"
       : Math.round(o / 1024) + " Kio/s";
@@ -123,6 +156,20 @@ const echelle = (ts, pas, n) => {
   const t0 = ts[0], t1 = ts[ts.length - 1], d = t1 - t0;
   if (!(d > 0)) return "";
   const m = [];
+  /* AU-DELA DE DEUX JOURS, UN REPERE PAR MINUIT, nomme par le jour qui
+     commence (« mar. ») : sept jours d heures feraient 28 etiquettes. Le pas
+     se fait au calendrier, pas en secondes, pour rester sur minuit les jours
+     de changement d heure. */
+  if (d > 2 * 86400) {
+    const z = new Date(t0 * 1000); z.setHours(24, 0, 0, 0);
+    for (; z / 1000 <= t1; z.setDate(z.getDate() + 1)) {
+      const x = (z / 1000 - t0) / d * 100;
+      if (x < 0.2 || x > 99.8) continue;
+      const cl = x < 4 ? "rep deb" : x > 94 ? "rep bout" : "rep";
+      m.push(`<span class="${cl}" style="left:${x.toFixed(1)}%">${z.toLocaleDateString("fr-FR", { weekday: "short" })}</span>`);
+    }
+    return `<div class="ech">${m.join("")}</div>`;
+  }
   for (let t = Math.ceil(t0 / 3600) * 3600; t <= t1; t += 3600) {
     const h = new Date(t * 1000).getHours();
     if (h % (pas || 6)) continue;
@@ -225,9 +272,30 @@ const H = (d, i) => ((d.hist && d.hist.j) || []).map(p => +p[i] || 0);
 const col = (d, n) => (((d.hist || {}).champs) || []).indexOf(n);
 const Hn = (d, n) => { const i = col(d, n); return i < 0 ? [] : H(d, i); };
 
-/* Meme lecture par nom, sur la serie de SEPT JOURS au pas d une heure. */
-const Hs = (d, n) => { const i = col(d, n);
-  return i < 0 ? [] : (((d.hist || {}).s) || []).map(p => +p[i] || 0); };
+/* Meme lecture par nom, sur la serie de SEPT JOURS au pas d une heure.
+   ⚠️ Elle a SES colonnes (`champs_s`) depuis le 08/10/2026 : `siteup`, les
+   temperatures des disques et, depuis le 09/10, les courbes des cartes pour
+   leur vue « 7 j ». Un fichier plus ancien n a que `champs`, commun aux deux
+   series. */
+const Hs = (d, n) => { const h = d.hist || {};
+  const i = (h.champs_s || h.champs || []).indexOf(n);
+  return i < 0 ? [] : (h.s || []).map(p => +p[i] || 0); };
+
+/* ---- 24 H OU 7 JOURS, CARTE PAR CARTE (09/10/2026) -------------------------
+   Chaque carte a graphe porte un selecteur « 24 h · 7 j » (voir `periode`).
+   24 h par defaut, au pas de la minute (`Hf`) ; 7 jours au pas de l heure
+   (`Hs`). Le choix est garde dans le navigateur : un confort d affichage, sans
+   stockage la page revient a 24 h.
+   ⚠️ L ETAT VIT HORS DU RENDU, dans `PERIODES` : la carte est redessinee toutes
+   les deux secondes et le selecteur ne fait que le lire.
+   ⚠️ Les PASTILLES des cartes restent sur 24 h (pointes, moyennes) : sur 7
+   jours, la moyenne horaire ecraserait justement les pointes qu elles citent. */
+let PERIODES = {};
+try { PERIODES = JSON.parse(localStorage.getItem("homelab.periodes") || "{}") || {}; } catch (x) { /* stockage refuse */ }
+const sept = (carte) => PERIODES[carte] === "7j";
+/* La serie tracee par une carte selon sa periode, et le texte qui va avec. */
+const Hp = (d, carte, n) => sept(carte) ? Hs(d, n) : Hf(d, n);
+const surP = (carte) => sept(carte) ? "sur 7 jours" : "sur 24 h";
 
 /* Colonnes de temperature par disque, triees, quel qu en soit le nombre. La
    machine a quatre emplacements M.2 de donnees, dont trois libres, plus celui du
@@ -251,7 +319,6 @@ const disquesHist = (d) => (((d.hist || {}).champs) || [])
    interroge les champs de la serie fine, et `Hf` retombe proprement sur la serie
    a 10 min tant que le fichier n existe pas — au premier demarrage, ou si le
    cron n est pas encore passe. */
-let FIN = null, FINT = 0;
 
 /* ---- `systeme.json`, ecrit par `systeme.py` chaque minute (05/10/2026) ----
    Memoire, stockage, securite, acces, reseau, Internet, ventilateurs, detail
@@ -259,21 +326,56 @@ let FIN = null, FINT = 0;
    20 s : le fichier ne change qu une fois par minute.
    ⚠️ Absent ou illisible, il ne casse rien : les cartes gardent ce que donne
    `data.json`, ou leur etat d attente. */
-let SYS = null, SYST = 0;
-async function lireSysteme() {
-  if (SYS && Date.now() - SYST < 20000) return SYS;
+/* ---- LECTURES SOBRES (08/10/2026) ----
+   Chaque fichier etait relu toutes les 2 s avec `?Date.now()` : une URL neuve a
+   chaque fois, donc JAMAIS de 304. Un seul onglet ouvert tirait 129 Mo et
+   20 000 requetes par heure, dont 94 Mo pour `history.json`, qui ne change
+   qu une fois par minute.
+   1. `cache: "no-cache"` : le navigateur revalide aupres de nginx (ETag) et
+      recoit un 304 sans corps quand rien n a change ;
+   2. chaque fichier a sa CADENCE, calee sur celle de son collecteur ;
+   3. rien ne part quand l onglet est cache (voir `refresh`).
+   ⚠️ L objet rendu est PARTAGE entre deux lectures : la page y range ses ajouts
+   (`d.hist`, la fusion de systeme.json), qu elle reecrit a chaque tour. */
+const LUS = new Map();      // url -> { t, v }
+async function lire(url, periode) {
+  const c = LUS.get(url);
+  if (c && Date.now() - c.t < periode * 1000) return c.v;
+  /* ⚠️ 15 S AU PLUS (09/10/2026). Un NAS qui accepte la connexion sans jamais
+     repondre laissait la lecture en attente pour toujours : le tour ne finissait
+     jamais, `TOUR` restait pris, plus rien ne se rafraichissait, et la bande
+     « Le NAS ne repond plus » ne pouvait pas s afficher, faute d erreur. */
+  const r = await fetch(url, { cache: "no-cache", signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(url + " : " + r.status);
+  const v = await r.json();
+  LUS.set(url, { t: Date.now(), v });
+  return v;
+}
+const lireOuRien = (url, periode) => lire(url, periode).catch(() => null);
+/* Lecture ponctuelle, sans cache de page : le contenu, ou `defaut` si le
+   fichier manque ou si la reponse est une erreur.
+   ⚠️ `r.ok` D ABORD (09/10/2026) : sur un fichier absent, nginx rend sa page
+   d erreur 404 en HTML ; lue comme du texte, elle passait pour un contenu
+   valide (l etat d une mise a jour en cours). */
+async function lireOu(url, defaut, texte) {
   try {
-    SYS = await fetch("systeme.json?" + Date.now()).then(r => r.ok ? r.json() : null);
-    SYST = Date.now();
-  } catch (e) { /* les cartes gardent leur etat */ }
-  return SYS;
+    const r = await fetch(url, { cache: "no-cache", signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return defaut;
+    return texte ? await r.text() : await r.json();
+  } catch { return defaut; }
+}
+
+async function lireSysteme() {
+  /* Ecrit chaque minute par systeme.py : relu toutes les 30 s. Absent, il ne
+     casse rien. */
+  return lireOuRien("systeme.json", 30);
 }
 /* Fusion dans les donnees de la page. Chaque cle de `systeme.json` remplace
    celle de `data.json` ; les cles partagees (sauvegarde, SMART, conteneurs)
    sont COMPLETEES et non remplacees. */
 function fusionSysteme(d, s) {
   if (!s) return;
-  for (const k of ["secu", "acces", "lan", "wan", "mem", "fankarr"]) if (s[k]) d[k] = s[k];
+  for (const k of ["secu", "acces", "lan", "wan", "mem", "fankarr", "journal"]) if (s[k]) d[k] = s[k];
   if (s.fans && d.nas) d.nas.fans = s.fans;
   if (s.backup) d.backup = Object.assign({}, d.backup, s.backup);
   if (s.kuma) d.kuma = Object.assign({}, d.kuma, s.kuma);
@@ -284,17 +386,74 @@ function fusionSysteme(d, s) {
   }
   if (s.mem && s.mem.anon && d.cont)
     for (const x of d.cont.c || []) if (s.mem.anon[x.n] != null) x.anon = s.mem.anon[x.n];
-  /* Detail de chaque disque pour sa fenetre, range sous le disque de smart.json. */
+  /* Detail de chaque disque pour sa fenetre, range sous le disque de smart.json.
+     ⚠️ LA TEMPERATURE VIENT D ICI (08/10/2026), capteur « Composite » relu toutes
+     les 10 min : celle de smart.json date de son passage quotidien, et etait
+     pourtant coloree comme une valeur vivante. */
   if (s.disq && d.smart)
-    for (const x of d.smart.d || []) if (s.disq[x.n]) x.det = s.disq[x.n];
+    for (const x of d.smart.d || []) {
+      if (!s.disq[x.n]) continue;
+      x.det = s.disq[x.n];
+      const c = (x.det.capt || []).find(k => k[0] === "Composite");
+      if (c && c[1] > 0) x.temp = c[1];
+    }
+}
+
+/* ---- SEUILS DE TEMPERATURE, LES MEMES PARTOUT (08/10/2026) ----
+   Le processeur passait a l ambre a 65 °C dans la barre, 70 dans la carte
+   Systeme, 80 pour ntfy et 85 pour la carte Temperatures ; les disques a 55 dans
+   la carte Stockage contre 70 ailleurs. Une seule table desormais, alignee sur
+   les alertes ntfy (`alerts.sh`) : [attention, critique]. */
+const SEUILS_T = { cpu: [80, 90], nvme: [70, 80] };
+const teinteT = (v, s) => v >= s[1] ? "cr" : v >= s[0] ? "wn" : "ok";
+
+/* Temperature du processeur LISSEE SUR 5 MIN. Le releve de la minute pile
+   tombait pendant la rafale des taches cron : 64,5 °C de moyenne contre
+   54,5 °C trente secondes plus tard, et la barre passait a l ambre pres d un
+   tiers du temps pour une chaleur que la collecte produisait elle-meme. */
+const tempCpu = (d) => {
+  const v = Hf(d, "temp").slice(-5).filter(x => x > 0);
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : (d.nas.temp || 0);
+};
+
+/* ---- FRAICHEUR DES DONNEES (08/10/2026) ----
+   La page ne disait jamais que ses donnees avaient cesse de bouger : un
+   collecteur arrete, ou le NAS injoignable (VPN coupe sur l iPhone), laissait
+   « Tout va bien » sur des valeurs figees, avec une horloge qui continuait de
+   battre. Chaque fichier porte maintenant son heure ; au-dela de trois fois sa
+   cadence (deux minutes au moins), une bande le dit au-dessus des pastilles, et
+   le fond perd ses couleurs : la page ne sait plus.
+   ⚠️ Un fichier SANS horodatage (collecteur d avant) n est pas juge. */
+const CADENCES = [["t", 30, "Collecte principale"], ["tLive", 2, "Mesures rapides"],
+                  ["tSys", 60, "Collecteur système"]];
+let DERNIER_OK = 0;      // derniere lecture reussie de data.json (ms)
+function figeHtml(d) {
+  const now = Date.now() / 1000, l = [];
+  if (!d) {
+    const s = DERNIER_OK ? now - DERNIER_OK / 1000 : 0;
+    /* Une lecture ratee isolee n est pas une panne : 30 s de grace. */
+    if (s < 30) return "";
+    l.push("Le NAS ne répond plus depuis " + duree(s / 60)
+      + " : réseau, VPN ou serveur. Les valeurs affichées sont les dernières reçues.");
+  } else {
+    for (const [k, cad, nom] of CADENCES) {
+      const t = +d[k];
+      if (!t) continue;
+      const age = now - t;
+      if (age > Math.max(3 * cad, 120)) l.push(nom + " : aucune mise à jour depuis " + duree(age / 60) + ".");
+    }
+  }
+  const pb = d && Array.isArray(d.problemes) ? d.problemes : [];
+  document.body.dataset.fige = l.length ? "1" : "";
+  if (!l.length && !pb.length) return "";
+  return (l.length ? `<div class="fg"><b>Données figées</b>${l.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "")
+    + (pb.length ? `<div class="fg pb"><b>Relevés en échec</b><span>${esc(pb.slice(0, 3).join(" · "))}${
+        pb.length > 3 ? " · +" + (pb.length - 3) : ""}</span></div>` : "");
 }
 async function histFin() {
-  if (FIN && Date.now() - FINT < 30000) return FIN;
-  try {
-    FIN = await fetch("history-min.json?" + Date.now()).then(r => r.json());
-    FINT = Date.now();
-  } catch (e) { /* le tracé retombe sur la série à 10 min */ }
-  return FIN;
+  /* Une ligne par minute : relu chaque minute. Absent, le trace retombe sur
+     la serie a 10 min. */
+  return lireOuRien("history-min.json", 60);
 }
 const colf = (d, n) => (((d.fin || {}).champs) || []).indexOf(n);
 const Hf = (d, n) => { const i = colf(d, n);
@@ -311,57 +470,31 @@ const Hf = (d, n) => { const i = colf(d, n);
    entiere et le survol continue de repondre a la minute. Consequence assumee :
    la courbe montre une moyenne de trois minutes la ou l infobulle donne une
    seule valeur, et les deux peuvent s ecarter sur une pointe breve.
+   ⚠️ SAUF LA POINTE DE LA SERIE (09/10/2026) : le paquet qui contient le
+   maximum garde ce maximum au lieu de sa moyenne. L echelle s arrete pile sur
+   la plus haute valeur relevee (voir `graphe`) ; moyennee, la pointe d une
+   minute n aurait jamais atteint le haut du graphe.
 
    ⚠️ Sans la serie fine, `p` vaut 1 et la fonction rend le tableau intact : les
    145 points de la serie a 10 min ne sont jamais degrades. */
 const reduis = (v, cible) => {
   const p = Math.max(1, Math.ceil(v.length / cible));
   if (p === 1) return v;
+  const im = v.indexOf(Math.max(...v));
   const o = [];
   for (let i = 0; i < v.length; i += p) {
     const s = v.slice(i, i + p);
-    o.push(s.reduce((a, b) => a + b, 0) / s.length);
+    o.push(im >= i && im < i + p ? v[im] : s.reduce((a, b) => a + b, 0) / s.length);
   }
   return o;
 };
 
-/* Aire empilable : une ou plusieurs series sur la meme echelle. */
-const aire = (series, mx, o) => {
-  o = o || {};
-  const ts = o.ts || [];
-  const ok = series.filter(x => x.v.length > 1);
-  if (!ok.length) return "";
-  /* ⚠️ LE PLAFOND SE CALCULE SUR LA SERIE REDUITE, celle qu on trace, et non
-     sur la serie fine. Sinon il vaut la pointe d une minute que la moyenne sur
-     six minutes ecrete, et la courbe ne peut jamais atteindre le haut du
-     cadre : mesure le 02/09/2026, sommet a 58,4 % de la hauteur, quinze unites
-     de vide sur trente-six.
-     ⚠️ On reduit UNE SEULE FOIS, ici, pour les deux usages. `tr` recevait
-     la serie brute et la reduisait a chaque appel, soit deux fois par serie
-     puisqu il sert au remplissage puis au trait. */
-  const red = ok.map(x => Object.assign({}, x, { r: reduis(x.v, 240) }));
-  const M = mx || Math.max(1, ...red.flatMap(x => x.r));
-  const tr = (v) => v.map((y, i) =>
-    (i / (v.length - 1) * 236).toFixed(1) + "," + (44 - Math.min(y / M, 1) * 36).toFixed(1)).join(" L ");
-  return `<div class="silh"><svg class="courbe" viewBox="0 0 236 48" preserveAspectRatio="none" role="img" aria-label="Historique sur 24 heures"`
-    + ` data-lec="gr" data-x0="0" data-x1="236" data-u="${esc(o.u || "%")}"`
-    + (ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : "")
-    + `><rect class="capt" x="0" y="0" width="236" height="48"/>`
-    + red.map(x => `<path d="M ${tr(x.r)} L 236,48 L 0,48 Z" fill="${x.c}" fill-opacity=".16"/>`
-        + `<path class="serie" data-n="${esc(x.n || "")}" data-k="0" data-v="${x.v.map(z => Math.round(z)).join(",")}" d="M ${tr(x.r)}" fill="none" stroke="${x.c}" stroke-width="1.4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join("")
-    /* Le repere du haut annonce le SOMMET REEL du trace : depuis que le
-       plafond se calcule sur la serie reduite, la courbe atteint
-       exactement cette valeur au point le plus haut du cadre. */
-    + `</svg><span class="vmax">${esc(fmtv(M, o.u || "%"))}</span><span class="vmin">0</span></div>`;
-};
-
-/* Debut de la periode reellement couverte par l historique. */
-const depuis = (d) => {
-  const j = (d.hist && d.hist.j) || [];
-  if (!j.length) return "";
-  const h = Math.round((Date.now() / 1000 - j[0][0]) / 3600);
-  return "il y a " + (h >= 24 ? "24 h" : Math.max(1, h) + " h");
-};
+/* Etiquettes de l AXE des graphes de debit : la gouttiere de `graphe()` ne
+   fait que 26 unites, ou « 59,4 Mio/s » deborderait sur le trace. Version
+   courte (« 59 M », « 1,5 M », « 850 K ») ; l infobulle garde la valeur
+   entiere. */
+const MoAxe = (v) => !v ? "0" : v >= 1048576
+  ? vg((v / 1048576).toFixed(v >= 10485760 ? 0 : 1)) + " M" : Math.round(v / 1024) + " K";
 
 /* Dernier point de l historique. C est la SEULE source pour les mesures qui ne
    transitent pas par data.json : les temperatures par disque et celle du
@@ -374,7 +507,12 @@ const dern = (d) => (((d.hist || {}).j) || []).slice(-1)[0] || [];
 
    - `o.min` deplace le BAS de l echelle. Quatre capteurs vivant entre 40 et
      72 degres etaient ecrases dans le tiers superieur d un axe partant de zero ;
-     l axe se lit de 30 a 90 et les trois etiquettes suivent.
+     l axe part de 30 et les trois etiquettes suivent.
+   - ⚠️ LE HAUT DE L ECHELLE EST LA PLUS HAUTE VALEUR RELEVEE DANS LA PERIODE
+     AFFICHEE (09/10/2026), et plus un plafond fixe : 100 % laissait les deux
+     tiers du graphe Systeme vides, 90 °C ecrasait les temperatures. Chaque vue
+     prend le maximum de SES series : la vue 24 h ne monte pas jusqu a une
+     pointe vue sur 7 jours. Un seuil hors de l echelle n est pas trace.
    - `x.d0` fait demarrer une serie LA OU SES DONNEES COMMENCENT. Une mesure
      ajoutee aujourd hui n a pas d historique hier : sans ca elle tracerait une
      ligne plate a zero sur vingt-trois heures, ce qui ressemble a une panne.
@@ -387,7 +525,7 @@ const graphe = (series, o) => {
     && (!x.d0 || x.v.some(n => n > 0)));
   if (!ok.length) return `<div class="note">Historique en cours de constitution</div>`;
   const m = o.min || 0;
-  const M = o.max || Math.max(1, ...ok.flatMap(x => x.v));
+  const M = Math.max(m + 1, ...ok.flatMap(x => x.v));
   const f = o.f || (v => String(Math.round(v)));
   const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 66).toFixed(1);
   const X = (i, n) => (26 + i / (n - 1) * 272).toFixed(1);
@@ -397,12 +535,17 @@ const graphe = (series, o) => {
      nombre elle tient dans la gouttiere et se lit comme une QUATRIEME GRADUATION
      de l axe ; la couleur et le pointille disent qu il s agit d un seuil.
      ⚠️ Le `Math.min` retient l etiquette dans le cadre : un seuil bas la ferait
-     sinon sortir sous l aire de trace, jusque dans l axe du temps. */
-  const sl = o.seuil == null ? "" :
-    `<line x1="26" y1="${Y(o.seuil)}" x2="298" y2="${Y(o.seuil)}" stroke="#ff453a"
-       stroke-width=".9" stroke-dasharray="3 3" opacity=".75"/>
-     <text x="0" y="${Math.min(+Y(o.seuil) + 2, 77).toFixed(1)}" text-anchor="start"
-       style="fill:#ff8f88;font-size:6.5px">${esc(f(o.seuil))}</text>`;
+     sinon sortir sous l aire de trace, jusque dans l axe du temps.
+     ⚠️ L echelle suivant les donnees, le seuil peut tomber au ras d une
+     graduation : son etiquette est alors omise (le trait reste), sinon les deux
+     nombres se chevauchent. */
+  const ys = Math.min(+Y(o.seuil) + 2, 77);
+  const sl = o.seuil == null || o.seuil > M || o.seuil < m ? "" :
+    `<line x1="26" y1="${Y(o.seuil)}" x2="298" y2="${Y(o.seuil)}" stroke="${o.seuilC || "#ff453a"}"
+       stroke-width=".9" stroke-dasharray="3 3" opacity=".75"/>`
+    + ([14, 47, 80].every(y => Math.abs(y - ys) > 7)
+      ? `<text x="0" y="${ys.toFixed(1)}" text-anchor="start"
+       style="fill:${o.seuilC || "#ff8f88"};font-size:6.5px">${esc(f(o.seuil))}</text>` : "");
   /* Trois series se superposent depuis la fusion Systeme + swap : on allege
      le remplissage, sinon les aires s additionnent en une soupe. */
   const op = ok.length >= 3 ? ".11" : ".16";
@@ -420,7 +563,7 @@ const graphe = (series, o) => {
       return `<path d="M ${pts} L 298,78 L ${X(k, n)},78 Z" fill="${x.c}" fill-opacity="${op}"/>
       <path class="serie" data-n="${esc(x.n || "")}" data-k="${kf}" data-v="${x.v.map(z => +(+z).toFixed(1)).join(",")}" d="M ${pts}" fill="none" stroke="${x.c}" stroke-width="1.2" stroke-linejoin="round"/>
       <circle cx="298" cy="${Y(vd[n - 1])}" r="2.6" fill="${x.c}"/>`; }).join("")}
-  </svg>` + (ts.length > 1 ? `<div class="gech">${echelle(ts, 3)}</div>` : "");
+  </svg>` + (ts.length > 1 ? `<div class="gech">${echelle(ts, o.pas || 3)}</div>` : "");
 };
 
 const pct = v => Math.round(v) + " %";
@@ -447,88 +590,8 @@ const leg = (l) => `<div class="leg">${l.map(([t, c, v]) =>
   `<span><i style="background:${c}"></i>${esc(t)}${
     v != null ? `<b>${esc(v)}</b>` : ""}</span>`).join("")}</div>`;
 
-/* On classe sur la memoire REELLE : residente + evacuee en zram. Sans le second
-   terme, Jellyfin paraissait 6e alors qu il est 2e (102 Mo vus, 528 reels). */
+/* Memoire d un conteneur en Mo, depuis le pourcentage de `docker stats`. */
 const moC = (p, rt) => rt ? Math.round(p / 100 * rt / 1024) : 0;
-const reelC = (x, rt) => moC(x.mem, rt) + (x.swap || 0);
-
-/* Une ligne par conteneur.
-   LA BARRE EST SCINDEE : le plein est ce qui tient en memoire, le voile ce qui a
-   ete evacue en zram. Les additionner en un seul nombre masquait le sujet meme
-   de la carte — Jellyfin affichait 524 Mo dont 449 evacues, soit 75 Mo
-   reellement residents. Sur un NAS de 7,5 Go qui swappe a 42 %, c est
-   precisement la distinction qui compte.
-
-   LE REPERE FIN marque la moyenne de residence sur 24 h : au-dela le conteneur
-   consomme plus que d habitude, en deca moins. C est la seule grandeur de cette
-   carte qui BOUGE vraiment, le classement ne changeant quasiment jamais.
-
-   ⚠️ Le repere ne concerne que la RESIDENCE : il n existe pas de `swap24`, et
-   melanger un total actuel avec une moyenne de residence donnerait un repere
-   faux. */
-const bars = (l, ramt) => {
-  if (!l.length) return `<div class="note">Relevé en attente</div>`;
-  const mx = Math.max(1, ...l.map(c => reelC(c, ramt)));
-  const pc = (v) => Math.min(100, v / mx * 100).toFixed(1);
-  return `<div class="bars">${l.map(c => {
-    const res = moC(c.mem, ramt), sw = c.swap || 0;
-    const moy = moC(c.mem24 != null ? c.mem24 : c.mem, ramt);
-    return `<div class="br"><span>${esc(c.n)}</span><b>${res + sw} Mo</b>`
-      + `<i><em style="width:${pc(res)}%"></em>`
-      + (sw ? `<u style="width:${pc(sw)}%"></u>` : "")
-      + `<s style="left:${pc(moy)}%"></s></i></div>`;
-  }).join("")}</div>`;
-};
-
-/* Sante SMART : une ligne par disque.
-   L anneau d endurance a ete retire : 99 % et 100 %, deux valeurs qui ne bougent
-   quasiment jamais et ne peuvent que baisser, pour la moitie de la hauteur de la
-   carte. Le remplacent les deux grandeurs qui VARIENT — la temperature sur son
-   echelle de 25 a 75 degres, repere au seuil de 65, et le RYTHME D ECRITURE en
-   Go/jour, deduit du total ecrit et de l age du disque, seule grandeur sur
-   laquelle une action est possible.
-
-   DUREE DE VIE MINIMALE, sans aucune specification constructeur. La NVMe expose
-   « Percentage Used » comme un ENTIER TRONQUE : un compteur a 0 signifie une
-   usure reelle strictement inferieure a 1 %, un compteur a 1 inferieure a 2 %.
-   Au rythme observe, la duree restante vaut donc AU MOINS 100 / (usure + 1) fois
-   l age du disque. C est une borne basse, annoncee avec un « au moins » : elle
-   existe des 0 % d usure, ne peut pas se reveler optimiste, et se resserre seule
-   a mesure que le disque vieillit. */
-const disques = (s) => {
-  const l = (s && s.d) || [];
-  if (!l.length) return `<div class="note">Relevé SMART en attente</div>`;
-  const TMIN = 25, TMAX = 75;          // bornes de la reglette, en degres
-  return `<div class="nvme">` + l.map(x => {
-    const cap = x.go >= 1000 ? vg((x.go / 1000).toFixed(1)) + " To" : x.go + " Go";
-    const j = Math.max(1, Math.round(x.heures / 24));
-    const gj = x.ecrit * 1000 / j;     // Go ecrits par jour
-    const rythme = gj >= 1000 ? vg((gj / 1000).toFixed(2)) + " To/j"
-                              : vg(gj.toFixed(1)) + " Go/j";
-    const ko = !x.ok || x.erreurs > 0;
-    const tc = x.temp >= 65 ? "cr" : x.temp >= 55 ? "wn" : "ok";
-    const pos = Math.min(100, Math.max(0, (x.temp - TMIN) / (TMAX - TMIN) * 100));
-    // `usure + 1` : le compteur etant tronque, l usure reelle lui est
-    // strictement inferieure. La borne vaut donc pour un disque a 0 %.
-    const ans = 100 / (x.usure + 1) * j / 365;
-    const vie = ans >= 2 ? "≥ " + Math.round(ans) + " ans"
-                         : "≥ " + Math.max(1, Math.round(ans * 12)) + " mois";
-    return `<div class="nv">
-        <div class="nv-h">
-          <i class="nv-p ${ko ? "cr" : "ok"}"></i>
-          <b class="nv-n">${esc(x.modele.replace(/_/g, " "))}</b>
-          <span class="nv-c">${cap}</span>
-          <span class="nv-d ${tc}">${x.temp} °C</span>
-        </div>
-        <div class="nv-b"><i style="left:${pos.toFixed(1)}%"></i></div>`
-      + past([["usure " + x.usure + " %"],
-              [rythme],
-              [vie],
-              [x.erreurs + (x.erreurs > 1 ? " erreurs" : " erreur"), ko ? "wn" : "ok"],
-              [x.brutaux + (x.brutaux > 1 ? " arrêts brutaux" : " arrêt brutal")]])
-      + `</div>`;
-  }).join("") + `</div>`;
-};
 
 /* ⚠️ La pastille etait DECLAREE dans style.css — `.etatv .ep` et sa variante
    `.ep.ko` en rouge — mais jamais emise : le troisieme argument etait ignore
@@ -583,6 +646,42 @@ const journal = (l, max) => {
       + `<span class="q">${esc(x.u)} · ${esc(x.n)}${x.c > 1 ? ` <small>×${x.c}</small>` : ""}</span>`
       + `<span class="r ${x.ok ? "ok" : "wn"}">${esc(x.r)}</span></div>`;
   }).join("")}</div>`;
+};
+
+/* D ou vient une connexion exterieure (08/10/2026), relu dans `acces.geo` :
+   [code pays, pays, ville, operateur, hebergeur]. C est ce qui dit si elle est
+   inquietante : un telephone en 5G en France n est pas un serveur loue a
+   l autre bout du monde. Le pays et l operateur sont fiables ; la ville d une
+   adresse MOBILE est souvent celle du reseau de l operateur, d ou son rang
+   second. « hébergeur ou VPN » est un indice tire du nom de l operateur. */
+const lieu = (g) => !g ? "" : [[g[2], g[1]].filter(Boolean).join(", "), g[3]].filter(Boolean).join(" · ")
+  + (g[4] ? " · hébergeur ou VPN" : "");
+
+/* Bloc « Depuis Internet » de la carte Acces, place EN TETE : c est la raison
+   de l alerte. Le 08/10/2026, la connexion exterieure etait introuvable sous
+   quatre lignes de sessions SSH du PC. Une ligne par adresse : la connexion la
+   plus recente, combien de fois sur 24 h, puis d ou elle vient. */
+const depuisInternet = (a) => {
+  const ev = (a.ev || []).length
+    ? a.ev.filter(x => +x[6]).map(x => ({ t: +x[0], s: x[1], u: x[2], n: x[3], r: x[4], ok: !!+x[5], c: 1 }))
+    : (a.log || []).filter(x => x.x).map(x => Object.assign({}, x, { c: x.c || 1 }));
+  if (!ev.length) return "";
+  const m = new Map();
+  for (const e of ev.sort((p, q) => q.t - p.t)) {
+    const p = m.get(e.n);
+    if (p) { p.c += e.c; p.ok = p.ok && e.ok; } else m.set(e.n, Object.assign({}, e));
+  }
+  const l = [...m.values()];
+  const auj = new Date().toDateString(), hier = new Date(Date.now() - 864e5).toDateString();
+  const quand = (t) => { const j = new Date(t * 1000).toDateString();
+    return (j === auj ? "" : j === hier ? "hier " : new Date(t * 1000)
+      .toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " ") + hhmm(t); };
+  return intertitre("Depuis Internet") + `<div class="dint">${l.slice(0, 3).map(x =>
+    `<div><span class="q">${esc(x.u)} · ${esc(x.s)} · ${quand(x.t)}${x.c > 1 ? ` <small>×${nb(x.c)}</small>` : ""}</span>`
+    + `<span class="r ${x.ok ? "ok" : "wn"}">${esc(x.r)}</span>`
+    + `<span class="lieu">${(a.geo || {})[x.n] ? esc(lieu(a.geo[x.n])) + ` <small>${esc(x.n)}</small>`
+      : esc(x.n) + " <small>localisation inconnue</small>"}</span></div>`).join("")}${
+    l.length > 3 ? `<div class="note">et ${nb(l.length - 3)} autre${l.length > 4 ? "s adresses" : " adresse"}</div>` : ""}</div>`;
 };
 
 /* Barres classees : libelle, valeur, longueur en %, couleur, precision.
@@ -680,7 +779,7 @@ const ligneDisque = (x, cfg) => {
   const modele = x.modele.replace(/_/g, " ").replace(/\s*\d+(?:[.,]\d+)?\s*(?:GB|TB|Go|To)$/i, "");
   const cap = x.go >= 1000 ? vg((x.go / 1000).toFixed(1)) + " To" : x.go + " Go";
   const ko = !x.ok || x.erreurs > 0;
-  const tc = x.temp >= 65 ? "cr" : x.temp >= 55 ? "wn" : "ok";
+  const tc = teinteT(x.temp, SEUILS_T.nvme);
   /* Un clic ouvre la fiche du disque (`popDisque`, ecouteur delegue : la carte
      est redessinee toutes les deux secondes). */
   return `<div class="dq" data-disque="${esc(x.n)}" role="button" tabindex="0" title="Voir le détail du disque">`
@@ -691,6 +790,18 @@ const ligneDisque = (x, cfg) => {
     + `<em class="${ko ? "wn" : "ok"}">${x.erreurs} erreur${x.erreurs > 1 ? "s" : ""}</em>`
     + `<span class="ouvre" aria-hidden="true"></span></div>`;
 };
+/* LES DISQUES iSCSI VUS DE L INTERIEUR (09/10/2026, `disques_iscsi` dans
+   systeme.py). Le volume ne voit qu un gros fichier, de la meme taille qu il
+   soit vide ou plein ; le NAS lit donc la carte d occupation de NTFS dans ce
+   fichier. La part du poste iSCSI que Windows a vraiment ecrite est dessinee
+   pleine, le reste du disque a 38 % d opacite, comme le swap dans la fenetre
+   Memoire. null sans releve. */
+const fractionIscsi = (e) => {
+  const l = ((e && e.iscsi) || []).filter(x => x.fs > 0 && x.used != null);
+  const fs = l.reduce((a, x) => a + x.fs, 0);
+  return fs ? l.reduce((a, x) => a + x.used, 0) / fs : null;
+};
+
 const grappesDisques = (s, cfg) => {
   const dq = (s && s.d) || [];
   if (!dq.length) return `<div class="note">Relevé des disques en attente</div>`;
@@ -716,12 +827,30 @@ const grappesDisques = (s, cfg) => {
     }
     let espace = "";
     if (e && e.tot) {
-      const parts = Object.keys(cfg.ESPACE).filter(k => ((e.parts || {})[k] || 0) > 0).map(k => [k, e.parts[k]]);
+      /* Du plus gros au plus petit, « autres » toujours en dernier, comme dans
+         la fenetre du volume (09/10/2026) : dans l ordre de la configuration,
+         la barre melangeait grands et petits postes. */
+      const parts = Object.keys(cfg.ESPACE).filter(k => ((e.parts || {})[k] || 0) > 0).map(k => [k, e.parts[k]])
+        .sort(([a, x], [b, y]) => (a === "autres") - (b === "autres") || y - x);
       const used = e.used != null ? e.used : parts.reduce((a, [, o]) => a + o, 0);
-      espace = `<div class="jauge-b pile">` + parts.map(([k, o]) =>
-          `<i style="width:${pc(o / e.tot * 100).toFixed(2)}%;background:${cfg.ESPACE[k][1]}"></i>`).join("")
+      /* L espace LIBRE DANS LE DISQUE iSCSI est HACHURE, comme le cache de la
+         carte Memoire (09/10/2026) : reserve sur le volume, mais rien n y est
+         ecrit. La legende le dit en deux entrees, « écrit » et « libre ». */
+      const fI = fractionIscsi(e);
+      espace = `<div class="jauge-b pile">` + parts.map(([k, o]) => {
+          const w = o / e.tot * 100, c = cfg.ESPACE[k][1];
+          return k === "iscsi" && fI != null
+            ? `<i style="width:${pc(w * fI).toFixed(2)}%;background:${c}"></i>`
+              + `<i style="width:${pc(w * (1 - fI)).toFixed(2)}%;background:${hachure(c)}"></i>`
+            : `<i style="width:${pc(w).toFixed(2)}%;background:${c}"></i>`; }).join("")
         + `</div><div class="bv"><span><b>${esc(surTotal(used, e.tot))}</b> · ${esc(taille(Math.max(0, e.tot - used)))} libres</span></div>`
-        + leg(parts.map(([k, o]) => [cfg.ESPACE[k][0], cfg.ESPACE[k][1], taille(o)]));
+        /* UNE SEULE ENTREE pour l iSCSI : pastille moitie pleine, moitie
+           hachuree, et « 1,1 To · 370 Go libres ». */
+        + leg(parts.map(([k, o]) => { const c = cfg.ESPACE[k][1];
+            return k === "iscsi" && fI != null
+              ? [cfg.ESPACE[k][0], `linear-gradient(90deg,${c} 50%,transparent 50%),${hachure(c)}`,
+                 taille(o * fI) + " · " + taille(o * (1 - fI)) + " libres"]
+              : [cfg.ESPACE[k][0], c, taille(o)]; }));
     }
     /* L en-tete et la barre d un volume de donnees ouvrent le detail de son
        espace (`popEspace`), les lignes de disque leur fiche. */
@@ -748,7 +877,7 @@ const grappesDisques = (s, cfg) => {
    donne « 144 h » pour six jours : au-dela de deux jours on passe aux jours. */
 const anciennete = (s) => s >= 172800 ? Math.round(s / 86400) + " j" : duree(s / 60);
 
-/* GROUPS : deplace dans `services.js`, charge avant ce fichier. */
+/* GROUPS : dans `cartes.js`, charge avant ce fichier. */
 
 const ICONS = {
   briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
@@ -763,11 +892,72 @@ const svg = (p, k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const esc = (s) => String(s).replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
 const label = (u) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
+/* ---- Etat d une carte (08/10/2026) ----
+   `false`, `true`, ou `"incident"`. Une carte de la liste `TACHES` (CRM,
+   Radarr…) porte d ordinaire une tache, qui ne fait pas virer le fond ; elle
+   peut desormais dire qu il s agit d un vrai incident (l outil des mises a
+   jour arrete, par exemple). Un service MUET (`ko` dans data.json, son API ne
+   repond pas) est toujours un incident : sa carte affichait sinon des zeros en
+   vert, « Aucun film manquant » pour un Radarr arrete. */
+const muet = (s, d) => !!s.ko && (d.ko || []).includes(s.ko);
+const etatCarte = (s, d) => {
+  if (muet(s, d)) return "incident";
+  if (!s.warn) return false;
+  try { return s.warn(d); } catch (e) { return false; }
+};
+/* ⚠️ TROIS NIVEAUX DEPUIS LE 08/10/2026. `warn` peut aussi rendre `"crit"` :
+   le service est hors d usage (site injoignable, tunnel tombe, lien coupe).
+   C est un incident ROUGE, la ou l ambre dit « a regarder ». Avant, tout etait
+   ambre, et l ambre allume a vingt endroits ne distinguait plus rien. */
+const incident = (s, w) => w === "incident" || w === "crit" || (!!w && !TACHES.includes(s.n));
+/* Classe de la pastille : rouge, ambre, ou TACHE (neutre, ne fait pas virer le fond). */
+const niveau = (s, w) => !w ? "" : w === "crit" ? "crit incident" : incident(s, w) ? "warn incident" : "tache";
+
+/* La RAISON d un etat, en quelques mots, pour la ligne sous la barre : le nom
+   seul obligeait a descendre jusqu a la carte pour savoir de quoi il s agit.
+   Chaque carte qui peut s allumer dit pourquoi (`pourquoi` dans `cartes.js`). */
+const raison = (s, d, w) => {
+  if (muet(s, d)) return "ne répond pas";
+  if (s.pourquoi) { try { const r = s.pourquoi(d); if (r) return r; } catch (e) { console.warn(s.n, e); } }
+  return w === "crit" ? "hors service" : "à vérifier";
+};
+
+/* « 1 film », « 3 films », « 0 film » : en francais, zero prend le singulier.
+   Espace INSECABLE entre le nombre et le mot : un retour a la ligne ne les
+   separe jamais. */
+const pluriel = (n, s, p) => nb(n) + "\u00a0" + (Math.abs(n) > 1 ? (p || s + "s") : s);
+
+/* Les messages de sante de Prowlarr arrivent en anglais, tels quels :
+   « Indexers unavailable due to failures for more than 6 hours: Orion ». Les
+   formes connues sont traduites ; une autre est citee entre guillemets, pour
+   qu on sache que la phrase vient de Prowlarr et non de la page. */
+const PROWLARR_OBJETS = { indexers: "indexeurs", applications: "applications",
+  "download clients": "clients de téléchargement", proxies: "proxys", "indexer proxies": "proxys" };
+const prowlarrFr = (m) => {
+  m = String(m || "").trim();
+  let r = m.match(/^All (indexers|applications|download clients|indexer proxies) are unavailable due to failures( for more than 6 hours)?\.?$/i);
+  if (r) return "Tous les " + PROWLARR_OBJETS[r[1].toLowerCase()] + " sont en échec" + (r[2] ? " depuis plus de 6 h" : "");
+  r = m.match(/^(Indexers|Applications|Download clients|Proxies) unavailable due to failures( for more than 6 hours)?: (.+)$/i);
+  if (r) { const o = PROWLARR_OBJETS[r[1].toLowerCase()];
+    return o[0].toUpperCase() + o.slice(1) + " en échec" + (r[2] ? " depuis plus de 6 h" : "") + " : " + r[3]; }
+  r = m.match(/^Indexer VIP benefits (expiring soon|have expired): (.+)$/i);
+  if (r) return (r[1].toLowerCase() === "have expired" ? "Statut VIP expiré : " : "Statut VIP bientôt expiré : ") + r[2];
+  return m ? "« " + m + " »" : "";
+};
+
 function card(s, d) {
-  const stats = s.f ? s.f(d) : null;
-  const viz = s.r ? s.r(d) : null;
-  const note = s.note ? s.note(d) : null;
-  const warn = s.warn ? s.warn(d) : false;
+  /* ⚠️ RENDU PROTEGE : une cle absente de data.json levait une exception, et
+     c est TOUTE LA PAGE qui cessait de se mettre a jour. La carte fautive dit
+     maintenant qu elle ne peut pas s afficher, les autres continuent. */
+  const sur = (f) => { try { return f ? f(d) : null; } catch (e) { console.warn(s.n, e); return undefined; } };
+  const tait = muet(s, d);
+  let stats = tait ? null : sur(s.f);
+  let viz = tait ? `<div class="note muet">${esc(s.n)} ne répond pas</div>` : sur(s.r);
+  const note = tait ? null : sur(s.note);
+  if (viz === undefined || stats === undefined) {
+    viz = `<div class="note muet">Données illisibles pour cette carte</div>`; stats = null;
+  }
+  const warn = etatCarte(s, d);
   const main = s.u || s.x;
   const logo = s.ic ? `<img src="icons/${s.ic.includes(".") ? s.ic : s.ic + ".svg"}" alt="">` : esc(s.n.slice(0, 2).toUpperCase());
   const adr = [s.x && `<span class="dom lien" data-lien="${esc(s.x)}" title="${esc(s.x)}">${esc(label(s.x))}</span>`, s.u && `<span class="port">:${esc(s.u.split(":").pop())}</span>`].filter(Boolean).join("");
@@ -776,14 +966,45 @@ function card(s, d) {
   const body = `<div class="head"><span class="chip">${logo}</span>
       <div class="txt"><h3><span class="nom">${esc(s.n)}</span>${adr ? `<span class="adr">${adr}</span>` : ""}</h3>
         <p>${esc(s.d)}</p></div>
-      <i class="dot${warn ? " warn" : ""}"></i></div>
+      ${s.per ? periode(s.n) : ""}<i class="dot${warn ? " " + niveau(s, warn) : ""}"></i>${s.pop ? '<i class="ouvre" aria-hidden="true"></i>' : ""}</div>
     ${viz ? `<div class="vizb">${viz}</div>` : ""}
     ${stats ? `<div class="stats">${stats.map(([v, l]) =>
       `<div class="st"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     ${note ? `<div class="note">${esc(note)}</div>` : ""}`;
-  if (s.pop) return `<div class="${kl} clic" data-pop="${s.pop}">${body}</div>`;
+  /* Focalisable et annoncee comme ouvrant une fenetre (09/10/2026) : au clavier,
+     Tab y arrive, Entree ou Espace l ouvre (voir plus bas). */
+  if (s.pop) return `<div class="${kl} clic" data-pop="${s.pop}" tabindex="0" role="button" aria-haspopup="dialog">${body}</div>`;
   return main ? `<a class="${kl}" rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}">${body}</div>`;
 }
+
+/* Le selecteur « 24 h · 7 j » d une carte a graphe (`per: 1` dans cartes.js),
+   pose dans son en-tete. Voir `PERIODES`.
+   ⚠️ Des `<span role="button">` et non des `<button>` : plusieurs de ces cartes
+   sont des liens `<a>`, ou un bouton n a pas sa place. Le clic est intercepte
+   en phase de CAPTURE, avant le lien de la carte (voir plus bas). */
+const periode = (carte) => `<span class="periode" role="group" aria-label="Période du graphe">${
+  [["24h", "24 h"], ["7j", "7 j"]].map(([k, t]) => {
+    const on = (sept(carte) ? "7j" : "24h") === k;
+    return `<span role="button" tabindex="0" data-per="${k}" aria-pressed="${on}"${on ? ' class="on"' : ""}>${t}</span>`;
+  }).join("")}</span>`;
+
+addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-per]");
+  if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const nom = b.closest(".card") && b.closest(".card").querySelector(".nom");
+  if (!nom) return;
+  if (b.dataset.per === "7j") PERIODES[nom.textContent] = "7j";
+  else delete PERIODES[nom.textContent];
+  try { localStorage.setItem("homelab.periodes", JSON.stringify(PERIODES)); } catch (x) { /* stockage refuse */ }
+  cacheTip();
+  dessineGroupes();
+}, true);
+addEventListener("keydown", (e) => {
+  if ((e.key !== "Enter" && e.key !== " ") || !e.target.matches || !e.target.matches("[data-per]")) return;
+  e.preventDefault(); e.stopPropagation();
+  e.target.click();
+}, true);
 
 /* ⚠️ LA CARTE EST DEJA UN `<a>`, vers le service LOCAL des qu il en existe un.
    On ne peut pas y imbriquer un second lien : le navigateur fermerait le premier
@@ -815,82 +1036,392 @@ addEventListener("click", (e) => {
    son texte au rendu suivant.
    ⚠️ `try` autour du predicat : une carte dont la donnee manque ne doit pas
    emporter toute la barre du haut avec elle. */
-const soucisDe = (d) => GROUPS.flatMap(g => g.s).filter(s => {
-  if (!s.warn || TACHES.includes(s.n)) return false;
-  try { return !!s.warn(d); } catch (e) { return false; }
-}).map(s => s.n);
+/* Toutes les cartes allumees, avec leur niveau et leur raison, dans l ordre de
+   la page. `inc` distingue les incidents des TACHES. */
+const etats = (d) => GROUPS.flatMap(g => g.s).map(s => {
+  const w = etatCarte(s, d);
+  return w ? { n: s.n, w, inc: incident(s, w), r: raison(s, d, w) } : null;
+}).filter(Boolean);
+const soucisDe = (d) => etats(d).filter(e => e.inc);
 
-/* LES PASTILLES SORTENT DE LA BARRE (06/10/2026, sur demande). Logees dans
-   le bloc d etat, elles l allongeaient a chaque alerte et faisaient passer la
-   barre sur deux lignes sur les ecrans moyens. Elles ont maintenant leur rangee
-   a elles, centree juste sous la barre (`#soucis`), vide quand tout va bien. */
-const pastilles = (d) => soucisDe(d).map(n =>
-  `<span class="cible" data-carte="${esc(n)}">${esc(n)}</span>`).join("");
+/* UNE PASTILLE PAR CARTE ALLUMEE, AVEC SA RAISON (08/10/2026).
+   Les pastilles ne donnaient qu un nom : la raison etait au huitieme ecran sur
+   iPhone. Chacune dit maintenant ce qui ne va pas ; un clic mene a la carte.
+   Depuis le 09/10/2026 elles vivent DANS la barre collante, entre le menu des
+   groupes et « Compact », et suivent donc le defilement.
+   Deux blocs : les TACHES en neutre (films manquants, demandes, leads), qui se
+   font sans alarme, TOUJOURS AU-DESSUS ; puis les incidents, rouges d abord. Chaque bloc passe a la ligne de son cote.
+   ⚠️ Cinq incidents au plus, puis « + N autres » : un clic deplie le reste, un
+   second le replie. L etat vit hors du rendu, refait toutes les deux secondes.
+   ⚠️ DES `<span role="button">` ET NON DES `<button>` : dans la barre, toutes
+   les regles des onglets visent `#filters button` (verre, taille, et surtout
+   `display: none` hors du menu) et les auraient avalees. Le clavier est rendu
+   plus bas (Entree, Espace). */
+const MAX_INCIDENTS = 5;
+let SOUCIS_TOUS = false;
+const pastilles = (d) => {
+  const l = etats(d);
+  const inc = l.filter(e => e.inc).sort((a, b) => (b.w === "crit") - (a.w === "crit"));
+  const tac = l.filter(e => !e.inc);
+  const vus = SOUCIS_TOUS ? inc : inc.slice(0, MAX_INCIDENTS);
+  const caches = inc.length - vus.length;
+  const bt = (cl, attr, html) => `<span role="button" tabindex="0" class="pil ${cl}" ${attr}>${html}</span>`;
+  /* LE NOM SEUL, LA RAISON AU SURVOL (09/10/2026) : la
+     phrase entiere faisait passer les pastilles sur plusieurs lignes dans la
+     barre collee. Elle passe dans l infobulle des courbes (`data-lec`), et
+     dans le nom accessible de la pastille pour un lecteur d ecran. */
+  const pil = (e, k) => bt(k, `data-carte="${esc(e.n)}" data-lec="raison" data-r="${esc(e.r)}" aria-label="${esc(e.n + " : " + e.r)}"`,
+    (k === "tache" ? "" : "<i></i>") + `<b>${esc(e.n)}</b>`);
+  const incs = vus.map(e => pil(e, e.w === "crit" ? "crit" : "inc")).join("")
+    + (caches > 0 ? bt("plus", 'data-plus="1"', "+ " + pluriel(caches, "autre"))
+       : SOUCIS_TOUS && inc.length > MAX_INCIDENTS ? bt("plus", 'data-plus="0"', "Réduire") : "");
+  /* Un bloc vide n est pas rendu, pour que `#soucis:empty` fasse disparaitre
+     la zone quand tout va bien. */
+  return (tac.length ? `<div class="taches">${tac.map(e => pil(e, "tache")).join("")}</div>` : "")
+    + (incs ? `<div class="incs">${incs}</div>` : "");
+};
+addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-plus]");
+  if (!b) return;
+  SOUCIS_TOUS = b.dataset.plus === "1";
+  fondre(document.getElementById("soucis"), pastilles(DATA));
+  placeEtSerre();
+});
+/* Entree et Espace sur une pastille ou la cloche : ce qu un `<button>` ferait
+   de lui-meme. */
+addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target.closest && e.target.closest("#filters [role=button]");
+  if (!el) return;
+  e.preventDefault();
+  el.click();
+});
+
+/* UNE PASTILLE SUR DEUX LIGNES EPOUSE SON TEXTE (09/10/2026).
+   Un texte qui passe a la ligne donne a sa boite TOUTE la largeur disponible,
+   meme quand ses lignes sont bien plus courtes : le fond colore s etalait pour
+   rien. Le CSS ne sait pas resserrer une boite sur ses lignes ; on mesure donc
+   la plus longue (une `Range` donne un rectangle par ligne) et on fixe la
+   largeur dessus, rembourrage et bordure compris. Les coupures restent les
+   memes : aucune ligne n est plus longue que la largeur fixee.
+   ⚠️ Refait apres chaque rendu : `fondre` reecrit les attributs, et efface donc
+   la largeur posee au tour precedent. */
+function serrePastilles() {
+  document.querySelectorAll("#soucis .pil").forEach(p => {
+    p.style.width = "";
+    const cs = getComputedStyle(p);
+    const lh = parseFloat(cs.lineHeight) || 16;
+    /* Une seule ligne : rien a resserrer. */
+    if (p.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) < lh * 1.5) return;
+    /* ⚠️ Regroupees par LIGNE ET NON PAR HAUTEUR EXACTE : le point colore et le
+       nom en gras ont leur propre rectangle, a un pixel pres du texte, et
+       comptes a part ils passaient pour des lignes courtes. */
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const lignes = [];
+    for (const b of r.getClientRects()) {
+      if (!b.width) continue;
+      const c = (b.top + b.bottom) / 2;
+      const l = lignes.find(x => Math.abs(x.c - c) < lh / 2);
+      if (l) { l.g = Math.min(l.g, b.left); l.d = Math.max(l.d, b.right); }
+      else lignes.push({ c, g: b.left, d: b.right });
+    }
+    if (lignes.length < 2) return;
+    const bord = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+               + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    p.style.width = Math.ceil(Math.max(...lignes.map(l => l.d - l.g)) + bord + 1) + "px";
+  });
+}
+/* EN MODE MENU, ENTRE LES BOUTONS OU DESSOUS (09/10/2026).
+   Les pastilles restent entre le menu et « Compact » tant qu elles y tiennent
+   sur UNE ligne ; au-dela, elles passent sous les boutons, sur toute la
+   largeur de la barre (`.dessous`, voir `fond.css`), au lieu de s empiler dans
+   la zone etroite du milieu.
+   Elles passent aussi dessous des qu une seule d entre elles doit se
+   resserrer pour tenir entre les boutons.
+   ⚠️ On essaie TOUJOURS d abord entre les boutons, puis on mesure : une
+   pastille qui disparait doit pouvoir les faire remonter. Les deux etats se
+   succedent dans la meme tache, sans image intermediaire a l ecran. */
+function placeSoucis() {
+  const w = document.getElementById("filters"), s = document.getElementById("soucis");
+  if (!w || !s) return;
+  w.classList.remove("dessous");
+  if (getComputedStyle(w).display !== "grid" || w.classList.contains("sans-notifs")) return;
+  const p = [...s.querySelectorAll(".pil")];
+  if (!p.length) return;
+  /* La largeur posee par `serrePastilles()` au tour precedent fausserait la
+     mesure : on la retire, elle sera reposee juste apres. */
+  p.forEach(x => { x.style.width = ""; });
+  const hauts = p.map(x => x.offsetTop);
+  /* ⚠️ UNE PASTILLE QUI SE RESSERRE PASSE AUSSI DESSOUS :
+     seule sur sa ligne et trop large pour la zone du milieu, elle ne changeait
+     pas de ligne mais retrecissait, son nom passant sur deux lignes ou
+     debordant. On le voit a sa hauteur (plus d une ligne de texte) ou a son
+     contenu plus large qu elle. */
+  const serree = (x) => {
+    const cs = getComputedStyle(x), lh = parseFloat(cs.lineHeight) || 16;
+    return x.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) > lh * 1.5
+      || x.scrollWidth > x.clientWidth + 1;
+  };
+  if (Math.max(...hauts) - Math.min(...hauts) > 4 || p.some(serree)) w.classList.add("dessous");
+}
+/* Le voile flou sous le trait (voir `fond.css`, paragraphe 29) : seulement quand
+   les pastilles sont SOUS les boutons, et cale sur leur zone. */
+function voile() {
+  const w = document.getElementById("filters"), s = document.getElementById("soucis");
+  if (!w || !s) return;
+  /* ⚠️ ZONE DEFILANTE SEULEMENT SI LES PASTILLES DEPASSENT L ECRAN (09/10/2026). Toujours defilante, elle retenait la molette et le doigt
+     (`overscroll-behavior: contain`) : la page ne defilait plus quand le
+     pointeur passait sur les pastilles. `scrollHeight` donne la hauteur
+     entiere meme une fois la zone bornee : pas d aller-retour possible. */
+  s.classList.toggle("deborde", s.scrollHeight > innerHeight - 90);
+  const sous = getComputedStyle(w).display !== "grid" || w.classList.contains("dessous");
+  const vu = sous && !!s.offsetParent && s.children.length > 0 && !w.classList.contains("sans-notifs");
+  w.classList.toggle("voile", vu);
+  if (!vu) return;
+  w.style.setProperty("--vy", s.offsetTop + "px");
+  w.style.setProperty("--vh", s.offsetHeight + "px");
+}
+const placeEtSerre = () => { placeSoucis(); serrePastilles(); voile(); };
+addEventListener("resize", voile, { passive: true });
+/* Le voile suit la zone des pastilles a chaque changement de TAILLE (une ligne
+   de plus, la barre construite) ; il ne change lui-meme aucune taille, donc
+   aucun risque de boucle. */
+new ResizeObserver(() => voile()).observe(document.getElementById("soucis"));
+
+/* Seulement quand la LARGEUR change : resserrer change la hauteur, et
+   relancer a chaque hauteur bouclerait. */
+{
+  let larg = 0;
+  new ResizeObserver(([e]) => {
+    const l = Math.round(e.contentRect.width);
+    if (l !== larg) { larg = l; placeEtSerre(); }
+  }).observe(document.getElementById("nav"));
+}
+
+/* La cloche de la barre : nombre de pastilles, point d etat de la plus grave,
+   et icone barree quand les pastilles sont masquees. */
+const CLOCHE = '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>';
+const CLOCHE_BARREE = '<path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="M2 2l20 20"/>';
+function majAlertes() {
+  const al = document.getElementById("alertes");
+  if (!al) return;
+  const l = DATA.nas ? etats(DATA) : [];
+  const cache = document.getElementById("filters").classList.contains("sans-notifs");
+  const niv = l.some(e => e.w === "crit") ? "crit" : l.some(e => e.inc) ? "inc" : "tache";
+  al.innerHTML = `<span class="ic">${svg(cache ? CLOCHE_BARREE : CLOCHE, 2)}${
+    l.length ? `<i class="pt ${niv}"></i>` : ""}</span>` + (l.length ? `<span class="n">${l.length}</span>` : "");
+  al.title = (cache ? "Afficher" : "Masquer") + " les notifications";
+  al.setAttribute("aria-label", al.title);
+  al.setAttribute("aria-pressed", cache ? "true" : "false");
+}
+
+
+/* ---- La barre du haut : L ETAT D ABORD (08/10/2026) ----
+   L heure occupait la place d honneur en 2,6 rem, l etat se lisait en petit a
+   l autre bout. La premiere question d un tableau de bord est « est-ce que
+   tout va bien » : l etat passe a gauche et en grand, l heure a droite et en
+   petit, les mesures restent au milieu. */
+/* Majuscule en tete de chaque texte de la barre (09/10/2026) : la date que rend
+   `toLocaleDateString` commence par une minuscule (« vendredi 9 octobre »). */
+const majuscule = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
 function bar(d) {
   const now = new Date();
   const ok = d.nas.run === d.nas.all, off = d.nas.all - d.nas.run;
   const soucis = soucisDe(d);
+  const grave = soucis.some(e => e.w === "crit");
+  /* Donnees figees (voir `figeHtml`) : « Tout va bien » ne peut plus se dire,
+     la page ne sait pas. Les arrets et les alertes, eux, restent affiches. */
+  const fige = document.body.dataset.fige === "1";
+  /* Une mesure : piste, valeur, libelle. Trois jauges seulement (processeur,
+     memoire, stockage), chacune dans son degrade : essayees en bleu uni le
+     08/10/2026, elles ternissaient la barre, et une jauge sur la temperature
+     et les conteneurs n apportait rien.
+     ⚠️ TOUTES ONT UNE PISTE, vide pour les trois autres : sans elle, la rangee
+     ne s alignait plus.
+     La jauge EN HAUT, puis la valeur et son libelle (09/10/2026, choix
+     d Alexis apres essai) : les jauges forment une ligne en tete de la rangee,
+     valeur et libelle se lisent d un bloc dessous. */
+  const mi = (v, u, larg, cl, lib, couleur) => `<div class="mi"><div class="tr${larg == null ? " vide" : ""}">${
+      larg == null ? "" : `<i class="${cl}" style="width:${pc(larg).toFixed(1)}%"></i>`}</div><b${
+      couleur ? ` style="color:${couleur}"` : ""}>${v}${u ? `<span class="u">${u}</span>` : ""}</b><small>${lib}</small></div>`;
 
-  const dsk = d.nas.disk || 0, dtot = d.nas.disktot || 0;
-  return `<div class="clock"><b>${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</b>
-      <span>${now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span></div>
+  const dsk = d.nas.disk || 0, dtot = d.nas.disktot || 0, t = tempCpu(d);
+  const tt = teinteT(t, SEUILS_T.cpu), maj = (d.updates || {}).total || 0;
+  return `<div class="hp"><div class="line"><i class="${!ok || grave ? "crit" : soucis.length ? "attention" : fige ? "inconnu" : ""}"></i><span>${
+        /* ⚠️ La classe de la pastille est lue par `sante()` : `crit` (conteneur
+           arrete ou incident grave) met le fond au rouge. */
+        !ok ? pluriel(off, "service arrêté", "services arrêtés")
+        : soucis.length ? pluriel(soucis.length, "incident")
+        : fige ? "Données figées" : "Tout va bien"}</span></div>
+      <em>${maj ? pluriel(maj, "mise à jour en attente", "mises à jour en attente") : "Aucune mise à jour en attente"}</em></div>
     <div class="met">
-      <div class="mi"><b>${(d.nas.cpu * (d.nas.cores || 1) / 100).toFixed(1).replace(".", ",")} / ${d.nas.cores || 1} <span class="u">cœurs</span></b><div class="tr"><i style="width:${d.nas.cpu}%"></i></div><small>processeur</small></div>
-      <div class="mi"><b>${Gk(d.nas.ramu || 0)} / ${Gk(d.nas.ramt || 1)} <span class="u">Go</span></b><div class="tr"><i class="w" style="width:${d.nas.ram}%"></i></div><small>mémoire</small></div>
-      <div class="mi"><b>${To(dtot * dsk / 100)} / ${To(dtot)} <span class="u">To</span></b><div class="tr"><i style="width:${dsk}%"></i></div><small>stockage</small></div>
-      <div class="mi na"><b style="color:${(d.nas.temp || 0) >= 75 ? "var(--scr)" : (d.nas.temp || 0) >= 65 ? "var(--swn)" : "inherit"}">${Math.round(d.nas.temp || 0)} °C</b><small>température</small></div>
-      <div class="mi na"><b>${d.nas.up} j</b><small>en service</small></div>
+      ${mi((d.nas.cpu * (d.nas.cores || 1) / 100).toFixed(1).replace(".", ",") + " / " + (d.nas.cores || 1), "cœurs", d.nas.cpu, "", "Processeur")}
+      ${mi(Gk(d.nas.ramu || 0) + " / " + Gk(d.nas.ramt || 1), "Go", d.nas.ram, "w", "Mémoire")}
+      ${mi(To(dtot * dsk / 100) + " / " + To(dtot), "To", dsk, "", "Stockage")}
+      ${mi(Math.round(t) + " °C", "", null, "", "Température", { cr: "var(--scr)", wn: "var(--swn)", ok: "" }[tt])}
+      ${/* Les conteneurs quittent la ligne d etat pour devenir une mesure : la
+           valeur passe au rouge des qu un conteneur est arrete. */
+        mi(d.nas.run + " / " + d.nas.all, "", null, "", "Conteneurs", ok ? "" : "var(--scr)")}
+      ${mi(d.nas.up + " j", "", null, "", "En service")}
     </div>
-    <div class="hp"><div class="line"><i class="${!ok ? "warn" : soucis.length ? "attention" : ""}"></i>${
-        /* ⚠️ TROIS ETATS, et la classe de la pastille n est pas anodine.
-           `sante()` cherche `.hp .line i.warn` pour decider de l etat CRITIQUE :
-           reutiliser `warn` pour une alerte de carte ferait passer le fond au
-           rouge au lieu de l ambre. D ou `attention`, que `sante()` ignore, le fond
-           restant decide par le comptage des cartes. */
-        !ok ? off + " service" + (off > 1 ? "s" : "") + " arrêté" + (off > 1 ? "s" : "")
-        : soucis.length ? soucis.length + " point" + (soucis.length > 1 ? "s" : "") + " d'attention"
-        : "Tout va bien"}</div>
-      <em><span>${d.nas.run} conteneurs</span><span>${d.updates.total || 0} MAJ en attente</span></em></div>`;
+    <div class="clock"><b>${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</b>
+      <span>${majuscule(now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }))}<span class="an"> ${now.getFullYear()}</span></span></div>`;
 }
 
-const KEY = "hl-sc";
-/* DEF : deplace dans `services.js`, charge avant ce fichier. */
-/* Les raccourcis vivent sur le NAS : identiques depuis tous les navigateurs. */
+/* DEF : dans `site.js`, charge avant ce fichier. */
+/* ---- Mot de passe des actions (08/10/2026) ----
+   Les ecritures (raccourcis, mises a jour, PC) passent par nginx, qui exige un
+   appareil du reseau maison ou du VPN ET un mot de passe (authentification
+   HTTP « Basic »). Le nom d utilisateur que ce protocole impose est fixe et
+   rempli ici : on ne tape que le mot de passe.
+   ⚠️ LE CHAMP VIT DANS LA FENETRE QUI FAIT L ACTION (raccourci, PC), pas dans
+   une fenetre de plus : une seule validation, et l erreur s affiche la ou on
+   vient de taper, fenetre ouverte. Il n apparait que tant que la page ne
+   connait pas le mot de passe.
+   ⚠️ `credentials: "omit"` EST CE QUI EVITE LA FENETRE DU NAVIGATEUR. Sur un 401,
+   un `fetch` ordinaire fait demander nom et mot de passe par le navigateur
+   lui-meme ; sans identifiants de navigateur, le 401 revient a la page, et
+   l en-tete `Authorization` pose a la main part quand meme (verifie).
+   Le mot de passe reste EN MEMOIRE le temps de la page, jamais dans le
+   stockage du navigateur. */
+const UTILISATEUR_ACTIONS = "homelab";
+let MDP = null;
+const REFUS = "Action refusée : réservée au réseau maison et au VPN.";
+/* 429 : nginx limite les ecritures a 10 par minute et par appareil, pour
+   qu on ne puisse pas essayer des mots de passe en rafale. */
+const TROP = "Trop d'essais : réessaie dans une minute.";
+
+/* 15 s au plus, comme les lectures : sinon les boutons de la fenetre restaient
+   desactives pour toujours, et « Le NAS ne repond pas » ne s affichait jamais. */
+const envoie = (url, corps, mdp) => fetch(url, { method: "PUT", credentials: "omit", signal: AbortSignal.timeout(15000),
+  headers: Object.assign({ "Content-Type": "application/json" }, mdp == null ? {}
+    : { Authorization: "Basic " + btoa(unescape(encodeURIComponent(UTILISATEUR_ACTIONS + ":" + mdp))) }),
+  body: JSON.stringify(corps) });
+
+/* Champ du mot de passe a inserer dans une fenetre d action, suivi de la ligne
+   d erreur. Le nom d utilisateur cache aide les gestionnaires de mots de passe. */
+const CHAMP_MDP = `<input type="text" name="username" autocomplete="username" value="${UTILISATEUR_ACTIONS}" hidden>
+  <label for="mdpv">Mot de passe des actions</label>
+  <input id="mdpv" type="password" autocomplete="current-password">`;
+const champMdp = () => (MDP === null && !DEMO ? CHAMP_MDP : "") + `<div class="err" role="alert"></div>`;
+
+/* Ecrit depuis une fenetre OUVERTE. Rend true si c est ecrit ; sinon la fenetre
+   reste ouverte et dit pourquoi. En demonstration, rien ne part : la page n a
+   pas de veilleur derriere elle, et le depot local ne doit pas voir ses
+   fixtures reecrites. */
+async function ecritDepuis(d, url, corps) {
+  if (DEMO) return true;
+  const err = d.querySelector(".err");
+  let champ = d.querySelector("#mdpv");
+  const essai = champ ? champ.value : MDP;
+  if (champ && !essai) { err.textContent = "Mot de passe requis."; champ.focus(); return false; }
+  const boutons = [...d.querySelectorAll("button")];
+  boutons.forEach(b => b.disabled = true);
+  err.textContent = "";
+  let r = null;
+  try { r = await envoie(url, corps, essai); } catch { /* panne reseau : dit plus bas */ }
+  boutons.forEach(b => b.disabled = false);
+  if (r && r.ok) { MDP = essai; return true; }
+  if (r && r.status === 401) {
+    /* Le mot de passe garde en memoire a pu changer cote NAS : on rend le champ. */
+    MDP = null;
+    if (!champ) { err.insertAdjacentHTML("beforebegin", CHAMP_MDP); champ = d.querySelector("#mdpv"); }
+    err.textContent = essai ? "Mot de passe incorrect." : "Mot de passe requis.";
+    champ.value = ""; champ.focus();
+    return false;
+  }
+  err.textContent = !r ? "Le NAS ne répond pas." : r.status === 403 ? REFUS
+    : r.status === 429 ? TROP : "Enregistrement impossible (erreur " + r.status + ").";
+  return false;
+}
+
+/* Pour les actions lancees hors d une fenetre a champ (la fenetre des mises a
+   jour) : une petite fenetre ne demande que le mot de passe. */
+function demandeMdp(msg) {
+  return new Promise((fin) => {
+    const d = document.createElement("dialog");
+    d.className = "dlg mdp";
+    d.innerHTML = `<form method="dialog"><h3>Mot de passe</h3>
+      <div class="sub">Cette action modifie le serveur.</div>
+      ${CHAMP_MDP}<div class="err" role="alert">${esc(msg || "")}</div>
+      <div class="row"><span class="sp"></span><button type="button" id="mdpn">Annuler</button>
+        <button value="ok" class="pri">Valider</button></div></form>`;
+    document.body.append(d);
+    d.querySelector("#mdpn").addEventListener("click", () => d.close("non"));
+    d.addEventListener("close", () => {
+      const v = d.returnValue === "ok" ? d.querySelector("#mdpv").value : "";
+      d.remove();
+      fin(v || null);
+    });
+    d.showModal();
+    d.querySelector("#mdpv").focus();
+  });
+}
+
+/* Ecrit un fichier de `data/` en PUT ; au premier refus faute de mot de passe,
+   le demande, puis reessaie. Rend la reponse : 401 si annule, 403 hors du
+   reseau maison et du VPN. */
+async function ecrire(url, corps) {
+  for (;;) {
+    const r = await envoie(url, corps, MDP);
+    if (r.status !== 401) return r;
+    const essai = await demandeMdp(MDP !== null ? "Mot de passe incorrect." : "");
+    if (essai === null) { MDP = null; return r; }
+    MDP = essai;
+  }
+}
+
+/* Les raccourcis vivent sur le NAS : identiques depuis tous les navigateurs.
+   ⚠️ LA LISTE AFFICHEE NE CHANGE QU APRES L ECRITURE (08/10/2026). Mise a jour
+   avant, elle montrait un raccourci « enregistre » alors que l ecriture avait
+   ete refusee, jusqu au rechargement. */
 let SC = DEF.slice();
 const rd = () => SC;
-const wr = (l) => { SC = l; save(); };
 async function load() {
   try {
-    const r = await fetch("data/shortcuts.json?" + Date.now());
+    const r = await fetch("data/shortcuts.json", { cache: "no-cache" });
     if (r.ok) { const j = await r.json(); if (Array.isArray(j) && j.length) SC = j; }
   } catch (e) { console.warn("raccourcis illisibles, liste par défaut", e); }
   shortcuts();
 }
-async function save() {
-  shortcuts();
-  try {
-    const r = await fetch("data/shortcuts.json", { method: "PUT",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify(SC) });
-    if (!r.ok) throw new Error(r.status);
-  } catch (e) { console.error("enregistrement impossible", e); }
-}
 const hst = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
-let editing = null;
+/* ⚠️ SEUL UN LIEN http(s) DEVIENT CLIQUABLE. Le fichier des raccourcis s ecrit
+   par une requete PUT : un `javascript:` qui y serait depose s executerait au
+   clic. `esc()` protege le HTML, pas le schema du lien. */
+const lienSurRacc = (u) => /^https?:\/\//i.test(u || "") ? u : "#";
 const dlg = () => document.getElementById("dlg");
 
 function editShortcut(i) {
-  editing = i;
   const it = i === null ? { url: "", name: "" } : rd()[i];
-  dlg().innerHTML = `<form method="dialog"><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
+  const d = dlg();
+  d.innerHTML = `<form><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
     <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required>
     <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple">
+    ${champMdp()}
     <div class="row">${i === null ? "" : '<button type="button" id="dsup" class="danger">Supprimer</button>'}
     <span class="sp"></span><button type="button" id="dann">Annuler</button>
-    <button value="ok" class="pri">${i === null ? "Ajouter" : "Enregistrer"}</button></div></form>`;
-  const d = dlg();
-  d.querySelector("#dsup")?.addEventListener("click", () => d.close("del"));
-  d.querySelector("#dann")?.addEventListener("click", () => d.close("no"));
+    <button type="submit" class="pri">${i === null ? "Ajouter" : "Enregistrer"}</button></div></form>`;
+  const enregistre = async (l) => {
+    if (!(await ecritDepuis(d, "data/shortcuts.json", l))) return;
+    SC = l; shortcuts(); d.close("ok");
+    // Le veilleur du NAS récupère l'icône d'un nouveau raccourci dès l'écriture
+    // du fichier (inotify sur www/data) : on recharge la table quelques secondes
+    // après, pour l'afficher sans avoir à recharger la page.
+    setTimeout(() => { ICONES = null; shortcuts(); }, 6000);
+  };
+  d.querySelector("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = d.querySelector("#du").value.trim(); if (!raw) return;
+    const url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
+    const nv = { url, name: d.querySelector("#dn").value.trim() || hst(url) };
+    const l = rd().slice();
+    i === null ? l.push(nv) : (l[i] = nv);
+    enregistre(l);
+  });
+  d.querySelector("#dsup")?.addEventListener("click", () => enregistre(rd().filter((_, k) => k !== i)));
+  d.querySelector("#dann").addEventListener("click", () => d.close("no"));
   d.showModal(); d.querySelector("#du").focus();
 }
 
@@ -909,19 +1440,6 @@ dlg().addEventListener("mouseup", (e) => {
   if (departDehors && horsCadre(e)) dlg().close("no");
   departDehors = false;
 });
-dlg().addEventListener("close", (e) => {
-  const l = rd(), v = e.target.returnValue;
-  if (v === "del" && editing !== null) { l.splice(editing, 1); wr(l); return shortcuts(); }
-  if (v !== "ok") return;
-  const raw = e.target.querySelector("#du")?.value.trim(); if (!raw) return;
-  const url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
-  const it = { url, name: e.target.querySelector("#dn").value.trim() || hst(url) };
-  editing === null ? l.push(it) : (l[editing] = it); wr(l); shortcuts();
-  // Le veilleur du NAS récupère l'icône du nouveau raccourci dès l'écriture du
-  // fichier (inotify sur www/data) : on recharge la table quelques secondes
-  // après, pour l'afficher sans avoir à recharger la page.
-  setTimeout(() => { ICONES = null; shortcuts(); }, 6000);
-});
 
 /* Les icônes des raccourcis sont servies par le NAS. Chargées depuis les sites
    eux-mêmes, c'étaient des requêtes tierces : le bouclier du navigateur en
@@ -932,19 +1450,38 @@ dlg().addEventListener("close", (e) => {
    dépend du format réel : un « .ico » est parfois un PNG). */
 let ICONES = null;
 
+/* ---- MODE EDITION DES RACCOURCIS, AU DOIGT (09/10/2026) ----
+   Le crayon de chaque raccourci n apparait qu au survol de la souris : sur
+   iPhone, impossible de modifier ou supprimer un raccourci. Sur un ecran sans
+   survol, la tuile « Ajouter » laisse la place a « Modifier », qui passe en
+   mode edition comme l ecran d accueil : crayon sur chaque icone, un toucher
+   sur une icone l ouvre en modification au lieu de suivre le lien, et
+   « Ajouter » revient a cote de « Terminé ».
+   ⚠️ « Modifier » REMPLACE « Ajouter » hors edition : meme nombre de tuiles,
+   donc meme disposition en lignes (voir `rangeeRacc`). Ordinateur inchange. */
+let EDITION = false;
+const TACTILE = () => matchMedia("(hover: none)").matches;
+const ICO_PLUS = '<path d="M12 6v12M6 12h12"/>';
+const ICO_CRAYON = '<path d="M4 20h4L20 8l-4-4L4 16z"/>';
+const ICO_FINI = '<path d="M5 12.5l4.5 4.5L19 7.5"/>';
+
 function shortcuts() {
   const w = document.getElementById("shortcuts");
-  w.innerHTML = rd().map((it, i) => `<a class="t" rel="noreferrer" href="${esc(it.url)}" title="${esc(it.url)}">
+  const tactile = TACTILE();
+  if (!tactile) EDITION = false;
+  const tuile = (cl, ico, txt) => `<button class="t ${cl}" type="button"><span class="i">${svg(ico, 1.8)}</span><span class="l">${txt}</span></button>`;
+  w.innerHTML = rd().map((it, i) => `<a class="t" rel="noreferrer" href="${esc(lienSurRacc(it.url))}" title="${esc(it.url)}">
       <span class="i" data-h="${esc(hst(it.url))}">${esc((it.name || hst(it.url)).slice(0, 2).toUpperCase())}</span>
       <span class="l">${esc(it.name || hst(it.url))}</span>
       <button class="e" type="button" data-i="${i}">${svg('<path d="M4 20h4L20 8l-4-4L4 16z"/>', 2.4)}</button></a>`).join("")
-    + `<button class="t add" type="button"><span class="i">${svg('<path d="M12 6v12M6 12h12"/>', 1.8)}</span><span class="l">Ajouter</span></button>`;
+    + (!tactile || EDITION ? tuile("add", ICO_PLUS, "Ajouter") : "")
+    + (tactile ? tuile("mod", EDITION ? ICO_FINI : ICO_CRAYON, EDITION ? "Terminé" : "Modifier") : "");
+  w.parentElement.classList.toggle("edition", EDITION);
   // Premier passage : on va chercher la table des icônes locales, puis on
   // redessine. `{}` en attendant, pour ne pas empiler les requêtes.
   if (ICONES === null) {
     ICONES = {};
-    fetch("icons/sites/index.json?" + Date.now()).then(r => r.json())
-      .then(m => { ICONES = m; shortcuts(); }).catch(() => {});
+    lireOu("icons/sites/index.json", null).then(m => { if (m) { ICONES = m; shortcuts(); } });
   }
   w.querySelectorAll(".i[data-h]").forEach(s => {
     const f = ICONES[s.dataset.h];
@@ -954,7 +1491,71 @@ function shortcuts() {
     im.src = "icons/sites/" + f;
   });
   w.querySelectorAll(".e").forEach(b => b.onclick = ev => { ev.preventDefault(); editShortcut(+b.dataset.i); });
-  w.querySelector(".add").onclick = () => editShortcut(null);
+  /* En edition, toucher l icone l ouvre en modification au lieu du lien. */
+  w.querySelectorAll("a.t").forEach((t, i) => t.onclick = ev => {
+    if (!EDITION) return;
+    ev.preventDefault(); editShortcut(i);
+  });
+  const add = w.querySelector(".add");
+  if (add) add.onclick = () => editShortcut(null);
+  const mod = w.querySelector(".mod");
+  if (mod) mod.onclick = () => { EDITION = !EDITION; shortcuts(); };
+  rangeeRacc();
+}
+
+/* ---- Raccourcis : TROIS LIGNES AU PLUS, PUIS DEFILEMENT (09/10/2026) ----
+   Telephone ET ordinateur. Autant de lignes qu il en faut,
+   equilibrees (six et six pour douze, et non huit et quatre), mais jamais plus
+   de trois : au-dela, la grille garde ses trois lignes, deborde a droite et
+   defile. Les fleches ‹ › disent
+   qu il y a la suite et la font venir ; elles n apparaissent que d un cote ou
+   il reste quelque chose a voir.
+   ⚠️ L ORDRE RESTE CELUI DE LA LECTURE, ligne par ligne : la grille recoit
+   son nombre de colonnes (`--k`) au lieu de couler en colonnes, ce qui aurait
+   range le deuxieme raccourci SOUS le premier.
+   ⚠️ La largeur d une colonne et l ecart viennent du CSS (`--l`, `--g`), qui
+   les change sur telephone : le calcul ne peut pas les supposer. */
+function rangeeRacc() {
+  const w = document.getElementById("shortcuts"), r = w.parentElement;
+  const st = getComputedStyle(w);
+  const l = parseFloat(st.getPropertyValue("--l")) || 76, g = parseFloat(st.getPropertyValue("--g")) || 14;
+  /* Largeur UTILE, sans le rembourrage pose quand la rangee va jusqu aux bords. */
+  const utile = w.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+  const n = w.children.length, cap = Math.max(1, Math.floor((utile + g) / (l + g)));
+  const lignes = Math.min(3, Math.ceil(n / cap));
+  const k = Math.ceil(n / lignes);
+  w.style.setProperty("--k", k);
+  r.classList.toggle("defile", k > cap);
+  fleches();
+}
+function fleches() {
+  const w = document.getElementById("shortcuts"), r = w.parentElement;
+  const plus = r.classList.contains("defile");
+  r.dataset.g = plus && w.scrollLeft > 2 ? "1" : "";
+  r.dataset.d = plus && w.scrollLeft + w.clientWidth < w.scrollWidth - 2 ? "1" : "";
+}
+{
+  const w = document.getElementById("shortcuts"), r = w.parentElement;
+  w.addEventListener("scroll", fleches, { passive: true });
+  new ResizeObserver(rangeeRacc).observe(r);
+  r.querySelectorAll(".fl").forEach(b => b.addEventListener("click", () =>
+    w.scrollBy({ left: (b.classList.contains("g") ? -1 : 1) * w.clientWidth * .8, behavior: defilementDoux() })));
+  molette(w);
+}
+
+/* A la souris, la molette verticale fait defiler une rangee horizontale tant
+   qu elle a de quoi defiler dans ce sens ; arrivee au bout, elle rend la main a
+   la page. Sans ca, une souris sans molette horizontale ne voyait jamais la fin
+   d une rangee qui deborde (raccourcis, pastilles). */
+function molette(el) {
+  el.addEventListener("wheel", (e) => {
+    const max = el.scrollWidth - el.clientWidth;
+    if (max <= 1 || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    const avant = el.scrollLeft;
+    if ((e.deltaY < 0 && avant <= 0) || (e.deltaY > 0 && avant >= max - 1)) return;
+    e.preventDefault();
+    el.scrollLeft = Math.max(0, Math.min(max, avant + e.deltaY));
+  }, { passive: false });
 }
 
 let majTimer = null;
@@ -968,8 +1569,7 @@ let majTimer = null;
    Le fichier peut manquer (installation neuve) : on renvoie un état vide plutôt
    que de laisser l'absence casser l'ouverture de la fenêtre. */
 async function getMaj() {
-  try { return await (await fetch("maj.json?" + Date.now())).json(); }
-  catch { return { conteneurs: {} }; }
+  return majDemo(await lireOu("maj.json", { conteneurs: {} }));
 }
 
 /* ⚠️ INVENTAIRE DE TOUS LES CONTENEURS, ecrit par `versions.sh`, trie du plus
@@ -984,12 +1584,10 @@ async function getMaj() {
    passe — et c est un cas NORMAL : on renvoie une liste vide plutot que de
    laisser l absence casser l ouverture de la fenetre. */
 async function getVersions() {
-  try { return await (await fetch("versions.json?" + Date.now())).json(); }
-  catch { return { items: [] }; }
+  return versionsDemo(await lireOu("versions.json", { items: [] }));
 }
 async function majState() {
-  try { return await (await fetch("data/maj-status.json?" + Date.now())).text(); }
-  catch { return ""; }
+  return lireOu("data/maj-status.json", "", true);
 }
 
 /* ⚠️ UNE SEULE LISTE, FUSION DE DEUX SOURCES : l'inventaire (`versions.json`,
@@ -1114,8 +1712,15 @@ function paintUpd(maj, note, vers) {
     figer(true); if (go) go.disabled = true;
     st.textContent = "Demande envoyée…";
     try {
-      await fetch("data/trigger.json", { method: "PUT",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify(charge) });
+      const r = await ecrire("data/trigger.json", charge);
+      /* ⚠️ `fetch` ne leve pas sur un code d erreur : sans ce test, un refus
+         laissait « en attente du demarrage » a l ecran pour toujours. */
+      if (!r.ok) {
+        st.textContent = r.status === 401 ? "Action annulée : mot de passe requis."
+          : r.status === 403 ? REFUS : r.status === 429 ? TROP
+          : "Déclenchement impossible (" + r.status + ").";
+        figer(false); sync(); return false;
+      }
     } catch {
       st.textContent = "Déclenchement impossible."; figer(false); sync(); return false;
     }
@@ -1155,20 +1760,8 @@ async function popUpdates() { paintUpd(await getMaj(), "", await getVersions());
 /* Liste complete des conteneurs, triee par memoire decroissante. */
 /* Les piles se deduisent du prefixe du nom : aucune liste a maintenir,
    un service ajoute se range tout seul. */
-/* PILES et AUTRES : deplace dans `services.js`, charge avant ce fichier. */
+/* PILES et AUTRES : dans `site.js`, charge avant ce fichier. */
 const pileDe = (n) => PILES.find(p => n.startsWith(p.k)) || AUTRES;
-
-/* Derive : moyenne du dernier tiers comparee au premier. */
-const tendance = (v) => {
-  if (!v || v.length < 6) return { t: "—", c: "" };
-  const q = Math.max(2, Math.floor(v.length / 3));
-  const moy = (a) => a.reduce((s, x) => s + x, 0) / a.length;
-  const a = moy(v.slice(0, q)), b = moy(v.slice(-q));
-  if (a <= 0) return { t: "—", c: "" };
-  const d = (b - a) / a * 100;
-  if (Math.abs(d) < 5) return { t: "stable", c: "" };
-  return { t: (d > 0 ? "+" : "") + Math.round(d) + " %", c: d >= 20 ? "wn" : d <= -20 ? "up" : "" };
-};
 
 async function popConteneurs() {
   /* ⚠️ PLUS DE DERIVE NI DE MOYENNE 24 H (retirees sur demande le
@@ -1476,8 +2069,10 @@ function popAcces() {
      ou refusee suffit a la faire remarquer. */
   const pire = (x) => accCoul(x.l.find(e => e.x) || x.l.find(e => !e.ok) || x.e);
   const services = (x) => [...new Set(x.l.map(e => e.u))].join(", ") + " · " + [...new Set(x.l.map(e => e.s))].join(", ");
+  const geo = a.geo || {};
   const qui = ev.length ? `<div class="acc-duo">`
-    + `<div><div class="psec">Par machine</div>${compte(e => e.n, pire, services)}</div>`
+    + `<div><div class="psec">Par machine</div>${compte(e => e.n, pire,
+        x => services(x) + (geo[x.k] ? " · " + lieu(geo[x.k]) : ""))}</div>`
     + `<div><div class="psec">Par méthode</div>${compte(e => e.s + " · " + e.r, x => accCoul(x.e), () => "")}</div>`
     + `</div>` : "";
 
@@ -1508,7 +2103,8 @@ function popAcces() {
     const corps = `<span class="chev" aria-hidden="true"></span><span class="h">${plage}</span>`
       + `<span class="s">${esc(x.s)}</span>`
       + `<span class="q">${esc(x.u)} · ${esc(x.n)}${x.c > 1 ? ` <small>×${nb(x.c)}</small>` : ""}</span>`
-      + `<span class="r ${cl}">${esc(x.r)}${x.x ? " · Internet" : ""}</span>`;
+      + `<span class="r ${cl}">${esc(x.r)}${x.x ? " · Internet" : ""}</span>`
+      + (x.x ? `<span class="lieu">${esc(lieu(geo[x.n]) || "localisation inconnue")}</span>` : "");
     /* Depliable seulement quand il y a plus d une minute a montrer. */
     return x.ts.length > 1 && new Set(x.ts.map(hhmm)).size > 1
       ? `<details class="acj"><summary class="acr">${corps}</summary><div class="acm">${minutes(x.ts)}</div></details>`
@@ -1528,6 +2124,58 @@ function popAcces() {
     ${ev.length ? histo : ""}<div class="scroll">${ev.length ? qui + journalHtml
       : `<div class="note">Aucune connexion sur 24 h</div>`}</div>`;
   d.showModal();
+}
+
+/* ============ JOURNAL DES 7 JOURS (09/10/2026) ============
+   Construit par `systeme.py` (`journal`) : [heure, categorie, texte, niveau],
+   du plus recent au plus ancien. Niveau `ok` retour a la normale, `in`
+   information, `wn` incident, `cr` panne : la pastille de chaque ligne en prend
+   la couleur. */
+const J_CAT = { nas: "NAS", memoire: "Mémoire", conteneur: "Conteneur", maj: "Mise à jour", sonde: "Sonde",
+                site: "Site", vpn: "VPN", reseau: "Réseau", sauvegarde: "Sauvegarde", acces: "Accès" };
+/* L heure seule aujourd hui ; « hier » ; le jour de la semaine au-dela. Dans la
+   fenetre, ou les jours ont leur intertitre, l heure suffit (`seule`). */
+const quandJ = (t, seule) => {
+  const j = new Date(t * 1000).toDateString();
+  if (seule || j === new Date().toDateString()) return hhmm(t);
+  if (j === new Date(Date.now() - 86400000).toDateString()) return "hier " + hhmm(t);
+  return new Date(t * 1000).toLocaleDateString("fr-FR", { weekday: "short" }) + " " + hhmm(t);
+};
+const evts = (l, max, seule) => `<div class="jx${seule ? " court" : ""}">${l.slice(0, max || l.length).map(e =>
+  `<div class="${esc(e[3] || "in")}"><span class="h">${quandJ(e[0], seule)}</span><span class="pt"></span>`
+  + `<span class="s">${esc(J_CAT[e[1]] || e[1])}</span><span class="q">${esc(e[2])}</span></div>`).join("")}</div>`;
+
+/* La fenetre : la semaine jour par jour, filtrable par categorie. Le filtre
+   choisi est garde le temps de la page, pas au-dela. */
+let J_FILTRE = "";
+function popJournal() {
+  const d = document.getElementById("dlg");
+  d.classList.add("large");
+  const l = DATA.journal || [];
+  const cats = [...new Set(l.map(e => e[1]))].sort((a, b) => (J_CAT[a] || a).localeCompare(J_CAT[b] || b));
+  if (J_FILTRE && !cats.includes(J_FILTRE)) J_FILTRE = "";
+  const vue = J_FILTRE ? l.filter(e => e[1] === J_FILTRE) : l;
+  const puce = (k, t, n) => `<button type="button" data-jf="${esc(k)}"${J_FILTRE === k ? ' class="on"' : ""}>${esc(t)}<b>${nb(n)}</b></button>`;
+  const filtres = cats.length > 1 ? `<div class="jf">${puce("", "Tout", l.length)}${
+    cats.map(c => puce(c, J_CAT[c] || c, l.filter(e => e[1] === c).length)).join("")}</div>` : "";
+  const auj = new Date().toDateString(), hier = new Date(Date.now() - 86400000).toDateString();
+  const jourDe = (t) => { const j = new Date(t * 1000).toDateString();
+    return j === auj ? "Aujourd'hui" : j === hier ? "Hier"
+      : new Date(t * 1000).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
+  let corps = "", jour = "", lot = [];
+  const vide = () => { if (lot.length) corps += evts(lot, 0, true); lot = []; };
+  for (const e of vue) {
+    const j = jourDe(e[0]);
+    if (j !== jour) { vide(); corps += `<div class="psec">${esc(j)}</div>`; jour = j; }
+    lot.push(e);
+  }
+  vide();
+  const inc = l.filter(e => e[3] === "wn" || e[3] === "cr").length;
+  d.innerHTML = `<h3>Journal</h3>
+    <div class="sub">${pluriel(l.length, "événement")} sur 7 jours · ${inc ? pluriel(inc, "incident") : "aucun incident"}</div>
+    ${filtres}<div class="scroll">${corps || `<div class="note">Aucun événement sur 7 jours</div>`}</div>`;
+  d.querySelectorAll("[data-jf]").forEach(b => b.onclick = () => { J_FILTRE = b.dataset.jf; popJournal(); });
+  if (!d.open) d.showModal();
 }
 
 /* ---- Fenetre d un disque (05/10/2026) ----
@@ -1572,7 +2220,7 @@ function popDisque(n) {
   /* ---- Quatre chiffres, les memes seuils que la ligne de la carte ---- */
   const tuile = (v, l, cl) => `<div class="dtu${cl ? " " + cl : ""}"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
   const tuiles = `<div class="dtus">`
-    + tuile(x.temp + " °C", "température", x.temp >= 65 ? "cr" : x.temp >= 55 ? "wn" : "")
+    + tuile(x.temp + " °C", "température", teinteT(x.temp, SEUILS_T.nvme).replace("ok", ""))
     + tuile(usure != null ? usure + " %" : "—", "usure", usure >= 80 ? "wn" : "")
     + tuile(ecrit ? dec(ecrit) : "—", "écrits au total")
     + tuile(jours != null ? nb(jours) + " j" : "—", "en service") + `</div>`;
@@ -1697,6 +2345,7 @@ function popEspace(nom) {
   const cats = Object.entries(e.parts || {}).filter(([, o]) => o > 0)
     .sort(([a, x], [b, y]) => (a === "autres") - (b === "autres") || y - x);
   const E = Math.max(1, ...cats.map(([, o]) => o));
+  const luns = e.iscsi || [], fI = fractionIscsi(e);
   let ouverts = [];
   try { ouverts = JSON.parse(localStorage.getItem("hl-pop-espace") || "[]"); } catch (er) { /* navigation privee */ }
   const pct = o => { const v = o / tot * 100; return v >= 10 ? Math.round(v) + " %" : vg(v.toFixed(1)) + " %"; };
@@ -1735,6 +2384,15 @@ function popEspace(nom) {
     return t.g.map(x => ligne(x.g ? `<s>${esc(x.n)}</s>` : nomD(x.n), x.o, c,
         x.p ? "et " + taille(x.p) + " en commun avec un autre dossier" : "")).join("")
       + ligneP(t.petits, c, t.petits.n > 1 ? "petits fichiers et dossiers" : "petit fichier ou dossier"); };
+  /* Un disque iSCSI : sa place sur le volume, et ce que Windows y a ecrit. */
+  const ligneLun = (x, c) => {
+    const lu = x.fs > 0 && x.used != null, p = lu ? Math.min(100, x.used / x.fs * 100) : 0;
+    return `<div class="ln"><span class="nm">${esc(x.nom || "Disque " + x.id)}<small>${lu
+        ? esc(taille(x.used) + " pris · " + taille(Math.max(0, x.fs - x.used)) + " libres") : "occupation illisible"}</small></span>`
+      + `<span class="mm">${taille(x.alloc || x.tot)}</span><span class="sw">${pct(x.alloc || x.tot)}</span>`
+      + `<span class="tr lunb">${lu ? `<i style="width:${p.toFixed(1)}%;background:${c}"></i>`
+        + `<u style="width:${(100 - p).toFixed(1)}%;background:${c}"></u>` : ""}</span></div>`;
+  };
 
   const parts = cats.map(([k, o]) => {
     const t = tamis(det[k]);
@@ -1769,6 +2427,14 @@ function popEspace(nom) {
   const corps = parts.map(({ k, o, ds, petits, nu }) => {
     const c = cat(k)[1];
     if (k === "autres") return autres(o, c);
+    /* iSCSI : une ligne par disque, lue EN DIRECT (la mesure de nuit ne
+       connait que des fichiers de la veille), sa barre sur toute la largeur
+       pour le disque entier : pris en plein, libre a 38 %. */
+    if (k === "iscsi" && luns.length) {
+      const reste = o - luns.reduce((a, x) => a + (x.alloc || x.tot || 0), 0);
+      return groupe("c:iscsi", c, cat(k)[0], luns.length > 1 ? luns.length + " disques" : "@iscsi", o,
+        luns.map(x => ligneLun(x, c)).join("") + (reste >= 104857600 ? ligne("<s>autres fichiers</s>", reste, c) : ""));
+    }
     if (!ds.length)
       return ligne(`<i class="pt" style="background:${c}"></i><b>${esc(cat(k)[0])}</b>`, o, c);
     /* Disque systeme : une ligne ou un groupe par partition. */
@@ -1791,11 +2457,14 @@ function popEspace(nom) {
 
   /* Barre de tete : chaque categorie decoupee en ses dossiers, puis le libre.
      Survol : l infobulle commune (`data-lec="part"`). */
-  const seg = (titre, n, o, c) => `<i data-lec="part" data-t="${esc(titre)}" data-n="${esc(n)}"`
-    + ` data-v="${esc(taille(o) + " · " + pct(o))}" data-c="${c}" style="width:${(o / tot * 100).toFixed(2)}%;background:${c}"></i>`;
+  const seg = (titre, n, o, c, vide) => `<i data-lec="part" data-t="${esc(titre)}" data-n="${esc(n)}"`
+    + ` data-v="${esc(taille(o) + " · " + pct(o))}" data-c="${c}"${vide ? ' class="vide"' : ""} style="width:${(o / tot * 100).toFixed(2)}%;background:${c}"></i>`;
   const LIBRE = "rgba(255,255,255,.14)";
   const tete = `<div class="compo"><div class="cbar">`
-    + parts.map(({ k, o, ds, petits, nu }) => ds.length > 1 && k !== "autres"
+    + parts.map(({ k, o, ds, petits, nu }) => k === "iscsi" && fI != null
+        ? seg(cat(k)[0], "écrit dans les disques", o * fI, cat(k)[1])
+          + seg(cat(k)[0], "libre dans les disques", o * (1 - fI), cat(k)[1], true)
+        : ds.length > 1 && k !== "autres"
         ? ds.map((x, i) => seg(cat(k)[0], NOMS_DOSSIER[x.n] || x.n, x.o, nu[i])).join("")
           + (petits.o > 0 ? seg(cat(k)[0], "petits dossiers", petits.o, cat(k)[1]) : "")
         : seg(cat(k)[0], ds.length === 1 ? ds[0].n : "", o, cat(k)[1])).join("")
@@ -1862,7 +2531,10 @@ function replier(w) {
 
 function filters() {
   const w = document.getElementById("filters");
-  if (w.childElementCount) return;
+  /* ⚠️ `#soucis` est deja dans la barre (index.html) : la barre n est plus vide
+     avant construction, d ou le test sur le menu. */
+  if (w.querySelector("#menu")) return;
+  const soucis = document.getElementById("soucis");
   const panneau = document.createElement("div"); panneau.className = "panneau";
   const mk = (t, i, on) => { const b = document.createElement("button");
     b.textContent = t; if (on) b.className = "on";
@@ -1875,29 +2547,90 @@ function filters() {
   const menu = document.createElement("button");
   menu.id = "menu"; menu.type = "button"; menu.title = "Groupes";
   menu.innerHTML = '<span class="menu-nom">Tout</span>' + svg('<path d="M6 9l6 6 6-6"/>', 2);
-  menu.onclick = (e) => { e.stopPropagation(); w.classList.toggle("ouvert"); };
-  w.appendChild(menu);
+  /* Le menu s ouvre 6 px sous SON bouton. Avec les pastilles dans la barre,
+     le bouton n est plus en haut de celle-ci (il est centre sur leur hauteur),
+     et une position fixee en CSS l aurait recouvert. */
+  menu.onclick = (e) => { e.stopPropagation();
+    panneau.style.top = (menu.offsetTop + menu.offsetHeight + 6) + "px";
+    w.classList.toggle("ouvert"); };
+  w.insertBefore(menu, soucis);
   addEventListener("click", () => w.classList.remove("ouvert"));
   addEventListener("keydown", (e) => { if (e.key === "Escape") w.classList.remove("ouvert"); });
 
   mk("Tout", null, true); GROUPS.forEach((g, i) => mk(g.n, i));
-  w.appendChild(panneau);
+  w.insertBefore(panneau, soucis);
+  /* LA CLOCHE (09/10/2026) : masque ou rend les pastilles, et
+     compte les cartes allumees a la couleur de la plus grave, pour qu une
+     alerte se voie encore pastilles masquees. Le choix est garde dans le
+     navigateur : un confort d affichage, sans stockage la page les montre.
+     ⚠️ Un `<span role="button">` et non un `<button>` : les regles du menu
+     prennent tout `#filters button` pour un onglet, et le cacheraient. */
+  const al = document.createElement("span");
+  al.id = "alertes"; al.setAttribute("role", "button"); al.tabIndex = 0;
+  try { if (localStorage.getItem("homelab.notifs") === "0") w.classList.add("sans-notifs"); } catch (x) { /* stockage refuse */ }
+  al.onclick = () => {
+    const cache = !w.classList.contains("sans-notifs");
+    w.classList.toggle("sans-notifs", cache);
+    try { localStorage.setItem("homelab.notifs", cache ? "0" : "1"); } catch (x) { /* stockage refuse */ }
+    majAlertes();
+    placeEtSerre();
+  };
+  w.appendChild(al);
+  majAlertes();
   replier(w);
+  /* La barre vient d etre construite autour des pastilles : leur place a change. */
+  placeEtSerre();
+}
+
+/* Cadence de chaque fichier, en secondes : celle de son collecteur, ou moins.
+   `live.json` bouge toutes les 2 s, le reste bien plus lentement. */
+const CADENCE = { "data.json": 10, "live.json": 0, "history.json": 60,
+                  "containers.json": 60, "smart.json": 600 };
+let TOUR = false;           // un tour de rafraichissement en cours
+/* Les cartes, depuis `DATA`. A part de `refresh` pour qu un selecteur de
+   periode redessine sa carte sur-le-champ, sans attendre ni relire le NAS. */
+function dessineGroupes() {
+  fondre(document.getElementById("groups"), GROUPS.map((g, i) =>
+    `<section class="sec" data-g="${i}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>
+     <div class="grid">${g.s.map(s => card(s, DATA)).join("")}</div></section>`).join(""));
+  document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
+    if (ev.target.closest("a")) return;
+    if (c.dataset.pop === "conteneurs") popConteneurs();
+    else if (c.dataset.pop === "acces") popAcces();
+    else if (c.dataset.pop === "journal") popJournal();
+    else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
+  });
+  filters();
+  const a = [...document.querySelectorAll("#filters button:not(#menu):not(#compact)")].findIndex(b => b.classList.contains("on"));
+  if (a > 0) document.querySelectorAll(".sec").forEach(s => s.style.display = +s.dataset.g === a - 1 ? "" : "none");
 }
 
 async function refresh() {
   if (document.querySelector("dialog[open]")) return;   // ne pas redessiner sous une fenetre ouverte
+  /* ⚠️ ONGLET CACHE : RIEN NE PART. Un onglet oublie en arriere-plan tirait
+     autant qu un onglet regarde. Le retour au premier plan relance un tour
+     aussitot (voir `visibilitychange`). */
+  if (document.hidden) return;
+  /* Un seul tour a la fois : un NAS lent ne doit pas voir s empiler les
+     requetes de tours qui se chevauchent. */
+  if (TOUR) return;
+  TOUR = true;
   try {
     const [d, l, h, k, sm] = await Promise.all([
-      fetch("data.json?" + Date.now()).then(r => r.json()),
-      fetch("live.json?" + Date.now()).then(r => r.json()).catch(() => null),
-      fetch("history.json?" + Date.now()).then(r => r.json()).catch(() => null),
-      fetch("containers.json?" + Date.now()).then(r => r.json()).catch(() => null),
-      fetch("smart.json?" + Date.now()).then(r => r.json()).catch(() => null)
+      lire("data.json", CADENCE["data.json"]),
+      lireOuRien("live.json", CADENCE["live.json"]),
+      lireOuRien("history.json", CADENCE["history.json"]),
+      lireOuRien("containers.json", CADENCE["containers.json"]),
+      lireOuRien("smart.json", CADENCE["smart.json"])
     ]);
     d.hist = h; d.cont = k; d.smart = sm;
-      d.fin = await histFin();
-    fusionSysteme(d, await lireSysteme());
+    d.fin = await histFin();
+    const sy = await lireSysteme();
+    fusionSysteme(d, sy);
+    /* Horodatages des autres fichiers, ranges dans `d` AVANT `demo()` : un
+       scenario peut ainsi les vieillir, et la demonstration les resout. */
+    d.tLive = l ? l.t : undefined;
+    if (sy) { d.tSys = sy.t; d.problemes = sy.problemes; }
     // live.json prime sur data.json : ses valeurs sont rafraichies toutes les 2 s.
     if (l) {
       d.nas.cpu = l.cpu; d.nas.ram = l.ram; d.nas.net = l.net;
@@ -1905,22 +2638,25 @@ async function refresh() {
       d.jellyfin.now = l.jnow;
     }
     DATA = demo(d);
+    DERNIER_OK = Date.now();
+    fondre(document.getElementById("fige"), figeHtml(DATA));
     fondre(document.getElementById("bar"), bar(DATA));
     fondre(document.getElementById("soucis"), pastilles(DATA));
-    fondre(document.getElementById("groups"), GROUPS.map((g, i) =>
-      `<section class="sec" data-g="${i}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>
-       <div class="grid">${g.s.map(s => card(s, DATA)).join("")}</div></section>`).join(""));
-    document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
-      if (ev.target.closest("a")) return;
-      if (c.dataset.pop === "conteneurs") popConteneurs();
-      else if (c.dataset.pop === "acces") popAcces();
-      else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
-    });
-    filters();
-    const a = [...document.querySelectorAll("#filters button:not(#menu):not(#compact)")].findIndex(b => b.classList.contains("on"));
-    if (a > 0) document.querySelectorAll(".sec").forEach(s => s.style.display = +s.dataset.g === a - 1 ? "" : "none");
-  } catch (e) { console.error("data.json illisible", e); }
+    majAlertes();
+    placeEtSerre();
+    dessineGroupes();
+    sante();
+    suisAncre();
+  } catch (e) {
+    console.error("data.json illisible", e);
+    /* Rien de neuf a dessiner : on garde la page, mais on dit depuis quand. */
+    fondre(document.getElementById("fige"), figeHtml(null));
+    if (DATA.nas) fondre(document.getElementById("bar"), bar(DATA));
+  } finally { TOUR = false; }
 }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { refresh(); checkVersion(); }
+});
 load(); refresh();
 
 // Champ de recherche vide et actif a CHAQUE affichage.
@@ -1939,15 +2675,19 @@ setInterval(() => {
   if (b) b.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }, 1000);
 
-/* ---- Rechargement automatique quand app.js ou style.css changent ---- */
+/* ---- Rechargement automatique quand le code ou les styles changent ---- */
 let VER = null;
 async function checkVersion() {
   // Pas de rechargement pendant une saisie : ce serait pénible en pleine édition.
   if (document.getElementById("dlg")?.open) return;
   try {
     const sig = [];
-    for (const f of ["app.js", "style.css", "fond.css"]) {
+    for (const f of ["app.js", "cartes.js", "style.css", "fond.css"]) {
       const r = await fetch(f, { method: "HEAD", cache: "no-store" });
+      /* ⚠️ Une reponse en erreur (502 pendant un redemarrage de nginx) n a pas
+         d ETag : la signature changeait et la page se rechargeait sur une page
+         d erreur, sans jamais en revenir. On attend le tour suivant. */
+      if (!r.ok) return;
       sig.push(r.headers.get("etag") || r.headers.get("last-modified") || "");
     }
     const now = sig.join("|");
@@ -1955,7 +2695,10 @@ async function checkVersion() {
     VER = now;
   } catch (e) { /* hors ligne : on réessaiera au prochain tour */ }
 }
-setInterval(checkVersion, 1000);
+/* Toutes les 60 s, et plus chaque seconde (08/10/2026) : trois requetes par
+   seconde, soit 10 800 par heure, plus que toutes les donnees reunies, pour un
+   deploiement qui arrive au plus quelques fois par jour. */
+setInterval(() => { if (!document.hidden) checkVersion(); }, 60000);
 checkVersion();
 
 /* ============ Transitions douces (17/08/2026) ============
@@ -2097,7 +2840,7 @@ const RE_FICHIER = /^(?:js|ts|py|md|txt|json|css|html?|php|log|conf|ya?ml|env|xm
 function adresseSaisie(q) {
   q = (q || "").trim();
   if (!q || /\s/.test(q)) return null;
-  if (RE_SCHEMA.test(q)) return q;
+  if (RE_SCHEMA.test(q)) return /^https?:\/\//i.test(q) ? q : null;   // ni javascript: ni file:
   if (RE_LOCAL.test(q)) return "http://" + q;   // le LAN n'est pas en HTTPS
   const m = q.match(RE_DOMAINE);
   return m && !RE_FICHIER.test(m[1]) ? "https://" + q : null;
@@ -2126,16 +2869,23 @@ document.querySelector("form.search")?.addEventListener("submit", (e) => {
 
    ⚠️ La correspondance se fait sur le NOM AFFICHE de la carte. Renommer une
    carte de cette liste la ferait de nouveau compter comme un incident. */
-/* TACHES : deplace dans `services.js`, charge avant ce fichier. */
+/* TACHES : dans `site.js`, charge avant ce fichier. */
 
 function sante() {
-  const arret = !!document.querySelector(".hp .line i.warn");
-  const incidents = [...document.querySelectorAll(".card")].filter(c =>
-    c.querySelector(".dot.warn") &&
-    !TACHES.includes((c.querySelector(".nom") || {}).textContent)).length;
-  document.body.dataset.sante = arret ? "crit" : incidents ? "warn" : "ok";
+  /* Rien a juger avant le premier rendu : sans cette garde, le fond passait au
+     bleu « tout va bien » le temps que data.json arrive. */
+  if (!document.querySelector("#bar .hp")) return;
+  /* Rouge : conteneur arrete OU incident grave, que la pastille de la barre
+     porte toutes les deux (`crit`). */
+  const grave = !!document.querySelector(".hp .line i.crit, .card .dot.crit");
+  /* `.dot.incident` est pose par `card()`, avec la meme regle que les
+     pastilles : taches ignorees, sauf incident declare, services muets compris. */
+  const incidents = document.querySelectorAll(".card .dot.incident").length;
+  const e = grave ? "crit" : incidents ? "warn" : "ok";
+  if (document.body.dataset.sante === e) return;
+  document.body.dataset.sante = e;
+  try { localStorage.setItem("homelab.sante", e); } catch (x) { /* stockage refuse : sans gravite */ }
 }
-sante();
 setInterval(sante, 2000);
 
 
@@ -2209,9 +2959,12 @@ function litGraphe(svg, e) {
   const x0 = +svg.dataset.x0, x1 = +svg.dataset.x1, u = svg.dataset.u || "%";
   const i = Math.max(0, Math.min(n - 1, Math.round((x - x0) / (x1 - x0) * (n - 1))));
   const t0 = +svg.dataset.t0, t1 = +svg.dataset.t1;
+  /* Sur 7 jours, l heure seule ne dit pas QUEL jour : « mar. 14:00 ». */
+  const ti = t0 + (t1 - t0) * i / (n - 1);
   return {
     vx: x0 + i / (n - 1) * (x1 - x0),
-    titre: t0 && t1 ? hhmm(t0 + (t1 - t0) * i / (n - 1)) : "",
+    titre: !(t0 && t1) ? "" : t1 - t0 > 2 * 86400
+      ? new Date(ti * 1000).toLocaleDateString("fr-FR", { weekday: "short" }) + " " + hhmm(ti) : hhmm(ti),
     lignes: ss.map((s, k) => ({
       n: s.dataset.n || "",
       c: s.getAttribute("stroke") || "#8a94a6",
@@ -2307,6 +3060,13 @@ function litAcc(el) {
   };
 }
 
+/* Pastille de la barre : le nom de la carte, et sa raison a la couleur de son
+   niveau. */
+function litRaison(el) {
+  const c = el.classList.contains("crit") ? "#ff453a" : el.classList.contains("inc") ? "#ff9f0a" : "#7fb2f0";
+  return { titre: el.dataset.carte, lignes: [{ n: el.dataset.r || "", c, v: "" }] };
+}
+
 function litJour(el) {
   const v = +el.dataset.v, i = +el.dataset.i, n = +el.dataset.n;
   const j = new Date();
@@ -2319,12 +3079,13 @@ function litJour(el) {
 
 const cacheTip = () => { TIPP.classList.remove("on"); TIPV.classList.remove("on"); };
 
-addEventListener("pointermove", (e) => {
+function montreTip(e) {
   const el = e.target && e.target.closest && e.target.closest("[data-lec]");
   if (!el) return cacheTip();
   const t = el.dataset.lec;
   const r = t === "batt" ? litBatt(el, e) : t === "jour" ? litJour(el)
-    : t === "ratio" ? litRatio(el) : t === "part" ? litPart(el) : t === "acc" ? litAcc(el) : litGraphe(el, e);
+    : t === "ratio" ? litRatio(el) : t === "part" ? litPart(el) : t === "acc" ? litAcc(el)
+    : t === "raison" ? litRaison(el) : litGraphe(el, e);
   if (!r || !r.lignes.length) return cacheTip();
 
   /* ⚠️ UNE FENETRE OUVERTE PASSE AU-DESSUS DE TOUT (couche superieure du
@@ -2354,7 +3115,7 @@ addEventListener("pointermove", (e) => {
      l'unité de lecture et où un trait se confondrait avec la gouttière.
      Les bornes du bloc reprennent celles du rectangle dessiné, 0,13 à 0,87
      d'unité, pour éclaircir la barre et pas la gouttière voisine. */
-  const cx = (t === "jour" || t === "ratio" || t === "part" || t === "acc") ? null
+  const cx = (t === "jour" || t === "ratio" || t === "part" || t === "acc" || t === "raison") ? null
     : cliX(el, r.vx0 != null ? r.vx0 : r.vx);
   if (cx == null) { TIPV.classList.remove("on"); return; }
   if (r.vx1 != null) {
@@ -2369,29 +3130,98 @@ addEventListener("pointermove", (e) => {
   TIPV.style.transform = `translate(${Math.round(cx)}px, ${Math.round(b.top)}px)`;
   TIPV.style.height = Math.round(b.height) + "px";
   TIPV.classList.add("on");
-});
+}
+addEventListener("pointermove", montreTip);
 
-addEventListener("pointerleave", cacheTip);
+/* ---- AU DOIGT (09/10/2026, etape 5) ----
+   Sur iPhone il n y a pas de survol : les infobulles des courbes, rubans,
+   ratios et pastilles ne s ouvraient jamais. Un toucher les ouvre la ou il
+   tombe, et elles RESTENT apres le lever du doigt, jusqu au toucher suivant
+   ailleurs ou au defilement.
+   ⚠️ `pointerleave` n efface plus au doigt : il tombe au lever du doigt, et
+   refermait l infobulle aussitot ouverte.
+   ⚠️ Glisser le doigt le long d une courbe la parcourt (`touch-action: pan-y`
+   dans fond.css) ; un geste vertical fait defiler la page comme avant. */
+let TOUCHE = null, TOUCHE_PREC = null, AU_DOIGT = false;
+addEventListener("pointerdown", (e) => {
+  AU_DOIGT = e.pointerType === "touch";
+  if (!AU_DOIGT) return;
+  TOUCHE_PREC = TOUCHE;
+  TOUCHE = e.target.closest && e.target.closest("[data-lec]");
+  if (!TOUCHE) return cacheTip();
+  montreTip(e);
+}, true);
+addEventListener("pointerleave", (e) => { if (e.pointerType !== "touch") cacheTip(); });
 addEventListener("pointercancel", cacheTip);
 addEventListener("scroll", cacheTip, true);
 
 
-/* Cliquer le nom d une carte en alerte y amene (01/09/2026).
-   ⚠️ Delegue sur `document` : la barre du haut est reconstruite toutes les deux
-   secondes, un ecouteur pose sur le noeud disparaitrait au premier rendu.
+/* ALLER A UNE CARTE : les pastilles y menent au clic, les notifications du NAS
+   par l adresse (`#carte=Mémoire`, voir `alerts.sh`). La carte defile au
+   centre et s entoure un instant d un liseré.
    ⚠️ La correspondance se fait sur le NOM AFFICHE, comme `sante()` et comme la
    liste `TACHES`. Renommer une carte casse les trois d un coup, ce qui est au
-   moins coherent.
-   ℹ️ Limite connue : si un filtre de groupe masque la carte visee, le
-   defilement ne montre rien. Le cas ne s est pas presente, le filtre etant
-   presque toujours sur « Tout ». */
+   moins coherent ; cote NAS, la table `CARTES` d `alerts.sh` suit les memes noms.
+   ⚠️ LE LISERE EST UNE ANIMATION, PAS UNE CLASSE : `fusionne` recopie l attribut
+   `class` a chaque rendu et l aurait efface en deux secondes au plus.
+   ⚠️ Une carte cachee par un filtre de groupe ramene le filtre sur « Tout » :
+   sans cela, le defilement ne montrait rien. */
+function vaACarte(nom) {
+  const cible = [...document.querySelectorAll(".card")].find(c =>
+    (c.querySelector(".nom") || {}).textContent === nom);
+  if (!cible) return false;
+  if (!cible.offsetParent) {
+    const tout = document.querySelector("#filters .panneau button");
+    if (tout) tout.click();
+  }
+  cible.scrollIntoView({ behavior: defilementDoux(), block: "center" });
+  cible.animate([{ outline: "2px solid rgba(255,255,255,.85)", outlineOffset: "3px" },
+                 { outline: "2px solid rgba(255,255,255,0)", outlineOffset: "3px" }],
+                { duration: 2400, easing: "ease-in" });
+  return true;
+}
+
+/* La carte demandee par l adresse, lue au chargement et a chaque changement
+   d ancre. Tentee une seule fois, au premier rendu qui suit (voir `refresh`) :
+   un nom inconnu ne doit pas faire defiler la page plus tard, au hasard d un
+   rendu. L ancre est ensuite effacee, pour qu un rechargement ne ramene pas
+   a la carte. */
+let CARTE_DEMANDEE = null;
+function lisAncre() {
+  CARTE_DEMANDEE = new URLSearchParams(location.hash.slice(1)).get("carte");
+  if (CARTE_DEMANDEE && document.querySelector(".card")) suisAncre();
+}
+function suisAncre() {
+  if (!CARTE_DEMANDEE) return;
+  const nom = CARTE_DEMANDEE; CARTE_DEMANDEE = null;
+  history.replaceState(null, "", location.pathname + location.search);
+  requestAnimationFrame(() => vaACarte(nom));
+}
+lisAncre();
+addEventListener("hashchange", lisAncre);
+
+/* Cliquer le nom d une carte en alerte y amene (01/09/2026).
+   ⚠️ Delegue sur `document` : la barre du haut est reconstruite toutes les deux
+   secondes, un ecouteur pose sur le noeud disparaitrait au premier rendu. */
 addEventListener("click", (e) => {
   const el = e.target.closest && e.target.closest("[data-carte]");
   if (!el) return;
   e.preventDefault();
-  const cible = [...document.querySelectorAll(".card")].find(c =>
-    (c.querySelector(".nom") || {}).textContent === el.dataset.carte);
-  if (cible) cible.scrollIntoView({ behavior: "smooth", block: "center" });
+  /* ⚠️ AU DOIGT, UNE PASTILLE SE TOUCHE DEUX FOIS (09/10/2026) : le premier
+     toucher ouvre sa raison (l infobulle), le second mene a la carte. Sans
+     survol, la raison n aurait sinon jamais ete lisible sur iPhone. */
+  if (AU_DOIGT && el.matches(".pil") && TOUCHE === el && TOUCHE_PREC !== el) return;
+  cacheTip(); TOUCHE = null;
+  vaACarte(el.dataset.carte);
+});
+
+/* Entree ou Espace sur une carte a fenetre : ce qu un clic ferait. */
+addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const c = e.target;
+  if (!c.classList || !c.classList.contains("card") || !c.classList.contains("clic")) return;
+  e.preventDefault();
+  c.click();
 });
 
 
@@ -2449,38 +3279,49 @@ const pcEnCours = (p) => {
    serait detruit au rendu suivant. Le bouton des mises a jour, lui, peut se
    permettre un `onclick` direct parce qu il vit dans une fenetre modale, hors
    de l arbre rendu. */
-document.addEventListener("click", async (e) => {
+document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-pc]");
   if (!b || b.disabled || pcAttente) return;
   e.preventDefault();
-  const action = b.dataset.pc;
-  if (action === "off" && !confirm("Éteindre le poste ?")) return;
-
-  pcAttente = { action, depuis: Date.now() };
-  refresh();                       /* pour que le libelle change tout de suite */
-
-  if (DEMO) {
-    /* Le delai n est pas cosmetique : sans lui le bouton changerait d etat
-       dans la meme image que le clic, et on ne verrait jamais l attente que
-       cette carte sert justement a montrer. */
-    setTimeout(() => {
-      pcDemo = { on: action === "on", vu: Math.floor(Date.now() / 1000) };
-      refresh();
-    }, 2600);
-    return;
-  }
-
-  /* ⚠️ `fetch` NE LEVE PAS SUR UN CODE HTTP D ERREUR. Il ne rejette que sur
-     une panne reseau : un 405 ou un 403 se resout normalement, le `catch`
-     n aurait jamais servi, et le bouton aurait tourne jusqu au plafond de
-     quatre minutes. C est exactement ce qui arrivait sur la demonstration. */
-  try {
-    const r = await fetch("data/pc.json", { method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, at: Date.now() }) });
-    if (!r.ok) { pcAttente = null; refresh(); }
-  } catch { pcAttente = null; refresh(); }
+  popPc(b.dataset.pc);
 });
+
+/* La confirmation passe par une fenetre de la page, et non plus par `confirm()`
+   du navigateur (08/10/2026) : elle porte aussi le champ du mot de passe, et
+   dit dans la meme fenetre pourquoi une demande est refusee.
+   ⚠️ L ATTENTE NE COMMENCE QU UNE FOIS LA DEMANDE ECRITE. Commencee avant, un
+   refus laissait les boutons en « Reveil en cours » pour rien.
+   ⚠️ `fetch` ne leve pas sur un code d erreur : c est `ecritDepuis` qui lit le
+   statut, la carte n en voit que le resultat. */
+function popPc(action) {
+  const on = action === "on";
+  const d = dlg();
+  d.innerHTML = `<form><h3>${on ? "Allumer le PC fixe" : "Éteindre le PC fixe"}</h3>
+    <div class="sub">${on ? "Le NAS envoie le signal de réveil. Le poste démarre en une trentaine de secondes."
+      : "Le NAS demande au poste de s'éteindre. Pense à enregistrer ton travail."}</div>
+    ${champMdp()}
+    <div class="row"><span class="sp"></span><button type="button" id="pcn">Annuler</button>
+      <button type="submit" class="pri${on ? "" : " danger"}">${on ? "Allumer" : "Éteindre"}</button></div></form>`;
+  d.querySelector("#pcn").addEventListener("click", () => d.close("no"));
+  d.querySelector("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!(await ecritDepuis(d, "data/pc.json", { action, at: Date.now() }))) return;
+    d.close("ok");
+    pcAttente = { action, depuis: Date.now() };
+    if (DEMO) {
+      /* Le delai n est pas cosmetique : sans lui le bouton changerait d etat
+         dans la meme image que le clic, et on ne verrait jamais l attente que
+         cette carte sert justement a montrer. */
+      setTimeout(() => {
+        pcDemo = { on, vu: Math.floor(Date.now() / 1000) };
+        refresh();
+      }, 2600);
+    }
+    refresh();                     /* pour que le libelle change tout de suite */
+  });
+  d.showModal();
+  (d.querySelector("#mdpv") || d.querySelector("button.pri")).focus();
+}
 
 /* ============ MODE DEMONSTRATION ============
    Les memes fichiers que le NAS, remplis de donnees inventees. Par-dessus, un
@@ -2550,7 +3391,7 @@ const horodate = (o) => {
    ⚠️ Modifie les tableaux EN PLACE, sans danger : la page retelecharge ses
    fichiers a chaque tour et l objet rebase est jete apres le rendu. */
 function rebase(d) {
-  const series = [d.hist && d.hist.j, d.hist && d.hist.s, d.fin && d.fin.m];
+  const series = [d.hist && d.hist.j, d.hist && d.hist.s, d.fin && d.fin.m, d.wan && d.wan.h, d.wan && d.wan.h7];
   let dernier = 0;
   for (const s of series)
     if (Array.isArray(s) && s.length) dernier = Math.max(dernier, s[s.length - 1][0] || 0);
@@ -2589,9 +3430,43 @@ function tronque(d) {
 /* ⚠️ `pcDemo` s applique APRES le calque, et c est indispensable : le calque
    d un scenario porte lui aussi un `pc`, et il ecraserait la simulation a
    chaque rendu. Ce qu on vient de demander doit primer sur le scenario. */
+/* ⚠️ LES DATES DES MISES A JOUR SUIVENT L HORLOGE EN DEMONSTRATION (09/10/2026).
+   `maj.json` et `versions.json` portent des dates absolues : la fenetre annoncait
+   « derniere passe le 14/03 » des mois apres, et la carte « controle du 14/03 »
+   pour un controle vieux de 8 h. Tout est decale pour que la derniere passe tombe
+   `updates.age` heures avant maintenant, comme en production. */
+const passeDemo = () => Date.now() - (((DATA.updates || {}).age > 0 ? DATA.updates.age : 8) * 3600000);
+const deux = (n) => String(n).padStart(2, "0");
+const isoLocal = (ms) => { const d = new Date(ms), z = -d.getTimezoneOffset();
+  return `${d.getFullYear()}-${deux(d.getMonth() + 1)}-${deux(d.getDate())}T${deux(d.getHours())}:${deux(d.getMinutes())}:${deux(d.getSeconds())}`
+    + (z >= 0 ? "+" : "-") + deux(Math.trunc(Math.abs(z) / 60)) + ":" + deux(Math.abs(z) % 60); };
+function majDemo(m) {
+  if (!DEMO || !m || !m.derniere_passe || !m.derniere_passe.fin) return m;
+  const ecart = passeDemo() - Date.parse(m.derniere_passe.fin);
+  const decale = (o) => { for (const k in o) { const v = o[k];
+    if (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v) && !isNaN(Date.parse(v))) o[k] = isoLocal(Date.parse(v) + ecart);
+    else if (v && typeof v === "object") decale(v); } };
+  decale(m);
+  return m;
+}
+function versionsDemo(v) {
+  if (!DEMO || !v || !Array.isArray(v.items) || !v.items.length) return v;
+  const ecart = Math.round(passeDemo() / 1000) - Math.max(...v.items.map(x => x.ts || 0));
+  for (const x of v.items) if (x.ts) {
+    x.ts += ecart;
+    const d = new Date(x.ts * 1000);
+    x.d = deux(d.getDate()) + "/" + deux(d.getMonth() + 1);
+  }
+  return v;
+}
+
 const demo = (d) => {
   if (!DEMO) return d;
   const o = rebase(tronque(horodate(DEMO_CALQUE ? fusion(d, DEMO_CALQUE) : d)));
+  if (o.updates && o.updates.age >= 0) {
+    const t = new Date(Date.now() - o.updates.age * 3600000);
+    o.updates.maj = deux(t.getDate()) + "/" + deux(t.getMonth() + 1) + " " + deux(t.getHours()) + ":" + deux(t.getMinutes());
+  }
   if (pcDemo) o.pc = { ...(o.pc || {}), ...pcDemo };
   return o;
 };

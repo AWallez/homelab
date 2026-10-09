@@ -218,7 +218,7 @@ a.card:hover, .card.clic:hover {
 }
 #filters button:not(.on):hover { color: #fff }
 
-/* LE MENU DEROULANT (sous 820 px)
+/* LE MENU DEROULANT (ecran etroit)
    Ancre SOUS le bouton de groupe, cale a gauche, largeur au contenu : il
    occupait avant toute la largeur de la barre et se lisait comme un bandeau.
    Meme voile, meme arete et memes ombres que les cartes, plus un fond sombre
@@ -226,8 +226,9 @@ a.card:hover, .card.clic:hover {
    c est le flou qui assure la lisibilite.
 
    ⚠️ Les onglets vivent DANS ce panneau, qui porte deja un `backdrop-filter`.
-   Leur en donner un imbriquerait deux filtres, donc des pastilles noires. */
-@media (max-width: 820px) {
+   Leur en donner un imbriquerait deux filtres, donc des pastilles noires.
+   ⚠️ Sous 980 px, comme dans `style.css`. */
+@media (max-width: 980px) {
   #filters .panneau {
     /* ⚠️ Ancre sur le BOUTON, pas sur la barre : cette valeur doit rester EGALE au
        remplissage horizontal de `#filters`. Celui-ci est passe de 18 a 6 px, et
@@ -479,87 +480,6 @@ h2 svg {
 }
 
 
-/* 7. WIDGET DISQUES NVMe
-   L anneau d endurance a saute : 99 % et 100 %, deux valeurs qui ne bougent
-   presque jamais et ne peuvent que baisser, pour la moitie de la carte. A la
-   place une REGLETTE DE TEMPERATURE, seule grandeur du releve SMART qui varie
-   vraiment. Elle porte son echelle dans son degrade — froid a chaud sur 25 a
-   75 degres, repere blanc au seuil de 65 — parce que le chiffre seul ne dit pas
-   si 45 degres est tiede.
-   Aucun point de rupture : le modele se tronque en `text-overflow`, capacite et
-   temperature gardent leur place a droite, les pastilles passent a la ligne. */
-.nvme { display: flex; flex-direction: column; gap: 11px }
-.nv   { display: flex; flex-direction: column; gap: 7px }
-
-.nv-h {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;                  /* sans quoi l ellipse ne se declenche pas */
-}
-.nv-p {                          /* pastille d etat */
-  align-self: center;
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sok);
-  box-shadow: 0 0 7px rgba(52,199,89,.55);
-}
-.nv-p.cr {
-  background: var(--scr);
-  box-shadow: 0 0 7px rgba(255,69,58,.60);
-}
-.nv-n {                          /* modele : c est lui qui cede la place */
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: .82rem;
-  font-weight: 600;
-  letter-spacing: -.01em;
-}
-.nv-c { flex: 0 0 auto; font-size: .68rem; color: var(--mut) }
-.nv-d {
-  flex: 0 0 auto;
-  font-size: .74rem;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-.nv-d.ok { color: var(--sok) }
-.nv-d.wn { color: var(--swn) }
-.nv-d.cr { color: var(--scr) }
-
-/* la reglette : degrade froid -> chaud, plus un repere au seuil d alerte */
-.nv-b {
-  position: relative;
-  height: 3px;
-  border-radius: 99px;
-  background:
-    linear-gradient(90deg,
-      transparent            calc(80% - .5px),
-      rgba(255,255,255,.40)  calc(80% - .5px),
-      rgba(255,255,255,.40)  calc(80% + .5px),
-      transparent            calc(80% + .5px)),
-    linear-gradient(90deg,
-      rgba(77,151,238,.40)   0%,
-      rgba(52,199,89,.40)   38%,
-      rgba(255,179,64,.42)  72%,
-      rgba(255,69,58,.50)  100%);
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.45);
-}
-.nv-b > i {
-  position: absolute;
-  top: 50%;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(4,6,12,.55),
-              0 1px 3px rgba(0,0,0,.60);
-}
 
 
 /* 8. LEGENDE PORTEUSE DE VALEURS
@@ -583,51 +503,13 @@ h2 svg {
 }
 
 
-/* 9. BARRES DE CONTENEURS
-   `.br i` n etait qu un trait pose a nu : aucune proportion lisible, et rien ne
-   distinguait la memoire residente de ce qui a ete evacue. Il devient une PISTE
-   contenant `em` (ce qui tient en memoire, plein), `u` (evacue en swap, voile)
-   et `s` (moyenne de residence sur 24 h, trait fin).
-   `overflow: hidden` sur la piste fait toute la decoupe : les segments heritent
-   de la pilule sans gerer leurs coins, et le repere ne peut pas deborder quand
-   la moyenne depasse le maximum de l echelle. */
-.br i {
-  position: relative;
-  display: flex;
-  overflow: hidden;
-  background: rgba(255,255,255,.07);
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.40);
-}
-.br i em { flex: 0 0 auto; background: var(--sbl) }
-.br i u  { flex: 0 0 auto; background: var(--sbl); opacity: .38 }
-.br i s {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1.5px;
-  margin-left: -.75px;           /* le trait est centré sur sa valeur */
-  background: #e8edf6;
-  box-shadow: 0 0 3px rgba(0,0,0,.55);
-}
-
-/* La legende passe SOUS les barres ici, alors qu elle coiffe le graphique de
-   « Systeme » : sa marge est donc inversee.
-   ⚠️ La marge BASSE ne peut pas etre portee par la note. `style.css` pose
-   `.vizb > .note { margin-top: auto }`, qui plaque la note au bas de la carte
-   pour que toutes s alignent ; lui donner un `margin-top` fixe ecraserait ce
-   `auto` et casserait l alignement de la grille entiere. Une marge basse sur la
-   legende, elle, s ADDITIONNE au `auto`. */
-.bars + .leg { margin: 9px 0 14px }
-
 /* Extremites : la piste etant en `overflow: hidden` et arrondie, elle taille
    deja le bord gauche du premier segment. Reste le bord droit du dernier, qu on
    arrondit explicitement.
    ⚠️ La jointure entre deux segments doit rester FRANCHE, sinon une encoche
    apparait au milieu de la barre. Quand il n y a qu un segment, les deux regles
    portent sur lui. */
-.br i > *,
 .ln .tr > * { border-radius: 0 }
-.br i > :last-child,
 .ln .tr > :last-child { border-radius: 0 99px 99px 0 }
 
 /* ---- La fenetre des conteneurs suit la meme grammaire ----
@@ -701,8 +583,6 @@ dialog.dlg::after {
    fenetre, la couleur de la pile joue ce role — et il le faut, sa palette
    occupant deja tout l espace des teintes : un segment ambre s y confondrait
    avec la pile Umami. */
-.br i em { background: var(--sbl) }                 /* résident, bleu Docker */
-.br i u  { background: var(--sbl); opacity: .38 }   /* évacué, le même en sourdine */
 
 /* ---- La fenetre gagne sa colonne de swap ----
    ⚠️ COLONNES FIXES, INDISPENSABLE. Chaque ligne est SA PROPRE grille : rien ne
@@ -732,7 +612,6 @@ dialog.dlg::after {
 
    Une variante collante DANS `.scroll` alignait bien, mais exigeait un fond pour
    masquer les lignes defilant dessous, et ce fond barrait le verre. */
-.dlg .scroll { scrollbar-gutter: stable }
 
 .ln.lnh {
   margin-right: 18px;            /* 10 px de barre + 8 px de padding */
@@ -928,7 +807,6 @@ dialog.dlg::after {
 .hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px }
 .hist li {
   display: grid;
-  grid-template-columns: 18px auto minmax(0, 1fr) auto auto;
   column-gap: 10px;
   row-gap: 3px;
   align-items: center;
@@ -1026,7 +904,13 @@ dialog.dlg::after {
      les lignes, actionnables comprises. Restent sur la première : case, date,
      nom, notes et mode. */
   .hist li { grid-template-columns: 18px auto minmax(0, 1fr) auto auto }
-  .hist .hv { grid-column: 3 / -1; justify-self: start; white-space: normal; word-break: break-all }
+  .hist .hv { grid-column: 3 / -1; grid-row: 2; justify-self: start; white-space: normal; word-break: break-all }
+  /* ⚠️ « notes » et le mode RESTENT SUR LA PREMIERE RANGEE, a droite du nom
+     (09/10/2026). Places par la grille apres la version, deja descendue en
+     rangee 2, ils tombaient sur une troisieme rangee, sous la case a cocher :
+     70 px par conteneur au lieu de 40. */
+  .hist .hl { grid-column: 4; grid-row: 1 }
+  .hist .mode { grid-column: 5; grid-row: 1 }
 }
 
 /* ---- 18. Ratios par tracker ---------------------------------------------
@@ -1085,7 +969,6 @@ dialog.dlg::after {
    de droite grandit et la courbe suit. Les deux restent solidaires. */
 .duo.tro{align-items:stretch}
 .duo.tro > *{display:flex;flex-direction:column}
-.duo.tro .courbe{flex:1 1 auto;height:auto;min-height:0;max-height:none}
 
 /* La legende se cale a GAUCHE, sous son titre. `.leg` est centree partout
    ailleurs, ce qui convient la ou elle est seule ; ici un titre a 40 px
@@ -1243,13 +1126,6 @@ dialog.dlg::after {
 }
 .vizb:has(.duo.tro) > .etatv .vv b { display: inline }
 
-/* Mention d incident dans une note. Reservee aux redemarrages automatiques de
-   conteneurs : le reste de la note est factuel, cette partie ne l est pas. */
-
-/* Bandeau des redemarrages automatiques sur 24 h. Distinct de la note, qui
-   reste factuelle : un incident ne se glisse pas au bout d une phrase de
-   comptage. ⚠️ PAS de `margin-top: auto` — `.note` le reclame deja, et deux
-   blocs qui se disputent l espace libre creuseraient un trou au milieu. */
 /* ⚠️ `justify-content` ET `text-align` : le premier centre la paire icone +
    texte dans le bandeau, le second centre les lignes entre elles quand le texte
    se replie. L un sans l autre laisse un repli aligne a gauche.
@@ -1283,7 +1159,8 @@ dialog.dlg::after {
    ⚠️ Le panneau et le trait vivent dans `<body>` : `fusionne` remplace les
    enfants d un noeud des que leur nombre change, ils ne survivraient pas dans
    une carte. */
-.gr rect.capt, .courbe rect.capt, .batt rect.capt { fill: none; pointer-events: all }
+.gr rect.capt,
+.batt rect.capt { fill: none; pointer-events: all }
 
 #tip, #tipv { position: fixed; top: 0; left: 0; z-index: 90; pointer-events: none;
   opacity: 0; transition: opacity .12s ease }
@@ -1321,34 +1198,169 @@ dialog.dlg::after {
    vraiment le conteneur, et les pourcentages suivent. */
 .gech { margin: 0 .667% 0 8.667% }
 
-/* ---- 29. Les cartes en alerte, nommees sous la barre ------------------
-   Rangee a part depuis le 06/10/2026 (`#soucis`, juste apres `#bar`) : logees
-   dans le bloc d etat de la barre, les pastilles l allongeaient a chaque alerte
-   et la faisaient passer sur deux lignes sur les ecrans moyens.
-   ⚠️ `:empty` PLUTOT QU UNE CONDITION EN JAVASCRIPT : la rangee est rendue a
-   chaque tour, vide quand tout va bien, et disparait alors sans laisser de trou.
-   ⚠️ L ECART BARRE / RACCOURCIS EST CONSERVE : quand la rangee est la, la barre
-   lui cede sa marge basse (70 px sur grand ecran, 38 sur telephone) et ne garde
-   que 16 px ; la rangee la reprend sous elle. Sans alerte, rien ne bouge. */
-.soucis:empty { display: none }
-.bar:has(+ .soucis:not(:empty)) { margin-bottom: 16px }
-.soucis { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
-  max-width: 760px; margin: 0 auto 54px; padding: 0 16px }
-@media (max-width: 600px) { .soucis { margin-bottom: 26px } }
-.soucis .cible { font-size: .72rem; font-weight: 600; line-height: 1.6;
-  color: var(--warn); background: rgba(255,159,10,.12);
-  border: 1px solid rgba(255,159,10,.30); border-radius: 99px;
-  padding: 1px .6rem; cursor: pointer; transition: background .15s ease }
-.soucis .cible:hover { background: rgba(255,159,10,.24) }
+/* ---- 29. Les pastilles, dans la barre collante (09/10/2026) ------------
+   Une pastille par carte allumee, avec sa RAISON (`pastilles()` dans app.js),
+   DANS la barre collante pour suivre le defilement. Une
+   seule rangee : les taches grises d abord, puis les incidents.
+   DEUX DISPOSITIONS :
+   - ecran large : les onglets, la cloche et « Compact » sur une ligne, et les
+     pastilles juste dessous, sur toute la largeur ;
+   - sous le seuil du menu : une grille menu | pastilles | cloche | Compact,
+     les boutons cales EN HAUT ; les pastilles passent sous les boutons, sur
+     toute la largeur, des qu elles ne tiennent plus sur une ligne entre eux.
+   La cloche (`#alertes`) masque ou rend les pastilles et compte les cartes
+   allumees, a la couleur de la plus grave.
+   ⚠️ DEFILEMENT VERTICAL, sans barre, si les pastilles depassent la hauteur
+   de l ecran : la barre collee ne doit jamais sortir de l ecran.
+   ⚠️ `:empty` : rendue a chaque tour, la zone disparait quand tout va bien.
+   ⚠️ PAS DE FOND quand la barre colle : essaye (voile sombre et flou), il
+   assombrissait trop la page ; chaque bouton et chaque pastille ont le leur. */
+.nav { position: sticky; top: 10px; z-index: 30; margin-bottom: 18px }
+/* ⚠️ MEME REMBOURRAGE OUVERT OU FERME : `style.css` passe `#filters.ouvert` a
+   18 px sur les cotes, et les deux boutons glissaient de 12 px vers le centre
+   a chaque ouverture du menu. */
+.nav > #filters, .nav > #filters.ouvert { position: relative; top: auto; margin-bottom: 0;
+  padding: 10px 6px; row-gap: 8px }
+.nav > #filters > #alertes { order: 1; margin-left: auto }
+.nav > #filters > #compact { order: 1; margin-left: 0 }
+.nav > #filters > #soucis { order: 2; flex: 1 1 100% }
+/* PASTILLES SOUS LES BOUTONS (onglets du grand ecran, ou menu et « Compact »
+   quand elles n y tiennent plus) : un trait les separe des boutons, CENTRE dans l ecart, 12 px de chaque cote : 8 px d ecart de la
+   barre plus 4 px de marge au-dessus, 12 px de rembourrage dessous. Peint en
+   fond, en haut de la zone : il ne defile pas avec elle. */
+/* Le trait, en variable pour les deux dispositions qui le portent (sous les
+   onglets, et `.dessous` en mode menu). */
+.nav { --separe:
+    linear-gradient(90deg, transparent, rgba(255,255,255,.2) 18%, rgba(255,255,255,.2) 82%, transparent)
+      top center / 100% 1px no-repeat }
+/* SOUS LE TRAIT, UN VOILE FLOU : le verre des boutons, en
+   plus leger, de la largeur de la barre, du trait jusque sous les pastilles.
+   Un masque l eteint vers le bas ET vers les deux cotes : aucune coupure
+   nette. Position et hauteur viennent de `voile()` (app.js), qui mesure la
+   zone des pastilles.
+   ⚠️ SUR UN PSEUDO-ELEMENT DE LA BARRE, frere des pastilles et non leur
+   parent : un `backdrop-filter` pose sur leur conteneur en ferait la racine de
+   fond de leur propre verre, que Chromium peindrait en noir (paragraphe 2). */
+#filters.voile::after { content: ""; position: absolute; z-index: -1; pointer-events: none;
+  left: 0; right: 0; top: var(--vy, 0); height: calc(var(--vh, 0px) + 22px);
+  background: rgba(12,13,18,.08);
+  backdrop-filter: blur(5px) saturate(1.25); -webkit-backdrop-filter: blur(5px) saturate(1.25);
+  -webkit-mask: linear-gradient(180deg, #000 0, #000 calc(100% - 40px), transparent),
+                linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  -webkit-mask-composite: source-in;
+          mask: linear-gradient(180deg, #000 0, #000 calc(100% - 40px), transparent),
+                linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+          mask-composite: intersect }
+.nav > #filters > #soucis, .nav > #filters.dessous > #soucis { margin-top: 4px; padding-top: 12px;
+  background: var(--separe) }
+.nav > #filters.sans-notifs > #soucis { display: none }
+/* Le menu s ouvre sous SON bouton (position posee a l ouverture par app.js) et
+   PAR-DESSUS les pastilles : leur verre (`backdrop-filter`) les ferait sinon
+   passer devant. */
+.nav > #filters > .panneau { top: 50px; z-index: 5 }
+@media (max-width: 980px) {
+  .nav > #filters, .nav > #filters.ouvert { display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "menu notifs alertes compact"; align-items: start; gap: 8px 10px }
+  .nav > #filters > #menu { grid-area: menu }
+  /* Pas de trait ni d ecart quand les pastilles sont A COTE des boutons. */
+  .nav > #filters > #soucis { grid-area: notifs; margin-top: 0; padding-top: 1px; background: none }
+  /* ⚠️ BOUTONS A LA HAUTEUR DES PASTILLES (28 px) : a 34 px (`style.css`), ils
+     paraissaient d une autre taille que les pastilles d a cote. */
+  .nav > #filters > button, .nav > #filters > #alertes { height: 28px }
+  .nav > #filters > #alertes { grid-area: alertes; margin: 0 }
+  .nav > #filters > #compact { grid-area: compact; margin: 0 }
+}
+  /* PASTILLES SOUS LES BOUTONS, SUR TOUTE LA LARGEUR (`.dessous`, pose par
+     `placeSoucis()`) des qu elles ne tiennent plus sur une ligne entre eux
+     : dessous, elles ne peuvent plus chevaucher un bouton,
+     et la zone etroite du milieu ne les empile plus pour rien. */
+@media (max-width: 980px) {
+  .nav > #filters.dessous, .nav > #filters.dessous.ouvert { grid-template-columns: auto 1fr auto auto;
+    grid-template-areas: "menu . alertes compact" "notifs notifs notifs notifs" }
+  .nav > #filters.dessous > #soucis { margin-top: 4px; padding-top: 12px; background: var(--separe) }
+}
+/* Une pastille sur deux lignes epouse son texte : voir `serrePastilles()`. */
 
-/* La pastille d ATTENTION de la ligne d etat.
-   ⚠️ Nom long et explicite : `att` est DEJA pris par `.majl li.att`.
-   ⚠️ Elle ressemble a `.warn` mais ne peut pas l etre : `sante()` cherche
-   `.hp .line i.warn` pour declarer l etat CRITIQUE, et le fond virerait au rouge
-   des qu une simple carte passe a l ambre. Deux classes distinctes pour deux
-   significations distinctes, meme apparence. */
-.hp .line i.attention { background: var(--warn);
-  box-shadow: 0 0 0 3px rgba(255,159,10,.16), 0 0 12px rgba(255,159,10,.45) }
+/* LA CLOCHE : le verre des boutons de la barre (paragraphe 2), le nombre de
+   pastilles, et le POINT D ETAT des cartes (rouge, ambre ou bleu) a l angle
+   de la cloche. Un rond plein colore a ete essaye : il jurait avec le reste.
+   Un `<span role="button">` : un `<button>` serait pris pour un onglet par les
+   regles du menu. */
+#alertes { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 0 11px; border-radius: 999px; cursor: pointer; user-select: none;
+  color: #b8c2d2; border: 1px solid transparent; background: var(--dalle);
+  backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4) brightness(1.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,.26), 0 5px 12px -7px rgba(0,0,0,.42),
+              inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(0,0,0,.26),
+              inset 0 0 0 1px rgba(255,255,255,.06) }
+#alertes::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  padding: 1px;
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.12) 12%, rgba(255,255,255,0) 30%),
+    linear-gradient(320deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.05) 10%, rgba(255,255,255,0) 28%);
+  -webkit-mask: var(--anneau); -webkit-mask-composite: xor;
+          mask: var(--anneau);         mask-composite: exclude }
+#alertes:hover { color: #fff }
+#alertes:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: 2px }
+#alertes .ic { position: relative; display: block; flex: none }
+#alertes svg { width: 13px; height: 13px; display: block }
+#alertes .n { font-size: .7rem; font-weight: 600; line-height: 1 }
+#alertes .pt { position: absolute; top: -2px; right: -3px; width: 6px; height: 6px; border-radius: 50% }
+#alertes .pt.crit { background: var(--scr); box-shadow: 0 0 6px rgba(255,69,58,.9) }
+#alertes .pt.inc { background: var(--warn); box-shadow: 0 0 6px rgba(255,159,10,.8) }
+#alertes .pt.tache { background: #7fb2f0; box-shadow: 0 0 6px rgba(77,151,238,.6) }
+/* Pastilles masquees : la cloche barree passe a l accent, comme « Compact »
+   actif, pour qu on sache qu il y a quelque chose de cache. */
+#filters.sans-notifs #alertes { color: var(--sbl) }
+
+.soucis:empty { display: none }
+.soucis { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
+  min-width: 0; margin: 0; padding: 0 }
+/* Defilante SEULEMENT quand elle depasse l ecran (`.deborde`, pose par `voile()`). */
+.soucis.deborde { max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none }
+.soucis::-webkit-scrollbar { display: none }
+/* UNE SEULE RANGEE : les taches grises d abord, puis les
+   incidents, a la suite. Les deux blocs restent dans le HTML mais ne font plus
+   de boite (`display: contents`) : leurs pastilles se suivent comme si elles
+   etaient soeurs, et passent a la ligne ensemble. */
+.soucis .incs, .soucis .taches { display: contents }
+.soucis .pil { font: inherit; cursor: pointer; max-width: 100%; text-align: center; text-wrap: balance;
+  font-size: .72rem; line-height: 1.4; padding: 4px 11px; border-radius: 15px;
+  color: #c4cddb; border: 1px solid rgba(255,255,255,.14); transition: background .15s ease, color .15s ease;
+  /* LE VERRE DES BOUTONS DE LA BARRE, sur chaque pastille : la barre collee
+     n a pas de fond, et sans le leur une pastille devenait illisible des qu un
+     titre de carte passait dessous. Un fond sous la barre entiere a ete essaye,
+     il assombrissait trop la page. */
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), rgba(14,15,20,.38);
+  backdrop-filter: blur(8px) saturate(1.4) brightness(1.05);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4) brightness(1.05) }
+.soucis .pil:hover { background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08)), rgba(14,15,20,.38); color: var(--ink) }
+.soucis .pil b { font-weight: 650; color: var(--ink) }
+.soucis .pil i { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  margin-right: 7px; vertical-align: .08em }
+.soucis .pil.inc { color: #ffdcab; border-color: rgba(255,159,10,.38);
+  background: linear-gradient(180deg, rgba(255,159,10,.20), rgba(255,159,10,.11)), rgba(14,15,20,.38) }
+.soucis .pil.inc:hover { background: linear-gradient(180deg, rgba(255,159,10,.30), rgba(255,159,10,.18)), rgba(14,15,20,.38) }
+.soucis .pil.inc i { background: var(--warn); box-shadow: 0 0 8px rgba(255,159,10,.6) }
+.soucis .pil.crit { color: #ffcfca; border-color: rgba(255,69,58,.46);
+  background: linear-gradient(180deg, rgba(255,69,58,.24), rgba(255,69,58,.13)), rgba(14,15,20,.38) }
+.soucis .pil.crit:hover { background: linear-gradient(180deg, rgba(255,69,58,.34), rgba(255,69,58,.2)), rgba(14,15,20,.38) }
+.soucis .pil.crit i { background: var(--scr); box-shadow: 0 0 8px rgba(255,69,58,.7) }
+.soucis .pil.inc b, .soucis .pil.crit b { color: #fff }
+/* « + N autres » : un cran plus petit. Les taches gardent la taille des
+   incidents, sur la meme rangee qu eux. */
+.soucis .pil.plus { font-size: .68rem; padding: 3px 10px }
+.soucis .pil.plus { color: var(--ink); border-style: dashed }
+.soucis .pil:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: 2px }
+@media (max-width: 600px) {
+  .soucis { gap: 5px }
+  .soucis .pil { padding: 3px 10px }
+  .soucis .pil.plus { padding: 3px 9px }
+  .soucis .pil i { margin-right: 6px }
+}
 
 /* ---- 30. Selecteur du mode demonstration --------------------------------
    ⚠️ En `position: fixed` dans `<body>`, hors de toute zone rendue : `fusionne`
@@ -1373,27 +1385,6 @@ dialog.dlg::after {
 
 @media (max-width: 700px) { #demo { left: 8px; right: 8px; bottom: 8px; max-width: none } }
 
-/* ---- 31. Echelle verticale de la silhouette -----------------------------
-   ⚠️ EN SURIMPRESSION ET NON EN GOUTTIERE. Une gouttiere a etiquettes couterait
-   ~34 px sur une courbe qui n en fait que 256, et il faudrait decaler l echelle
-   horizontale d autant : elle place ses reperes en pourcentage de sa propre
-   largeur, et mentirait des que le trace ne commencerait plus a zero.
-   ⚠️ Les reperes sont des `<span>` HTML et non du texte SVG : la courbe est en
-   `preserveAspectRatio="none"`, donc etiree, et le texte y serait deforme.
-   ⚠️ `.silh` REPREND LES REGLES DE FLEX de `.courbe` : la courbe n est plus
-   enfant direct de la colonne, c est l enveloppe qui l est. */
-.silh { position: relative; display: flex; margin-top: 11px }
-.silh .courbe { margin-top: 0 }
-.duo.tro .silh { flex: 1 1 auto }
-.duo.tro .silh .courbe { flex: 1 1 auto }
-
-.silh .vmax, .silh .vmin { position: absolute; left: 3px; pointer-events: none;
-  font-size: .52rem; line-height: 1; color: var(--mut);
-  /* Un liseré sombre detache le chiffre du remplissage colore, sans avoir a
-     poser un fond opaque qui masquerait le trace. */
-  text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg) }
-.silh .vmax { top: 1px }
-.silh .vmin { bottom: 1px }
 
 /* ---- 32. La colonne des ratios ne prend que sa largeur ------------------
    Possible SEULEMENT depuis que la description est passee au survol : avec elle
@@ -1456,3 +1447,420 @@ dialog.dlg::after {
 @media (prefers-reduced-motion: reduce) { .pcb button.att::before { animation: none } }
 .pcn { flex: 1 1 100%; font-size: .66rem; color: var(--mut); text-align: center;
   margin-top: 2px }
+
+/* ---- 30. Donnees figees (08/10/2026) --------------------------------------
+   Bande NEUTRE, entre la barre et les pastilles : ce n est pas une alerte du
+   serveur, c est la page qui ne sait plus (collecteur arrete, NAS injoignable).
+   Tant qu elle dure, le fond perd ses couleurs : un fond vert sur des valeurs
+   figees disait « tout va bien » sans le savoir.
+   ⚠️ La barre lui cede sa marge basse, et la bande la reprend sous elle. */
+.fige:empty { display: none }
+.bar:has(+ .fige:not(:empty)) { margin-bottom: 14px }
+.fige { display: flex; flex-direction: column; align-items: center; gap: 6px;
+  max-width: 760px; margin: 0 auto 12px; padding: 0 16px }
+.fige:not(:empty) { margin-bottom: 36px }
+@media (max-width: 600px) { .fige:not(:empty) { margin-bottom: 20px } }
+.fige .fg { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  gap: 2px 10px; text-align: center; font-size: .74rem; line-height: 1.5; color: #e2e8f1;
+  background: rgba(138,148,166,.18); border: 1px solid rgba(138,148,166,.42);
+  border-radius: 12px; padding: 6px 12px }
+.fige .fg b { font-weight: 700 }
+.fige .fg.pb { font-size: .7rem; color: #c9d3e3; background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.14) }
+body[data-fige="1"] .aurora { filter: grayscale(1) brightness(.8); transition: filter 1.2s ease }
+/* Carte d un service muet, ou dont les donnees ne s affichent pas. */
+.note.muet { color: #ffd08a }
+/* Ratio d un tracker dont le releve est fige depuis plus de 6 h (08/10/2026) :
+   valeur grisee, et son age ecrit en clair, lisible au doigt sur iPhone. */
+.trk b.vieux { color: var(--mut) }
+.trk small.age { font-size: .66rem; color: var(--mut); white-space: nowrap }
+
+/* ---- 34. Trois niveaux, et le premier ecran (08/10/2026, etape 4) ---------
+   ROUGE : hors service (site injoignable, tunnel tombe, lien coupe, disque en
+   echec). AMBRE : a regarder. NEUTRE : une TACHE, qui se fait sans alarme
+   (films manquants, demandes, leads). Avant, l ambre servait aux trois, et
+   s allumait a plus de vingt endroits. */
+.dot.crit { background: var(--scr); box-shadow: 0 0 0 3px rgba(255,69,58,.18), 0 0 12px rgba(255,69,58,.8) }
+.dot.tache { background: #7fb2f0; box-shadow: 0 0 0 3px rgba(77,151,238,.16) }
+.hero.ta b { color: #a6cdf7 }
+/* Fond rouge au premier coup d oeil quand une carte est grave, plus seulement
+   quand un conteneur est arrete : voir `sante()`. */
+
+/* Les cartes qui ouvrent une fenetre le disent : un chevron apres la pastille.
+   Rien ne les distinguait des cartes inertes. */
+.head .ouvre { width: 7px; height: 7px; flex: none; margin-left: 10px; opacity: .55;
+  border-right: 1.5px solid var(--mut); border-bottom: 1.5px solid var(--mut);
+  transform: rotate(-45deg); transition: opacity .2s }
+.card.clic:hover .head .ouvre { opacity: 1 }
+#groups.compact .head .ouvre { display: none }
+
+/* Le premier fond pose sans fondu : voir le debut d app.js. */
+body.sans-fondu { transition: none !important }
+
+/* LE PREMIER ECRAN. La premiere carte arrivait a 70 % de la hauteur sur bureau
+   et a 85 % sur iPhone : barre, raccourcis, recherche et filtres empilaient
+   plus de 250 px de marges. */
+.search { margin-bottom: 40px }
+@media (max-width: 600px) {
+  .search { margin-bottom: 22px }
+}
+
+/* ---- 35. Raccourcis : trois lignes au plus, puis defilement (09/10/2026) ----
+   Voir `rangeeRacc()` dans app.js, qui donne a la grille son nombre de colonnes
+   (`--k`) et pose `.defile` quand trois lignes ne suffisent plus. Ordinateur et
+   telephone ont la meme mecanique, seules la colonne et l ecart changent.
+   ⚠️ `--l` ET `--g` SONT LUS PAR LE SCRIPT : les changer ici suffit.
+   ⚠️ 6 px de rembourrage en haut : la zone defilante rogne ce qui depasse, et
+   le bouton de modification (`top: -4px`) comme le survol (`-3px`) en ont
+   besoin.
+   ⚠️ Pas de `mask-image` pour estomper les bords : il ferait de la rangee une
+   racine de fond, et le verre des icones (`backdrop-filter`) virerait au noir. */
+.racc { position: relative; max-width: 760px; margin: 0 auto 26px }
+.shortcuts { --l: 76px; --g: 14px; display: grid;
+  grid-template-columns: repeat(var(--k, 8), var(--l)); gap: 12px var(--g);
+  justify-content: center; padding: 6px 0 2px; overflow-x: auto;
+  overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: none }
+.shortcuts::-webkit-scrollbar { display: none }
+.shortcuts .t { width: auto; scroll-snap-align: start }
+/* Quand ca deborde, la grille part du bord gauche : centree, son debut
+   sortirait de la zone defilante et ne pourrait plus etre atteint. */
+.racc.defile .shortcuts { justify-content: start }
+
+/* LA RANGEE VA D UN BORD DE L ECRAN A L AUTRE des que la page est plus etroite
+   que la rangee : arretee au bord du contenu, elle coupait
+   les icones a 20 px du bord, comme une erreur. Elle deborde dans la marge de
+   `main` (`--pg`, son rembourrage lateral) et reprend cette marge en
+   rembourrage : au repos, la premiere icone reste alignee sur le contenu.
+   ⚠️ `rangeeRacc()` compte la place SANS ce rembourrage : la largeur utile ne
+   change pas, et les colonnes non plus. */
+main { --pg: 1.25rem }
+@media (min-width: 640px) { main { --pg: 1.5rem } }
+@media (min-width: 1024px) { main { --pg: 2rem } }
+@media (max-width: 807px) {
+  .racc { max-width: none; margin-inline: calc(-1 * var(--pg)) }
+  .shortcuts { padding-inline: var(--pg); scroll-padding-inline: var(--pg) }
+}
+
+/* LES FLECHES : carres arrondis, dans le meme verre que les cartes (dalle,
+   flou leger, arete speculaire) ; l arete et l ombre les detachent quand une
+   icone passe dessous. */
+.racc .fl { position: absolute; top: calc(50% - 18px); z-index: 2; width: 36px; height: 36px;
+  display: grid; place-items: center; padding: 0; cursor: pointer; border: 0; border-radius: 11px;
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.05) 55%, rgba(255,255,255,.08) 100%);
+  /* Flou LEGER : a 10 px, sur un bouton de 36 px, l icone de
+     dessous devenait une tache ; a 3 px on la devine au travers. */
+  backdrop-filter: blur(3px) saturate(1.3) brightness(1.05);
+  -webkit-backdrop-filter: blur(3px) saturate(1.3) brightness(1.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 18px -8px rgba(0,0,0,.6);
+  opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility .2s, background .15s }
+.racc .fl::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none; padding: 1.2px;
+  background:
+    linear-gradient(140deg, rgba(255,255,255,.65) 0%, rgba(255,255,255,.16) 14%, rgba(255,255,255,0) 32%),
+    linear-gradient(320deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.07) 12%, rgba(255,255,255,0) 30%),
+    linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
+  -webkit-mask: var(--anneau); -webkit-mask-composite: xor;
+          mask: var(--anneau);         mask-composite: exclude }
+.racc .fl svg { width: 15px; height: 15px; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)) }
+.racc .fl:hover { background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.10)) }
+.racc .fl.g { left: -14px }
+.racc .fl.d { right: -14px }
+.racc[data-g="1"] .fl.g, .racc[data-d="1"] .fl.d { opacity: 1; visibility: visible }
+@media (max-width: 807px) {
+  .racc .fl.g { left: 6px }
+  .racc .fl.d { right: 6px }
+}
+
+@media (max-width: 600px) {
+  .racc { margin-bottom: 18px }
+  .shortcuts { --l: 68px; --g: 10px; row-gap: 10px }
+  .racc .fl { width: 32px; height: 32px; top: calc(50% - 16px); border-radius: 10px }
+}
+@media (prefers-reduced-motion: reduce) { .racc .fl { transition: none } }
+
+/* ---- 36. Pas de zoom au toucher d un champ (09/10/2026) ------------------
+   Safari sur iPhone agrandit la page des qu on touche un champ dont le texte
+   fait moins de 16 px, et ne la rend pas ensuite : la recherche (14,4 px)
+   faisait sauter toute la page. 16 px sur ecran tactile suffisent a l eviter.
+   ⚠️ PAS de `maximum-scale=1` dans la balise viewport : il obtient le meme
+   effet en interdisant aussi le zoom a deux doigts, dont on a besoin pour
+   lire un detail. */
+@media (pointer: coarse) {
+  .search input, .dlg input, #demo select { font-size: 16px }
+}
+
+/* ---- 37. Deux tailles de chiffre cle (09/10/2026) ------------------------
+   Le grand chiffre d une carte existait en quatre tailles (43, 38, 37 et
+   35 px) selon le composant qui le portait, ce qui faisait varier son poids
+   d une carte a l autre sans raison. Deux tailles seulement : 37 px pour le
+   chiffre vedette, 20 px pour les mesures d appoint. */
+.hero b,
+.s7n b,
+.verdict > b { font-size: 2.3rem }
+.st b, .jauge-t b, .dtu b { font-size: 1.24rem }
+
+/* ---- 38. FanKarr et ntfy en bandeau fin (09/10/2026) -------
+   Deux cartes pleine largeur qui n ont presque rien a dire (ntfy aucun widget,
+   FanKarr deux pastilles) occupaient chacune une rangee de 100 px. Elles
+   deviennent un bandeau d une ligne : logo et nom a gauche, pastilles a droite,
+   point d etat au bout.
+   ⚠️ LE MINIMUM DE 100 PX PAR RANGEE PASSE DE LA GRILLE AUX CARTES : il etait
+   impose a toute la grille (`grid-auto-rows`), et un bandeau ne pouvait pas
+   descendre en dessous. Chaque carte le porte desormais elle-meme (deux
+   rangees de 100 px plus l ecart de 13 px pour une carte de donnees, une
+   rangee pour une carte-lien) : rien ne bouge ailleurs, mesure faite carte
+   par carte avant et apres.
+   ⚠️ Hors du mode compact, qui a sa propre grille de tuiles. */
+#groups:not(.compact) .grid { grid-auto-rows: minmax(40px, auto) }
+#groups:not(.compact) .card { min-height: 213px }
+#groups:not(.compact) .card.mini { min-height: 100px }
+#groups:not(.compact) .card.mini.c4 { min-height: 0; flex-direction: row; flex-wrap: wrap;
+  align-items: center; gap: 8px 14px; padding-block: 12px }
+#groups:not(.compact) .card.mini.c4 .head { display: contents }
+#groups:not(.compact) .card.mini.c4 .chip { order: 0 }
+#groups:not(.compact) .card.mini.c4 .txt { order: 1; flex: 0 1 auto }
+#groups:not(.compact) .card.mini.c4 .vizb { order: 2; flex: 0 1 auto; margin: 0 0 0 auto }
+#groups:not(.compact) .card.mini.c4 .dot { order: 3; margin-left: 0 }
+#groups:not(.compact) .card.mini.c4:not(:has(.vizb)) .dot { margin-left: auto }
+#groups:not(.compact) .card.mini.c4 .vizb > .past { margin: 0; padding-top: 0; justify-content: flex-end }
+#groups:not(.compact) .card.mini.c4 .vizb > .note { margin: 0 }
+/* Sur telephone, les pastilles passent sous le nom, centrees. */
+@media (max-width: 600px) {
+  #groups:not(.compact) .card.mini.c4 .dot { margin-left: auto }
+  #groups:not(.compact) .card.mini.c4 .vizb { order: 4; flex: 1 1 100%; margin: 0 }
+  #groups:not(.compact) .card.mini.c4 .vizb > .past { justify-content: center }
+}
+
+/* ---- 39. Graphes de debit (09/10/2026) ---------------------------------
+   Reseau local, Internet et qBittorrent prennent la legende et le graphe des
+   cartes Systeme et Temperatures. Le nombre vedette reste en ligne au-dessus
+   (nombre puis texte), et passe a la ligne au lieu de deborder quand la carte
+   retrecit.
+   ⚠️ 16 PX ENTRE LE NOMBRE ET LA LEGENDE : le texte du nombre vedette
+   (« abonnement 2 Gb/s… ») collait a la legende, et pouvait la chevaucher. */
+.card:has(.gr) .hero { flex: none; flex-direction: row; align-items: center;
+  text-align: left; gap: 4px 11px; flex-wrap: wrap; justify-content: center }
+.card:has(.gr) .hero b { font-size: 2.3rem }
+.vizb > .hero + .leg { margin-top: 16px }
+
+/* ---- 40. iPhone et accessibilite (09/10/2026, etape 5) --------------------
+   LE FOND NE DEFILE PLUS SOUS UNE FENETRE OUVERTE : sur iPhone, glisser dans
+   une fenetre arrivee en butee faisait defiler la page derriere.
+   ⚠️ `scrollbar-gutter: stable` : en retirant la barre de defilement de la
+   page, le verrou aurait decale tout le contenu de sa largeur sur ordinateur. */
+html { scrollbar-gutter: stable }
+html:has(dialog[open]) { overflow: hidden }
+/* Une carte a fenetre atteinte au clavier se voit. */
+.card.clic:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: 3px }
+/* Au doigt, glisser le long d une courbe ou d un ruban le parcourt ; un geste
+   vertical fait toujours defiler la page. */
+[data-lec="gr"], [data-lec="batt"] { touch-action: pan-y }
+
+/* ---- 41. Aucun texte sous 11 px sur telephone (09/10/2026, etape 5) ------
+   Sur un ecran de 390 px, 311 textes faisaient moins de 11 px
+   (libelles en capitales a 8,8 px, adresses, heures des graphes, pastilles).
+   Chaque regle qui fixait une taille plus petite est reprise ici, avec le MEME
+   selecteur, donc le meme poids : placee en dernier, elle l emporte, et une
+   regle plus precise qui voulait plus grand garde la main.
+   ⚠️ LISTE RELEVEE AUTOMATIQUEMENT dans `style.css` et `fond.css` (toute taille
+   en rem ou en px sous 11 px valable sur telephone). Une nouvelle regle a moins
+   de 11 px devra y etre ajoutee a la main.
+   ⚠️ Hors liste : le texte des graphes SVG, dont l unite est celle du dessin et
+   que la gouttiere de l echelle ne laisserait pas grandir. Ordinateur inchange. */
+@media (max-width: 600px) {
+  .met .mi>small,
+.hp em,
+.clock>span,
+.t .l,
+.st span,
+.dlg label,
+.rq,
+.sub2,
+.jauge-t span,
+.past span,
+.past:has(span:nth-child(3)) span,
+.leg span,
+.s7n span,
+.jours em,
+.clg span,
+.grp-h em,
+.grp-h .nm small,
+.ln:not(summary) .nm small,
+.psec,
+.ln .dv,
+.pied,
+.majh,
+.majh b,
+.majl .rq,
+.hist .rq,
+#groups.compact .card:not(:has(.adr)) .head p,
+.wgt b,
+.chk .k,
+.chk em,
+.sh,
+.ses span,
+.jr>div,
+.jr .s,
+.jr .q small,
+.jr .r,
+.dint>div:not(.note),
+.dint small,
+.dint .r,
+.dint .lieu,
+.acr .lieu,
+.rg small,
+.rg b,
+.gh>span,
+.bv,
+.dq .dn small,
+.dq em,
+.libre,
+.faits span,
+.acx-m,
+.acx-a span,
+.acr .s,
+.acr .q small,
+.acr .r,
+.acm span,
+.acm small,
+.acr,
+.dtu span,
+.ln.lnh,
+.ln.lnh .nm,
+.ln.lnh .mm,
+.ln.lnh .sw,
+.ln.lnh .cp,
+.ln.lnh .dv,
+.hist .hd,
+.hist .hv,
+.hist .hv.brut,
+.hist .hl,
+.sub3,
+.hist .mode,
+.hist .motif,
+.hist .motif code,
+.trkh,
+.trk .q,
+.ech span,
+.rleg,
+#tip b,
+.soucis .pil.plus,
+.soucis .pil,
+.pcn,
+.trk small.age { font-size: 11px }
+  .adr,
+  #groups.compact .head .adr { font-size: 11px !important }
+}
+/* Les unites de la barre (« cœurs », « Go », « To ») suivent la taille du
+   chiffre en `em` : le releve automatique ne pouvait pas les voir. */
+@media (max-width: 600px) { .met .mi b .u { font-size: 11px } }
+
+/* ---- 42. Zones de toucher (09/10/2026, etape 5) ----------------------------
+   Apple recommande 44 px pour une cible au doigt. La croix des fenetres en
+   faisait 30, « auto / manuel » 38 x 18, « notes » une ligne de texte. Le
+   DESSIN NE CHANGE PAS : un pseudo-element transparent, deborde autour du
+   bouton, agrandit seulement la zone qui repond au doigt.
+   ⚠️ Moins de debord pour les pastilles (5 px) : serrees a 5 px d ecart, des
+   zones plus grandes se chevaucheraient d une rangee a l autre.
+   ⚠️ `::before` et non `::after`, deja pris par l arete de verre de la
+   cloche, du menu, de « Compact » et des fleches. */
+@media (pointer: coarse) {
+  .dlg-x::before, .hist .mode::before, .hist .hl::before, .soucis .pil::before,
+  #menu::before, #compact::before, #alertes::before, .racc .fl::before {
+    content: ""; position: absolute; inset: -8px -4px }
+  .soucis .pil, .hist .hl { position: relative }
+  .dlg-x::before { inset: -7px }
+  .hist .mode::before { inset: -13px -4px }
+  .hist .hl::before { inset: -13px -6px }
+  .soucis .pil::before { inset: -5px -3px }
+  .racc .fl::before { inset: -6px }
+}
+
+/* ---- 43. Raccourcis en mode edition (09/10/2026) ---------------------------
+   Voir `shortcuts()` : sur un ecran sans survol, « Modifier » fait paraitre le
+   crayon de chaque icone, comme l ecran d accueil de l iPhone. */
+.racc.edition .t .e { display: grid }
+.racc.edition a.t .i { outline: 1px dashed rgba(255,255,255,.28); outline-offset: 3px }
+.t.mod .i svg { color: var(--ink) }
+.racc.edition .t.mod .i svg { color: var(--sbl) }
+
+/* ---- 44. Selecteur « 24 h · 7 j » des graphes (09/10/2026, etape 8) --------
+   Voir `periode()` et `PERIODES` dans app.js. Deux segments dans l en-tete de
+   la carte, juste avant son point d etat : le meme verre que les onglets, en
+   plus discret. Masque en mode compact, ou la carte n a plus de graphe.
+   ⚠️ `margin-left: auto` passe du point au selecteur : deux marges
+   automatiques se partageraient l espace et poseraient le selecteur au
+   milieu de l en-tete. */
+.periode {
+  display: inline-flex; flex: none; gap: 2px; padding: 2px; margin-left: auto;
+  border-radius: 8px; background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.09);
+}
+.periode + .dot { margin-left: 10px }
+.periode [data-per] {
+  position: relative; font-size: 11px; line-height: 1; padding: 4px 7px;
+  border-radius: 6px; color: var(--mut); cursor: pointer; user-select: none;
+  -webkit-user-select: none; white-space: nowrap;
+}
+.periode [data-per]:hover { color: var(--ink) }
+.periode [data-per].on { background: rgba(255,255,255,.13); color: var(--ink) }
+.periode [data-per]:focus-visible { outline: 2px solid var(--sbl); outline-offset: 1px }
+#groups.compact .periode { display: none }
+#groups.compact .periode + .dot { margin-left: auto }
+@media (pointer: coarse) {
+  .periode [data-per]::before { content: ""; position: absolute; inset: -9px -2px }
+}
+
+/* ---- 45. Journal des 7 jours (09/10/2026, etape 8) -------------------------
+   Voir `evts()` et `popJournal()`. Une ligne : l heure, une pastille a la
+   couleur du niveau, la categorie, le texte. La categorie tombe sur telephone,
+   ou la pastille et le texte suffisent. Dans la fenetre, le texte passe a la
+   ligne au lieu d etre coupe. */
+.jx { display: flex; flex-direction: column }
+.jx > div {
+  display: grid; grid-template-columns: 76px 7px 92px minmax(0, 1fr); gap: 9px;
+  align-items: baseline; padding: 6px 2px; border-top: 1px solid rgba(255,255,255,.06);
+  font-size: .74rem; line-height: 1.35;
+}
+.jx > div:first-child { border-top: 0 }
+.jx.court > div { grid-template-columns: 40px 7px 92px minmax(0, 1fr) }
+.jx .h { color: var(--mut); white-space: nowrap }
+.jx .pt { width: 7px; height: 7px; border-radius: 50%; align-self: center; background: var(--mut); opacity: .7 }
+.jx .ok .pt { background: var(--sok); opacity: 1 }
+.jx .wn .pt { background: var(--swn); opacity: 1 }
+.jx .cr .pt { background: var(--scr); opacity: 1 }
+.jx .s {
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--mut);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.jx .q { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+#dlg .jx .q { white-space: normal; overflow-wrap: anywhere }
+@media (max-width: 600px) {
+  .jx > div { grid-template-columns: 70px 7px minmax(0, 1fr) }
+  .jx.court > div { grid-template-columns: 40px 7px minmax(0, 1fr) }
+  .jx .s { display: none }
+}
+.jf { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 2px }
+.jf button {
+  font: inherit; font-size: 11px; line-height: 1; padding: 5px 10px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14); background: transparent; color: var(--mut); cursor: pointer;
+}
+.jf button:hover { color: var(--ink) }
+.jf button.on { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.22); color: var(--ink) }
+.jf button b { font-weight: 600; margin-left: 5px }
+.jf button:focus-visible { outline: 2px solid var(--sbl); outline-offset: 2px }
+@media (pointer: coarse) {
+  .jf button { position: relative }
+  .jf button::before { content: ""; position: absolute; inset: -6px -2px }
+}
+
+/* ---- 46. Disques iSCSI vus de l interieur (09/10/2026) ---------------------
+   Voir `fractionIscsi()` : la part iSCSI que Windows a ecrite est pleine. Le
+   reste du disque est HACHURE sur la carte, comme le cache de la carte Memoire
+   (style en ligne, `hachure()`), et a 38 % d opacite dans la fenetre, comme le
+   swap de la fenetre Memoire, ou chaque disque a aussi sa barre pleine largeur. */
+.jauge-b.pile i.vide, .cbar i.vide { opacity: .38 }
+.ln .tr.lunb { display: flex }
+.ln .tr.lunb i { border-radius: 99px 0 0 99px; flex: none }
+.ln .tr.lunb u { display: block; height: 100%; flex: none; opacity: .38; border-radius: 0 99px 99px 0 }

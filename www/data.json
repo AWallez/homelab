@@ -3,13 +3,16 @@
   "_horodatages": "Les dates s ecrivent en DECALAGE, jamais en absolu : \"@-13h\", \"@-4j\", \"@-90min\". Une fixture figee annoncerait « il y a trois ans » dans trois ans. La resolution se fait a l affichage, cote page.",
 
   "ts": "14:32",
+  "_t": "Heure de la collecte (08/10/2026) : la page juge la fraicheur sur elle. Un calque la vieillit pour montrer des donnees figees.",
+  "t": "@-0.3min",
+  "ko": [],
 
   "nas": {
     "cpu": 11, "ram": 54, "swap": 18, "temp": 61, "nvme": 44,
     "up": 23, "uptime": 2013840,
     "run": 26, "all": 26,
     "ramu": 4404019, "ramt": 8155136, "cores": 8,
-    "net": 1524288, "disk": 63, "disktot": 7984990126080,
+    "net": 1524288, "disk": 76, "disktot": 7984990126080,
     "load": 0.74, "load5": 0.91, "load15": 1.12,
     "dr": 486210, "dw": 1932544,
     "fans": [ { "n": "processeur", "rpm": 2566 },
@@ -18,6 +21,14 @@
   },
 
   "site":   { "ms": 68, "cert": 74, "ok": true },
+  "_ur": "UptimeRobot (collect.sh) : le site vu d Internet. h = hote sonde, s = etat (2 en ligne, 8 et 9 hors ligne), r = disponibilite en % sur 1, 7 et 30 jours, b = derniere coupure.",
+  "ur":     { "t": "@-3min", "m": [
+              { "n": "Site", "h": "example.com", "s": 2, "r": [100, 99.96, 99.99], "b": { "t": "@-3j", "d": 240 } },
+              { "n": "Notifications", "h": "notifs.example.com", "s": 2, "r": [100, 100, 100], "b": null } ] },
+  "_certs": "Certificat de chaque domaine public (collect.sh, CERT_HOTES) : j = jours restants, v = duree de vie en jours, null si illisible.",
+  "certs":  [ { "h": "example.com", "j": 74, "v": 89 }, { "h": "www.example.com", "j": 74, "v": 89 },
+              { "h": "media.example.com", "j": 51, "v": 89 }, { "h": "stats.example.com", "j": 38, "v": 89 },
+              { "h": "vault.example.com", "j": 62, "v": 89 }, { "h": "ntfy.example.com", "j": 55, "v": 89 } ],
   "crm":    { "tot": 31, "traites": 24, "age": 12 },
   "leads":  7,
   "umami":  { "visitors": 9, "views": 21, "visits": 14,
@@ -104,9 +115,10 @@
   "lan": { "up": 1, "vit": 10000, "mtu": 9000, "coup": 0, "err": 4 },
   "wan": { "ok": 1, "v6": 1, "cd": 2000000, "cu": 900000,
            "boxup": 4016838, "err": 0, "lat": 7 },
-  "_mem": "Memoire en Mo. tot = prog + zram + noyau + cache + libre. tasse = donnees d origine dans le zram, zcap = sa capacite, ssd = ce qui a deborde sur le SSD. g = qui la prend, groupe par groupe : mo = memoire anonyme (sans le cache), t = swap. La somme des mo vaut prog, celle des t vaut tasse + ssd : autres ramasse le reste.",
+  "_mem": "Memoire en Mo. tot = prog + zram + noyau + cache + libre. tasse = donnees d origine dans le zram, zcap = sa capacite, ssd = ce qui a deborde sur le SSD. g = qui la prend, groupe par groupe : mo = memoire anonyme (sans le cache), t = swap. La somme des mo vaut prog, celle des t vaut tasse + ssd : autres ramasse le reste. oom = processus tues faute de memoire sur 24 h (n24) et ceux nommes par leur groupe (ev : instant, nom, nombre).",
   "mem": { "tot": 7964, "dispo": 3900, "prog": 2350, "zram": 420, "noyau": 650, "cache": 2950, "libre": 1594,
            "tasse": 1150, "zcap": 3836, "ssd": 0, "psi": 0.2, "psi5": 0.1,
+           "oom": { "n24": 0, "ev": [] },
            "ram": { "go": 8, "slots": 2, "libres": 1 },
            "g": [ { "k": "conteneurs", "mo": 1300, "t": 348, "n": 26 },
                   { "k": "systeme", "mo": 520, "t": 420, "l": [
