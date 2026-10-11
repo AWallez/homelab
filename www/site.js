@@ -20,7 +20,7 @@ const IP = "nas.local";
 /* Port local de chaque service, par nom de carte. Une carte sans port n a pas
    de lien local. */
 const PORTS = {
-  "CRM": 8100, "Statistiques": 3002, "Jellyfin": 8096, "Seerr": 5055, "FanKarr": 9898,
+  "Statistiques": 3002, "Jellyfin": 8096, "Seerr": 5055, "FanKarr": 9898,
   "Prowlarr": 9696, "Radarr": 7878, "Sonarr": 8989, "Bazarr": 6767, "qBittorrent": 8080,
   "Uptime Kuma": 3001, "ntfy": 8081, "AdGuard Home": 3000, "WireGuard": 51821, "Dockge": 5001,
 };
@@ -35,6 +35,7 @@ const LIENS = {
   "VPN": "https://example.com/vpn",
   "ntfy": "https://notifs.example.com",
   "Vaultwarden": "https://coffre.example.com",
+  "CRM": "https://crm.example.com",
 };
 
 /* Fournisseur du tunnel VPN du client torrent. */

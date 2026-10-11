@@ -204,7 +204,7 @@ const GROUPS = [
          sert encore mais plus personne dehors ne l atteint. */
       warn: d => (d.site || {}).ok === false ? "crit" : horsDehors(dehors(d, LIENS["Site"])),
       pourquoi: d => (d.site || {}).ok === false ? "le site ne répond pas" : "injoignable vu d'Internet" },
-    { n: "CRM", ko: "crm", d: "Suivi des leads et prospects", u: go("CRM"), ic: "crm",
+    { n: "CRM", ko: "crm", d: "Suivi des leads et prospects", x: LIENS["CRM"], ic: "crm",
       r: d => { const c = d.crm || {};
         return hero(d.leads, (d.leads > 1 ? "leads non lus" : "lead non lu") + "<br>en attente de réponse", d.leads > 0 ? "ta" : "")
           + past([[(c.tot || 0) + " reçus"], [(c.traites || 0) + " traités"],
