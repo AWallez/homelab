@@ -1,0 +1,104 @@
+/* ============ Atelier des cartes (index.html?atelier) ============
+   Charge seulement en mode atelier (voir atelier.js). Tout est sous
+   `body.atelier` : rien ici ne peut toucher la page normale. */
+
+/* La page normale s efface : l atelier prend toute la largeur. */
+body.atelier main{max-width:none}
+body.atelier #bar,body.atelier #fige,body.atelier .racc,
+body.atelier .search,body.atelier #nav{display:none}
+
+body.atelier{--at-ok:#34c759;--at-wn:#ffb340;--at-ko:#ff453a;--at-ligne:rgba(255,255,255,.09)}
+
+.at-tete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 28px;
+  margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--at-ligne)}
+.at-titre h1{margin:0;font-size:1.35rem;font-weight:650;letter-spacing:-.01em}
+.at-titre p{margin:4px 0 0;font-size:.8rem;color:var(--mut)}
+.at-titre a{color:var(--ink)}
+.at-reglages{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:.78rem;color:var(--mut)}
+.at-reglages input[type=number]{width:4.2em;padding:4px 6px;border-radius:7px;border:1px solid var(--at-ligne);
+  background:rgba(255,255,255,.05);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums}
+.at-ecrans{display:flex;flex-wrap:wrap;gap:4px}
+.at-ecrans button,.at-action{padding:5px 10px;border-radius:8px;border:1px solid var(--at-ligne);
+  background:rgba(255,255,255,.05);color:var(--ink);font:inherit;font-size:.74rem;cursor:pointer}
+.at-ecrans button b{margin-left:6px;font-weight:500;color:var(--mut)}
+.at-ecrans button.on{border-color:rgba(77,151,238,.7);background:rgba(77,151,238,.18)}
+.at-action{background:rgba(52,199,89,.16);border-color:rgba(52,199,89,.4)}
+.at-action:disabled{opacity:.6;cursor:progress}
+.at-coche{display:flex;align-items:center;gap:6px;cursor:pointer}
+.at-resume{flex-basis:100%;margin:0;font-size:.78rem;color:var(--mut)}
+
+.at-corps{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;align-items:start}
+@media(max-width:900px){.at-corps{grid-template-columns:1fr}}
+
+.at-liste{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;padding-right:4px}
+.at-grp h2{margin:14px 0 5px;font-size:.66rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);font-weight:600}
+.at-grp:first-child h2{margin-top:0}
+.at-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:8px;
+  background:none;color:var(--ink);font:inherit;font-size:.8rem;text-align:left;cursor:pointer}
+.at-item:hover{background:rgba(255,255,255,.05)}
+.at-item.on{background:rgba(77,151,238,.16)}
+.at-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.at-item em{font-style:normal;font-size:.66rem;color:var(--mut)}
+.at-niv{display:grid;place-items:center;width:18px;height:18px;border-radius:5px;font-style:normal;
+  font-size:.62rem;font-weight:700;flex:none;background:rgba(255,255,255,.08);color:var(--mut)}
+.at-niv.essentielle{background:rgba(77,151,238,.25);color:#9cc3ff}
+.at-niv.secondaire{background:rgba(255,255,255,.04)}
+.at-pt{width:8px;height:8px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.25)}
+.at-pt.ok{background:var(--at-ok);border-color:transparent}
+.at-pt.tel{background:var(--at-wn);border-color:transparent}
+.at-pt.ko{background:var(--at-ko);border-color:transparent}
+
+.at-detail{min-width:0}
+.at-vide{color:var(--mut);font-size:.85rem}
+.at-fiche h2{margin:0 0 10px;font-size:1.15rem;font-weight:650}
+.at-fiche h2 small{margin-left:8px;font-size:.75rem;font-weight:500;color:var(--mut)}
+.at-fiche dl{display:flex;flex-wrap:wrap;gap:8px 22px;margin:0 0 10px}
+.at-fiche dt{font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut)}
+.at-fiche dd{margin:2px 0 0;font-size:.85rem;font-variant-numeric:tabular-nums}
+.at-fiche dd small{color:var(--mut)}
+.at-avis,.at-note{margin:0 0 6px;padding:7px 11px;border-radius:9px;font-size:.8rem;width:fit-content;max-width:100%}
+.at-avis.ok{background:rgba(52,199,89,.12);color:#8ce8a4}
+.at-avis.info{background:rgba(77,151,238,.13);color:#9cc3ff}
+.at-avis.ko{background:rgba(255,69,58,.13);color:#ff9d96}
+.at-note{background:rgba(255,255,255,.05);color:var(--mut)}
+
+.at-sous{margin:26px 0 10px;font-size:.9rem;font-weight:600}
+.at-sous small{margin-left:8px;font-weight:400;font-size:.74rem;color:var(--mut)}
+/* Une rangee par hauteur : les cartes y gardent leur taille reelle, la
+   rangee defile si elle est plus large que l ecran. */
+.at-rang{display:flex;gap:18px;align-items:flex-start;overflow-x:auto;padding:4px 2px 14px}
+.at-cas{margin:0;flex:none}
+.at-cas figcaption{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;font-size:.78rem;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.at-cas figcaption span{font-weight:400;font-size:.7rem;color:var(--mut)}
+.at-cas.ideal figcaption{color:#9cc3ff}
+/* Le cadre a la taille exacte essayee ; la carte le remplit, comme dans une
+   case de la grille. Contour rouge : la carte a un defaut a cette taille. */
+.at-cadre{display:flex;outline:1px dashed rgba(255,255,255,.14);outline-offset:3px;border-radius:var(--r)}
+/* `!important` contre `#groups:not(.compact) .card { min-height: 213px }`
+   (fond.css) : une hauteur imposee par l ANCIENNE grille. Dans le bento, c est
+   la grille qui donne sa taille a la carte ; l atelier mesure le contenu. */
+.at-cadre>.card,.at-banc>.card{flex:1;min-width:0;min-height:0 !important;max-width:none}
+.at-cas.ko .at-cadre{outline:2px solid var(--at-ko)}
+.at-def{margin:8px 0 0;padding:0 0 0 16px;max-width:360px;font-size:.7rem;color:#ff9d96}
+
+.at-lecture{margin:0 0 8px;font-size:.78rem;color:#8ce8a4;font-variant-numeric:tabular-nums}
+.at-lecture.ko{color:#ff9d96}
+.at-libre{overflow:auto;padding:4px 2px 18px}
+#at-libre{resize:both;overflow:hidden;min-width:80px;min-height:60px;max-width:none}
+
+/* Banc de mesure : mis en page, jamais vu. Transparent et non cache :
+   `visibility:hidden` se transmettrait aux elements de la carte, que la
+   detection des defauts ignore alors tous. Fixe, pour ne jamais elargir la
+   page quand il essaie 1 600 px. */
+.at-banc{position:fixed;left:0;top:0;opacity:0;pointer-events:none;z-index:-1;display:flex;contain:layout}
+
+.at-table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+.at-table th{text-align:left;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);
+  font-weight:600;padding:6px 8px;border-bottom:1px solid var(--at-ligne)}
+.at-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05)}
+.at-table tr.ko td:first-child{box-shadow:inset 3px 0 var(--at-ko)}
+.at-table tr.tel td:first-child{box-shadow:inset 3px 0 var(--at-wn)}
+.at-table tr.ok td:first-child{box-shadow:inset 3px 0 var(--at-ok)}
+.at-table button{border:0;background:none;color:var(--ink);font:inherit;cursor:pointer;padding:0;text-decoration:underline;
+  text-decoration-color:rgba(255,255,255,.25);text-underline-offset:3px}

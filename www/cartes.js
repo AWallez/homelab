@@ -139,6 +139,29 @@ const lignesCerts = (l) => {
   return r;
 };
 
+/* ---- Tailles et niveaux (bento, 13/10/2026) ---------------------------
+   Chaque carte declare sa CATEGORIE (`taille`) et son `niveau`. Elle peut
+   corriger une valeur de sa categorie avec `ajuste` (ex. `{ min: 600 }`).
+     min  largeur minimale en PIXELS : en dessous, le contenu ne tient plus.
+          En pixels et non en modules : le module change de taille selon
+          l ecran, le contenu, lui, a besoin d une largeur reelle.
+     l    largeur ideale, en modules (12 modules sur 1 160 px, soit 86 px).
+     max  largeur maximale, en modules, quand il faut boucher un trou.
+     h    hauteur [min, ideale, max], en rangees de 100 px.
+   Niveaux : une carte « essentielle » passe en premier et garde sa taille
+   ideale ; les « secondaires » s etirent pour boucher les trous.
+   ⚠️ Valeurs de depart, a verifier dans l atelier (index.html?atelier). */
+const TAILLES = {
+  lien:      { min: 180, l: 6,  max: 8,  h: [1, 1, 2] },
+  petite:    { min: 220, l: 3,  max: 4,  h: [2, 2, 3] },
+  moyenne:   { min: 300, l: 6,  max: 8,  h: [2, 2, 3] },
+  graphique: { min: 340, l: 6,  max: 8,  h: [2, 2, 3] },
+  large:     { min: 560, l: 12, max: 12, h: [2, 2, 3] },
+};
+const NIVEAUX = ["essentielle", "normale", "secondaire"];
+/** Taille d une carte : celle de sa categorie, corrigee par `ajuste`. */
+const tailleDe = (s) => ({ ...TAILLES[s.taille] || TAILLES.moyenne, ...s.ajuste });
+
 /* ---- GROUPS ----------------------------------------------------- */
 const GROUPS = [
   { n: "Portfolio", i: "briefcase", s: [
@@ -168,7 +191,7 @@ const GROUPS = [
        ⚠️ Un bloc qui grandit puis un bloc colle en bas : `.vizb` distribue son
        espace libre par `margin-top: auto`, et deux blocs qui le reclament se le
        partageraient en creusant un trou au milieu. */
-    { n: "Site", d: "Vitrine freelance", x: LIENS["Site"], ic: "portfolio",
+    { n: "Site", taille: "petite", niveau: "normale", d: "Vitrine freelance", x: LIENS["Site"], ic: "portfolio",
       r: d => {
         const s = d.site || {};
         const ms = Hn(d, "site").filter(v => v > 0);
@@ -204,14 +227,14 @@ const GROUPS = [
          sert encore mais plus personne dehors ne l atteint. */
       warn: d => (d.site || {}).ok === false ? "crit" : horsDehors(dehors(d, LIENS["Site"])),
       pourquoi: d => (d.site || {}).ok === false ? "le site ne répond pas" : "injoignable vu d'Internet" },
-    { n: "CRM", ko: "crm", d: "Suivi des leads et prospects", x: LIENS["CRM"], ic: "crm",
+    { n: "CRM", taille: "petite", niveau: "essentielle", ko: "crm", d: "Suivi des leads et prospects", x: LIENS["CRM"], ic: "crm",
       r: d => { const c = d.crm || {};
         return hero(d.leads, (d.leads > 1 ? "leads non lus" : "lead non lu") + "<br>en attente de réponse", d.leads > 0 ? "ta" : "")
           + past([[(c.tot || 0) + " reçus"], [(c.traites || 0) + " traités"],
                   [c.age > 0 ? "il y a " + c.age + " j" : c.age === 0 ? "aujourd'hui" : "—"]]); },
       warn: d => d.leads > 0,
       pourquoi: d => pluriel(d.leads, "lead non lu", "leads non lus") },
-    { n: "Statistiques", ko: "umami", d: "Fréquentation du portfolio", u: go("Statistiques"),
+    { n: "Statistiques", taille: "graphique", niveau: "normale", ko: "umami", d: "Fréquentation du portfolio", u: go("Statistiques"),
       x: LIENS["Statistiques"], ic: "stats", w: 2,
       r: d => `<div class="stat7"><div class="s7n"><b>${d.umami.visitors}</b>`
             + `<span>visiteurs<br>sur 7 jours</span></div>`
@@ -219,7 +242,7 @@ const GROUPS = [
             + past([[d.umami.visits + " visites"], [d.umami.views + " pages vues"]]) },
   ]},
   { n: "Médiathèque", i: "play", s: [
-    { n: "Jellyfin", ko: "jellyfin", d: "Films, séries et animés", u: go("Jellyfin"),
+    { n: "Jellyfin", taille: "moyenne", niveau: "essentielle", ko: "jellyfin", d: "Films, séries et animés", u: go("Jellyfin"),
       x: LIENS["Jellyfin"], ic: "jellyfin", w: 2,
       r: d => d.jellyfin.now
             ? calme("<b>" + esc(d.jellyfin.now) + "</b>", "bl")
@@ -228,7 +251,7 @@ const GROUPS = [
             : mesures([[d.jellyfin.films, "films"], [d.jellyfin.series, "séries"],
                        [d.jellyfin.episodes, "épisodes"]])
               + `<div class="note">Aucune lecture en cours</div>` },
-    { n: "Seerr", ko: "seerr", d: "Demandes de la famille", u: go("Seerr"),
+    { n: "Seerr", taille: "moyenne", niveau: "normale", ko: "seerr", d: "Demandes de la famille", u: go("Seerr"),
       x: LIENS["Seerr"], ic: "seerr", w: 2,
       r: d => (d.seerr.pending > 0
             ? hero(d.seerr.pending, (d.seerr.pending > 1 ? "demandes" : "demande") + "<br>en attente", "ta")
@@ -236,7 +259,7 @@ const GROUPS = [
             + past([[d.seerr.done + " complétées", d.seerr.pending > 0 ? "" : "ok"]]),
       warn: d => d.seerr.pending > 0,
       pourquoi: d => pluriel(d.seerr.pending, "demande") },
-    { n: "FanKarr", d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
+    { n: "FanKarr", taille: "lien", niveau: "secondaire", ajuste: { l: 12, max: 12 }, d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
       ic: "fankarr.ico", mini: 1, w: 4,
       /* Ce que FanKarr a telecharge (06/10/2026, demande : « des
          pastilles comme Sonarr et Radarr »), lu par systeme.py dans ses fichiers
@@ -269,7 +292,7 @@ GROUPS.push(
 
        Les captures par indexeur remplacent le pourcentage — elles bougent tous
        les jours et disent quelle source alimente reellement la bibliotheque. */
-    { n: "Prowlarr", ko: "prowlarr", d: "Indexeurs et trackers", u: go("Prowlarr"), ic: "prowlarr",
+    { n: "Prowlarr", taille: "petite", niveau: "secondaire", ko: "prowlarr", d: "Indexeurs et trackers", u: go("Prowlarr"), ic: "prowlarr",
       r: d => {
         const p = d.prowlarr || {};
         const ix = p.ix || [];
@@ -291,7 +314,7 @@ GROUPS.push(
       pourquoi: d => { const p = d.prowlarr || {};
         if (!(p.ix || []).length) return "aucun indexeur actif";
         return p.msg ? prowlarrFr(p.msg) : pluriel(p.sante, "problème signalé", "problèmes signalés"); } },
-    { n: "Radarr", ko: "radarr", d: "Films — recherche et import", u: go("Radarr"), ic: "radarr",
+    { n: "Radarr", taille: "petite", niveau: "normale", ko: "radarr", d: "Films — recherche et import", u: go("Radarr"), ic: "radarr",
       r: d => (d.radarr.mis > 0
             ? hero(d.radarr.mis, (d.radarr.mis > 1 ? "films manquants" : "film manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun film manquant</b>"))
@@ -299,7 +322,7 @@ GROUPS.push(
                     [Go(d.radarr.size)]]),
       warn: d => d.radarr.mis > 0,
       pourquoi: d => pluriel(d.radarr.mis, "film manquant", "films manquants") },
-    { n: "Sonarr", ko: "sonarr", d: "Séries — recherche et import", u: go("Sonarr"), ic: "sonarr",
+    { n: "Sonarr", taille: "petite", niveau: "normale", ko: "sonarr", d: "Séries — recherche et import", u: go("Sonarr"), ic: "sonarr",
       r: d => (d.sonarr.mis > 0
             ? hero(d.sonarr.mis, (d.sonarr.mis > 1 ? "épisodes manquants" : "épisode manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun épisode manquant</b>"))
@@ -307,7 +330,7 @@ GROUPS.push(
                     [Go(d.sonarr.size)]]),
       warn: d => d.sonarr.mis > 0,
       pourquoi: d => pluriel(d.sonarr.mis, "épisode manquant", "épisodes manquants") },
-    { n: "Bazarr", ko: "bazarr", d: "Sous-titres français", u: go("Bazarr"), ic: "bazarr",
+    { n: "Bazarr", taille: "petite", niveau: "secondaire", ko: "bazarr", d: "Sous-titres français", u: go("Bazarr"), ic: "bazarr",
       r: d => (d.bazarr.ep + d.bazarr.mv > 0
             ? hero(d.bazarr.ep + d.bazarr.mv, (d.bazarr.ep + d.bazarr.mv > 1 ? "médias" : "média") + "<br>sans sous-titre", "ta")
               + past([[pluriel(d.bazarr.ep, "épisode")], [pluriel(d.bazarr.mv, "film")]])
@@ -342,7 +365,7 @@ GROUPS.push(
        COMBIEN, ET QUELLE TAILLE. La derniere pastille ; la repartition par
        categorie vit dans la fenetre, ou elle a la place de signifier quelque
        chose. */
-    { n: "qBittorrent", d: "Client torrent, sous VPN", u: go("qBittorrent"), ic: "qbittorrent",
+    { n: "qBittorrent", taille: "moyenne", niveau: "essentielle", d: "Client torrent, sous VPN", u: go("qBittorrent"), ic: "qbittorrent",
       w: 2, per: 1,
       r: d => {
         const q = d.qbit || {};
@@ -524,7 +547,7 @@ GROUPS.push(
        Sans elle, un cross-seed mort continuerait d afficher ses correspondances
        comme si de rien n etait.
        ⚠️ Pas de lien : le port 2468 est une API, pas une interface. */
-    { n: "Cross-seed", d: "Ratio multi-trackers", ic: "cross-seed", w: 2,
+    { n: "Cross-seed", taille: "moyenne", niveau: "secondaire", d: "Ratio multi-trackers", ic: "cross-seed", w: 2,
       r: d => {
         const c = d.cross || {};
         if (!c.nb && !c.run) return `<div class="note">Relevé cross-seed indisponible</div>`;
@@ -570,7 +593,7 @@ GROUPS.push(
        ⚠️ `vpn.open` vient d un vrai test TCP vers l IP publique du tunnel, PAS du
        contenu de `/tmp/gluetun/forwarded_port`, qui annoncait un numero pendant
        que Proton ne routait plus rien. */
-    { n: "VPN", d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
+    { n: "VPN", taille: "large", niveau: "normale", ajuste: { min: 340 }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
       x: LIENS["VPN"],
       r: d => {
         const up = Hn(d, "vpnup");
@@ -632,7 +655,7 @@ GROUPS.push(
        autrement qu un controle simplement vieux, et `undefined` tant que le
        collecteur n a pas ete mis a jour : les deux comparaisons sont alors
        fausses et la carte se comporte comme avant. */
-    { n: "Mises à jour", d: "À appliquer à la main", pop: "updates", ic: "maj", w: 2,
+    { n: "Mises à jour", taille: "moyenne", niveau: "normale", d: "À appliquer à la main", pop: "updates", ic: "maj", w: 2,
       r: d => {
         const u = d.updates || {};
         const att = (u.items || []).filter(x => x.upd);
@@ -669,7 +692,7 @@ GROUPS.push(
        donnees deja deposees sur le PC.
        ⚠️ Les pastilles n apparaissent qu avec `t`, l heure de la copie : un
        collecteur qui n ecrit encore que l age laisse la carte telle qu avant. */
-    { n: "Sauvegarde", d: "Copie chiffrée vers le PC", ic: "sauvegarde", w: 2,
+    { n: "Sauvegarde", taille: "moyenne", niveau: "essentielle", d: "Copie chiffrée vers le PC", ic: "sauvegarde", w: 2,
       r: d => { const b = d.backup || {};
         const chk = b.chk || null;
         return jauge(b.h < 0 ? "jamais" : "il y a " + b.h + " h",
@@ -728,7 +751,7 @@ GROUPS.push(
        sur la carte, au moins au moment ou elle se declenche. */
     /* `per` : selecteur « 24 h · 7 j » dans l en-tete (voir `PERIODES`), d ou
        une description sans duree. */
-    { n: "Système", d: "Processeur, mémoire et swap", ic: "systeme", w: 2, per: 1,
+    { n: "Système", taille: "graphique", niveau: "essentielle", d: "Processeur, mémoire et swap", ic: "systeme", w: 2, per: 1,
       r: d => leg([["processeur", "#4d97ee", pct(d.nas.cpu)],
                    ["mémoire", "#34c759", pct(d.nas.ram)],
                    ["swap", "#ffb340", pct(d.nas.swap)]])
@@ -794,7 +817,7 @@ GROUPS.push(
        Son libelle vient de SMART : une capacite parle davantage que « nvme2 ».
        ⚠️ Les series ajoutees en cours de route n ont pas d historique anterieur :
        `d0` les fait demarrer la ou leurs donnees commencent. */
-    { n: "Températures", d: "Capteurs matériels", ic: "temp", w: 2, per: 1,
+    { n: "Températures", taille: "graphique", niveau: "secondaire", d: "Capteurs matériels", ic: "temp", w: 2, per: 1,
       r: d => {
         const L = dern(d);
         const dg = v => v > 0 ? Math.round(v) + " °C" : "—";
@@ -873,7 +896,7 @@ GROUPS.push(
        ⚠️ RETIRES VOLONTAIREMENT : la pastille de pression (elle compte
        toujours dans le verdict, sans s afficher) et le bandeau des redemarrages
        automatiques des conteneurs. */
-    { n: "Mémoire", d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
+    { n: "Mémoire", taille: "graphique", niveau: "normale", d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
       r: d => { const m = d.mem;
         if (!m || !m.tot) return `<div class="note">Relevé de la mémoire en attente</div>`;
         const E = etatMemoire(m);
@@ -932,7 +955,7 @@ GROUPS.push(
        erreurs ou s use, si un miroir existant perd un disque, ou si btrfs
        compte des erreurs. Le volume presque plein est deja l alerte de la carte
        « Systeme ». */
-    { n: "Stockage", d: "Volumes et disques", ic: "ssd", w: 2,
+    { n: "Stockage", taille: "graphique", niveau: "normale", d: "Volumes et disques", ic: "ssd", w: 2,
       r: d => grappesDisques(d.smart, { ESPACE, ROLES }),
       /* Disque en echec, miroir degrade, corruption detectee : ROUGE. L usure
          seule laisse le temps de commander un disque : ambre. */
@@ -949,7 +972,7 @@ GROUPS.push(
           if (g.err > 0) l.push(pluriel(g.err, "erreur") + " de données");
           if (!g.sys && g.n < g.att) l.push("miroir dégradé, " + g.n + " disque sur " + g.att); });
         return l.join(SEP); } },
-    { n: "Uptime Kuma", ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
+    { n: "Uptime Kuma", taille: "large", niveau: "essentielle", ajuste: { min: 420 }, ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
       /* ⚠️ NI `calme` NI `hero` ICI, et c'est un retrait délibéré. Le bandeau
          vert répétait l'addition des trois lignes — « 28 sondes en ligne »
          quand elles disent 7, 10 et 11 — et n'apportait en propre que la
@@ -985,7 +1008,7 @@ GROUPS.push(
        cinq derniers ici, la semaine entiere au clic (`popJournal`).
        ⚠️ PAS D ALERTE : chaque incident allume deja sa propre carte. Le journal
        dit QUAND, pas QUOI faire. */
-    { n: "Journal", d: "Ce qui s'est passé sur 7 jours", ic: "journal", w: 4, pop: "journal",
+    { n: "Journal", taille: "large", niveau: "normale", ajuste: { min: 600 }, d: "Ce qui s'est passé sur 7 jours", ic: "journal", w: 4, pop: "journal",
       r: d => (d.journal || []).length ? evts(d.journal, 5)
         : `<div class="note">Journal en cours de constitution</div>`,
       note: d => { const l = d.journal || [];
@@ -995,7 +1018,7 @@ GROUPS.push(
           + (inc ? pluriel(inc, "incident") : "aucun incident"); } },
     /* Injoignable vu d Internet (UptimeRobot) : le telephone ne recoit plus
        rien, puisqu il vient chercher chaque message sur ce domaine. */
-    { n: "ntfy", d: "Notifications push", u: go("ntfy"),
+    { n: "ntfy", taille: "lien", niveau: "secondaire", ajuste: { l: 12, max: 12 }, d: "Notifications push", u: go("ntfy"),
       x: LIENS["ntfy"], ic: "ntfy", mini: 1, w: 4,
       warn: d => horsDehors(dehors(d, LIENS["ntfy"])),
       pourquoi: () => "injoignable vu d'Internet, les notifications n'arrivent plus" },
@@ -1010,7 +1033,7 @@ GROUPS.push(
        apres un redemarrage, tous les services deviendraient injoignables. Le
        collecteur verifie que CHAQUE reseau Docker actif a sa regle ; un simple
        compte ne dirait pas lequel manque. */
-    { n: "Sécurité", d: "Contrôles du serveur", ic: "securite", w: 2,
+    { n: "Sécurité", taille: "moyenne", niveau: "normale", d: "Contrôles du serveur", ic: "securite", w: 2,
       r: d => { const s = d.secu;
         if (!s) return `<div class="note">Contrôles en attente</div>`;
         const ouv = s.ouverts || [], manq = s.manq || [];
@@ -1053,7 +1076,7 @@ GROUPS.push(
        client WireGuard) ; une adresse hors du reseau local et du VPN passe a
        l ambre, et c est la seule condition d alerte. Un clic ouvre les 24 h
        entieres, heure par heure puis connexion par connexion (`popAcces`). */
-    { n: "Accès", d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
+    { n: "Accès", taille: "moyenne", niveau: "normale", d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
       r: d => { const a = d.acces;
         if (!a) return `<div class="note">Relevé des connexions en attente</div>`;
         return depuisInternet(a) + intertitre("Connectés maintenant") + sessions(a.now || [])
@@ -1072,7 +1095,7 @@ GROUPS.push(
        depuis le demarrage : c est ce que produit un switch qui se fige.
        La courbe est la colonne `reseau`, collectee depuis l origine et jamais
        affichee jusqu ici : recu et envoye confondus. */
-    { n: "Réseau local", d: "Lien du serveur vers le switch", ic: "reseau", w: 2, per: 1,
+    { n: "Réseau local", taille: "graphique", niveau: "secondaire", d: "Lien du serveur vers le switch", ic: "reseau", w: 2, per: 1,
       r: d => { const l = d.lan;
         if (!l) return `<div class="note">Relevé du lien en attente</div>`;
         const v = Hf(d, "reseau"), red = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
@@ -1116,7 +1139,7 @@ GROUPS.push(
        une panne du port du VPN, qui en suit souvent un, mais c est la carte VPN
        qui porte cette alerte : le dire deux fois teindrait la page pour un
        evenement deja passe. */
-    { n: "Internet", d: "Fibre et box de la maison", ic: "internet", w: 2, per: 1,
+    { n: "Internet", taille: "graphique", niveau: "normale", d: "Fibre et box de la maison", ic: "internet", w: 2, per: 1,
       r: d => { const w = d.wan;
         if (!w) return `<div class="note">Relevé de la box en attente</div>`;
         const gb = k => k >= 1000000 ? vg(k / 1000000) + " Gb/s" : Math.round(k / 1000) + " Mb/s";
@@ -1149,12 +1172,12 @@ GROUPS.push(
         : pluriel(err24(d.wan), "erreur fibre", "erreurs fibre") + " sur 24 h" },
   ]},
   { n: "Bureau et infrastructure", i: "server", s: [
-    { n: "AdGuard Home", ko: "adguard", d: "DNS filtrant du réseau", u: go("AdGuard Home"), ic: "adguard-home", w: 2,
+    { n: "AdGuard Home", taille: "moyenne", niveau: "normale", ko: "adguard", d: "DNS filtrant du réseau", u: go("AdGuard Home"), ic: "adguard-home", w: 2,
       r: d => { const t = d.adguard.q ? d.adguard.b / d.adguard.q * 100 : 0;
         return jauge(vg(t.toFixed(1)) + " %", "des requêtes bloquées", t, "var(--swn)")
           + past([[nb(d.adguard.q) + " req."], [nb(d.adguard.b) + " bloq."],
                   [d.adguard.lat + " ms", d.adguard.lat <= 20 ? "ok" : "wn"]]); } },
-    { n: "WireGuard", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
+    { n: "WireGuard", taille: "moyenne", niveau: "normale", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
       // Tuiles plutôt que lignes : dix appareils tiennent sur deux rangées au
       // lieu de dix. Grille calibrée à 68 px pour conserver au moins deux
       // colonnes même dans une carte étroite — à 84 px elle tombait à une seule
@@ -1188,7 +1211,7 @@ GROUPS.push(
        une rangee a elle seule et laissait la moitie droite vide ; posee avant,
        le placement automatique empile Vaultwarden et Dockge a sa droite. L ordre
        de cette liste est donc signifiant ici. */
-    { n: "PC fixe", d: "Poste de travail", ic: "pc", w: 2,
+    { n: "PC fixe", taille: "moyenne", niveau: "essentielle", d: "Poste de travail", ic: "pc", w: 2,
       r: d => {
         const p = d.pc || {};
         const att = pcEnCours(p);          /* action en attente, ou null */
@@ -1212,9 +1235,9 @@ GROUPS.push(
       pourquoi: d => { const p = d.pc || {};
         return !p.vu ? "jamais vu sur le réseau"
           : "injoignable depuis " + anciennete(Math.floor(Date.now() / 1000) - p.vu); } },
-    { n: "Vaultwarden", d: "Coffre-fort de mots de passe",
+    { n: "Vaultwarden", taille: "lien", niveau: "normale", d: "Coffre-fort de mots de passe",
       x: LIENS["Vaultwarden"], ic: "vaultwarden", mini: 1, w: 2 },
-    { n: "Dockge", d: "Gestion des stacks Docker", u: go("Dockge"), ic: "dockge", mini: 1, w: 2 },
+    { n: "Dockge", taille: "lien", niveau: "secondaire", d: "Gestion des stacks Docker", u: go("Dockge"), ic: "dockge", mini: 1, w: 2 },
   ]},
 );
 

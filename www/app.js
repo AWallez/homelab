@@ -2590,6 +2590,9 @@ let TOUR = false;           // un tour de rafraichissement en cours
 /* Les cartes, depuis `DATA`. A part de `refresh` pour qu un selecteur de
    periode redessine sa carte sur-le-champ, sans attendre ni relire le NAS. */
 function dessineGroupes() {
+  /* Mode atelier (`?atelier`, voir atelier.js) : il dessine les cartes a sa
+     facon, chacune seule et a toutes ses tailles. */
+  if (window.ATELIER?.actif) return window.ATELIER.dessine(DATA);
   fondre(document.getElementById("groups"), GROUPS.map((g, i) =>
     `<section class="sec" data-g="${i}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>
      <div class="grid">${g.s.map(s => card(s, DATA)).join("")}</div></section>`).join(""));
