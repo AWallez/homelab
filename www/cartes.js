@@ -147,16 +147,17 @@ const lignesCerts = (l) => {
           l ecran, le contenu, lui, a besoin d une largeur reelle.
      l    largeur ideale, en modules (12 modules sur 1 160 px, soit 86 px).
      max  largeur maximale, en modules, quand il faut boucher un trou.
-     h    hauteur [min, ideale, max], en rangees de 100 px.
+     h    hauteur [min, ideale, max], en DEMI-RANGEES de 44 px (+ 12 px
+          d espace) : 2 font 100 px, 4 font 212, 6 font 324, 8 font 436.
    Niveaux : une carte « essentielle » passe en premier et garde sa taille
    ideale ; les « secondaires » s etirent pour boucher les trous.
    ⚠️ Valeurs de depart, a verifier dans l atelier (index.html?atelier). */
 const TAILLES = {
-  lien:      { min: 180, l: 6,  max: 8,  h: [1, 1, 2] },
-  petite:    { min: 220, l: 3,  max: 4,  h: [2, 2, 3] },
-  moyenne:   { min: 300, l: 6,  max: 8,  h: [2, 2, 3] },
-  graphique: { min: 340, l: 6,  max: 8,  h: [2, 2, 3] },
-  large:     { min: 560, l: 12, max: 12, h: [2, 2, 3] },
+  lien:      { min: 180, l: 6,  max: 8,  h: [2, 2, 3] },
+  petite:    { min: 220, l: 3,  max: 4,  h: [4, 4, 5] },
+  moyenne:   { min: 300, l: 6,  max: 8,  h: [4, 4, 6] },
+  graphique: { min: 340, l: 6,  max: 8,  h: [6, 7, 8] },
+  large:     { min: 560, l: 12, max: 12, h: [4, 5, 6] },
 };
 const NIVEAUX = ["essentielle", "normale", "secondaire"];
 /** Taille d une carte : celle de sa categorie, corrigee par `ajuste`. */

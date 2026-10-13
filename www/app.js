@@ -945,6 +945,10 @@ const prowlarrFr = (m) => {
   return m ? "« " + m + " »" : "";
 };
 
+// « Mises à jour » → « mises-a-jour »
+const slug = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
 function card(s, d) {
   /* ⚠️ RENDU PROTEGE : une cle absente de data.json levait une exception, et
      c est TOUTE LA PAGE qui cessait de se mettre a jour. La carte fautive dit
@@ -961,6 +965,9 @@ function card(s, d) {
   const main = s.u || s.x;
   const logo = s.ic ? `<img src="icons/${s.ic.includes(".") ? s.ic : s.ic + ".svg"}" alt="">` : esc(s.n.slice(0, 2).toUpperCase());
   const adr = [s.x && `<span class="dom lien" data-lien="${esc(s.x)}" title="${esc(s.x)}">${esc(label(s.x))}</span>`, s.u && `<span class="port">:${esc(s.u.split(":").pop())}</span>`].filter(Boolean).join("");
+  /* `data-carte` : repere stable de la carte (nom sans accents ni espaces),
+     pour lui donner des styles a elle seule (www/bento/*.css). */
+  const id = `data-carte="${slug(s.n)}"`;
   const kl = "card" + (viz ? " viz" : "")
     + (s.w === 4 ? " c4" : s.w === 3 ? " c3" : s.w === 2 ? " c2" : "") + (s.mini ? " mini" : "");
   const body = `<div class="head"><span class="chip">${logo}</span>
@@ -973,8 +980,8 @@ function card(s, d) {
     ${note ? `<div class="note">${esc(note)}</div>` : ""}`;
   /* Focalisable et annoncee comme ouvrant une fenetre (09/10/2026) : au clavier,
      Tab y arrive, Entree ou Espace l ouvre (voir plus bas). */
-  if (s.pop) return `<div class="${kl} clic" data-pop="${s.pop}" tabindex="0" role="button" aria-haspopup="dialog">${body}</div>`;
-  return main ? `<a class="${kl}" rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}">${body}</div>`;
+  if (s.pop) return `<div class="${kl} clic" ${id} data-pop="${s.pop}" tabindex="0" role="button" aria-haspopup="dialog">${body}</div>`;
+  return main ? `<a class="${kl}" ${id} rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}" ${id}>${body}</div>`;
 }
 
 /* Le selecteur « 24 h · 7 j » d une carte a graphe (`per: 1` dans cartes.js),

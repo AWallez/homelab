@@ -26,6 +26,9 @@
   const actif = new URLSearchParams(location.search).has("atelier");
   window.ATELIER = { actif };
   if (!actif) return;
+  // La page normale ne se rafraichit pas dans un onglet cache. L atelier, si :
+  // il sert aussi d outil de mesure, dans un onglet qu on ne regarde pas.
+  try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (e) { /* tant pis */ }
 
   /* ---- Reglages ---- */
   // la largeur d un module selon l ecran (voir la base de grille proposee)
@@ -34,7 +37,8 @@
     ["Écran 1 440", 106], ["Tablette couchée", 113],
   ];
   const TELEPHONE = 350; // largeur utile d un telephone de 390 px
-  const R = { module: 92, espace: 12, rangee: 100 };
+  // rangees de 44 px : des DEMI-rangees (2 = 100 px, 4 = 212, 6 = 324)
+  const R = { module: 92, espace: 12, rangee: 44 };
   const NIV = { essentielle: "E", normale: "N", secondaire: "S" };
 
   let donnees = null, demoVu, choisie = null, direct = false;
@@ -53,14 +57,19 @@
   const court = (t) => { t = String(t).replace(/\s+/g, " ").trim(); return t.length > 38 ? t.slice(0, 37) + "…" : t; };
 
   /* ---- Rendu d une carte a une taille donnee ---- */
-  // Les classes de l ANCIENNE grille (c2, c4, mini) viennent de `w` et `mini`.
-  // Certaines regles changent le CONTENU selon elles (une carte `mini c4` se
-  // met en ligne) : on les recalcule d apres la taille essayee.
-  function habille(el, w, h) {
+  // Le CONTRAT DE TAILLE, que la grille en bento posera de la meme facon :
+  // `data-l` = largeur en modules, `data-h` = hauteur en demi-rangees. Les
+  // styles d une carte s adaptent a sa hauteur par `[data-h]`, a sa largeur
+  // par `@container carte` (voir bento/base.css).
+  // Les classes de l ANCIENNE grille (c4, mini) changent aussi le contenu (une
+  // carte `mini c4` se met en ligne) : on les recalcule d apres la taille.
+  function habille(el, w, py) {
     const c = el.querySelector(".card");
     if (!c) return;
+    c.dataset.l = w;
+    c.dataset.h = Math.max(1, Math.round((py + R.espace) / (R.rangee + R.espace)));
     c.classList.remove("c2", "c3", "c4", "mini");
-    if (h === 1) c.classList.add("mini");
+    if (py <= 100) c.classList.add("mini");
     if (w >= 10) c.classList.add("c4");
     // ni lien ni fenetre dans l atelier : un clic n y doit rien ouvrir
     c.querySelectorAll("[data-lien]").forEach((x) => x.removeAttribute("data-lien"));
@@ -69,11 +78,11 @@
     c.removeAttribute("role");
   }
 
-  function poseCarte(cadre, s, w, h, px, py) {
+  function poseCarte(cadre, s, w, px, py) {
     cadre.innerHTML = card(s, donnees);
     cadre.style.width = px + "px";
     cadre.style.height = py + "px";
-    habille(cadre, w, h);
+    habille(cadre, w, py);
   }
 
   /* ---- Detection des defauts ---- */
@@ -113,31 +122,38 @@
   // Cadre de mesure, hors de la vue mais bien mis en page (dans #groups, pour
   // que les regles qui le visent s appliquent).
   let banc;
-  const mesure = (s, w, h, px, py) => { poseCarte(banc, s, w, h, px, py); return defauts(banc); };
+  const mesure = (s, w, px, py) => { poseCarte(banc, s, w, px, py); return defauts(banc); };
 
   // Plus petite largeur, en pixels, sans aucun defaut, pour une hauteur donnee.
-  // Recherche par dichotomie : on suppose qu une carte qui tient a une largeur
-  // tient aussi a toute largeur superieure.
+  // ⚠️ PAS de dichotomie sur toute la plage : un graphique qui garde ses
+  // proportions grandit en hauteur avec la largeur, et une carte trop LARGE
+  // deborde alors par le bas. On balaie donc par pas de 26 px, puis on affine
+  // entre le dernier echec et le premier succes.
   function minimumMesure(s, h) {
     const py = hauteurPx(h);
-    if (mesure(s, 99, h, 1600, py).length) return null; // ne tient jamais
-    let a = 100, b = 1600;
-    while (b - a > 2) {
-      const m = (a + b) >> 1;
-      if (mesure(s, modulesPour(m), h, m, py).length) a = m; else b = m;
+    let avant = 100;
+    for (let px = 100; px <= 1600; px += 26) {
+      if (!mesure(s, modulesPour(px), px, py).length) {
+        let a = avant, b = px;
+        while (b - a > 2) {
+          const m = (a + b) >> 1;
+          if (mesure(s, modulesPour(m), m, py).length) a = m; else b = m;
+        }
+        return b;
+      }
+      avant = px;
     }
-    return b;
+    return null; // ne tient a aucune largeur avec cette hauteur
   }
 
   // Hauteur, en pixels, dont le contenu a besoin a une largeur donnee : la
   // plus petite sans aucun defaut. Sert a choisir la hauteur des rangees.
   function hauteurContenu(s, px) {
-    const rg = (py) => Math.max(1, Math.round((py + R.espace) / (R.rangee + R.espace)));
-    if (mesure(s, modulesPour(px), rg(1400), px, 1400).length) return null;
+    if (mesure(s, modulesPour(px), px, 1400).length) return null;
     let a = 30, b = 1400;
     while (b - a > 2) {
       const m = (a + b) >> 1;
-      if (mesure(s, modulesPour(px), rg(m), px, m).length) a = m; else b = m;
+      if (mesure(s, modulesPour(px), px, m).length) a = m; else b = m;
     }
     return b;
   }
@@ -153,10 +169,10 @@
     const tailles = [];
     for (const h of hauteurs(t))
       for (const w of largeurs(t)) {
-        const d = mesure(s, w, h, largeurPx(w), hauteurPx(h));
+        const d = mesure(s, w, largeurPx(w), hauteurPx(h));
         tailles.push({ w, h, d });
       }
-    const tel = hauteurs(t).map((h) => ({ h, d: mesure(s, 4, h, TELEPHONE, hauteurPx(h)) }));
+    const tel = hauteurs(t).map((h) => ({ h, d: mesure(s, 4, TELEPHONE, hauteurPx(h)) }));
     const minis = Object.fromEntries(hauteurs(t).map((h) => [h, minimumMesure(s, h)]));
     const enDefaut = tailles.filter((x) => x.d.length);
     const mid = minis[t.h[1]];
@@ -298,7 +314,7 @@
       <h3 class="at-sous">Sur téléphone <small>toute la largeur, ${TELEPHONE} px</small></h3>
       <div class="at-rang">${r.tel.map(({ h, d }) => `
         <figure class="at-cas${d.length ? " ko" : ""}">
-          <figcaption>${h} rangée${h > 1 ? "s" : ""}<span>${TELEPHONE} × ${hauteurPx(h)} px</span></figcaption>
+          <figcaption>${h} demi-rangée${h > 1 ? "s" : ""}<span>${TELEPHONE} × ${hauteurPx(h)} px</span></figcaption>
           <div class="at-cadre" data-tel="1" data-h="${h}"></div>
           ${d.length ? `<ul class="at-def">${d.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : ""}
         </figure>`).join("")}</div>
@@ -308,8 +324,8 @@
 
     zone.querySelectorAll(".at-cadre[data-h]").forEach((c) => {
       const h = +c.dataset.h;
-      if (c.dataset.tel) poseCarte(c, s, 4, h, TELEPHONE, hauteurPx(h));
-      else { const w = +c.dataset.w; poseCarte(c, s, w, h, largeurPx(w), hauteurPx(h)); }
+      if (c.dataset.tel) poseCarte(c, s, 4, TELEPHONE, hauteurPx(h));
+      else { const w = +c.dataset.w; poseCarte(c, s, w, largeurPx(w), hauteurPx(h)); }
     });
     libre(s, t);
   }
@@ -317,12 +333,12 @@
   function libre(s, t) {
     const c = racine.querySelector("#at-libre");
     const w = Math.max(t.l, modulesPour(t.min));
-    poseCarte(c, s, w, t.h[1], largeurPx(w), hauteurPx(t.h[1]));
+    poseCarte(c, s, w, largeurPx(w), hauteurPx(t.h[1]));
     const lecture = racine.querySelector("#at-lecture");
     const maj = () => {
       const px = Math.round(c.getBoundingClientRect().width), py = Math.round(c.getBoundingClientRect().height);
       const mw = (px + R.espace) / (R.module + R.espace), mh = (py + R.espace) / (R.rangee + R.espace);
-      habille(c, Math.floor(mw), Math.round(mh));
+      habille(c, Math.floor(mw), py);
       const d = defauts(c);
       lecture.className = "at-lecture" + (d.length ? " ko" : "");
       lecture.textContent = `${px} × ${py} px, soit ${mw.toFixed(1)} modules × ${mh.toFixed(1)} rangées. `
@@ -347,6 +363,114 @@
           <td>${r.tel.some((y) => y.d.length) ? "à revoir" : "tient"}</td></tr>`;
       }).join("")}</tbody></table>`;
   }
+
+
+  /* ---- Analyse detaillee, pour les outils (et les agents) ----
+     `ATELIER.analyser("Système", { module: 92 })` renvoie tout ce qu il faut
+     pour juger les tailles d une carte : hauteur de son contenu a chaque
+     largeur, defauts et remplissage a chaque taille declaree, un cran au-dela
+     de ses maximums, largeur minimale mesuree, rendu telephone. */
+
+  // Ou s arrete reellement le contenu : textes, images, graphiques et elements
+  // colores (barres, pastilles), pas les boites vides qui s etirent.
+  // `videVertical` compte AUSSI les trous au milieu (entre l en-tete et des
+  // chiffres pousses en bas), que `videBas` ne voit pas.
+  function remplissage(cadre) {
+    const c = cadre.querySelector(".card");
+    if (!c) return null;
+    const cs = getComputedStyle(c), cr = c.getBoundingClientRect();
+    const z = { l: cr.left + parseFloat(cs.paddingLeft), t: cr.top + parseFloat(cs.paddingTop),
+                r: cr.right - parseFloat(cs.paddingRight), b: cr.bottom - parseFloat(cs.paddingBottom) };
+    const rects = [];
+    const garde = (r) => { if (r.width > 0.5 && r.height > 0.5) rects.push(r); };
+    const tw = document.createTreeWalker(c, NodeFilter.SHOW_TEXT), rg = document.createRange();
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      if (!n.nodeValue.trim() || n.parentElement.closest("svg")) continue;
+      rg.selectNodeContents(n);
+      for (const r of rg.getClientRects()) garde(r);
+    }
+    for (const el of c.querySelectorAll("svg, img, canvas")) if (!el.parentElement.closest("svg")) garde(el.getBoundingClientRect());
+    for (const el of c.querySelectorAll("*")) {
+      if (el.children.length || el.closest("svg")) continue;
+      const k = getComputedStyle(el);
+      const fond = k.backgroundColor !== "rgba(0, 0, 0, 0)" && k.backgroundColor !== "transparent";
+      if (fond || parseFloat(k.borderTopWidth) > 0) garde(el.getBoundingClientRect());
+    }
+    if (!rects.length) return null;
+    // longueur couverte par l union d intervalles, bornee a la zone utile
+    const couvre = (iv, a, b) => {
+      iv = iv.map(([x, y]) => [Math.max(a, x), Math.min(b, y)]).filter(([x, y]) => y > x).sort((p, q) => p[0] - q[0]);
+      let tot = 0, cx = -Infinity, cy = -Infinity;
+      for (const [x, y] of iv) { if (x > cy) { tot += cy - cx > 0 ? cy - cx : 0; cx = x; cy = y; } else cy = Math.max(cy, y); }
+      return tot + (cy - cx > 0 ? cy - cx : 0);
+    };
+    const hz = z.b - z.t, lz = z.r - z.l;
+    const bas = Math.max(...rects.map((r) => r.bottom)), droite = Math.max(...rects.map((r) => r.right));
+    return {
+      zone: { largeur: Math.round(lz), hauteur: Math.round(hz) },
+      videBas: Math.max(0, Math.round(z.b - bas)),
+      videDroite: Math.max(0, Math.round(z.r - droite)),
+      videVertical: Math.max(0, Math.round(hz - couvre(rects.map((r) => [r.top, r.bottom]), z.t, z.b))),
+      videHorizontal: Math.max(0, Math.round(lz - couvre(rects.map((r) => [r.left, r.right]), z.l, z.r))),
+    };
+  }
+
+  // Taille REELLE a l ecran du plus petit texte des graphiques SVG : un
+  // graphique reduit rapetisse aussi ses libelles. Signale aussi un graphique
+  // deforme (etire plus dans un sens que dans l autre).
+  function lisibilite(cadre) {
+    let min = Infinity, deforme = 0;
+    for (const svg of cadre.querySelectorAll("svg")) {
+      const vb = svg.viewBox && svg.viewBox.baseVal, r = svg.getBoundingClientRect();
+      if (!vb || !vb.width || !vb.height || !r.width) continue;
+      const kx = r.width / vb.width, ky = r.height / vb.height;
+      if (svg.getAttribute("preserveAspectRatio") === "none") deforme = Math.max(deforme, Math.max(kx, ky) / Math.min(kx, ky));
+      for (const t of svg.querySelectorAll("text")) {
+        const fs = parseFloat(getComputedStyle(t).fontSize);
+        if (fs) min = Math.min(min, fs * Math.min(kx, ky));
+      }
+    }
+    return {
+      texteGraphiqueMin: min === Infinity ? null : +min.toFixed(1),
+      deformationGraphique: deforme ? +deforme.toFixed(2) : null,
+    };
+  }
+
+  window.ATELIER.lister = () => GROUPS.map((g) => ({ groupe: g.n, cartes: g.s.map((s) => s.n) }));
+  window.ATELIER.reglages = () => ({ ...R });
+  window.ATELIER.analyser = (nom, opts = {}) => {
+    if (!banc) return { erreur: "l'atelier n'est pas encore affiché" };
+    const x = trouve(nom);
+    if (!x) return { erreur: "carte inconnue : " + nom };
+    const avant = { ...R };
+    Object.assign(R, opts);
+    try {
+      const s = x.s, t = tailleDe(s);
+      const fiche = (w, px, py) => {
+        const defs = mesure(s, w, px, py);
+        return { defauts: defs, remplissage: remplissage(banc), ...lisibilite(banc) };
+      };
+      const contenu = [];
+      for (let w = 1; w <= 16; w++)
+        contenu.push({ modules: w, px: largeurPx(w), hauteurContenu: hauteurContenu(s, largeurPx(w)) });
+      const declarees = [];
+      for (const h of hauteurs(t))
+        for (const w of largeurs(t))
+          declarees.push({ modules: w, demiRangees: h, px: largeurPx(w), py: hauteurPx(h), ...fiche(w, largeurPx(w), hauteurPx(h)) });
+      const w0 = largeurs(t)[0];
+      const auDela = [
+        { cas: "2 modules de plus que le max", modules: t.max + 2, demiRangees: t.h[1] },
+        { cas: "2 demi-rangées de plus que le max", modules: Math.max(t.l, w0), demiRangees: t.h[2] + 2 },
+        { cas: "1 module de moins que le minimum", modules: Math.max(1, w0 - 1), demiRangees: t.h[1] },
+        { cas: "1 demi-rangée de moins que le minimum", modules: Math.max(t.l, w0), demiRangees: Math.max(1, t.h[0] - 1) },
+      ].map((c) => ({ ...c, px: largeurPx(c.modules), py: hauteurPx(c.demiRangees), ...fiche(c.modules, largeurPx(c.modules), hauteurPx(c.demiRangees)) }));
+      const minimums = Object.fromEntries(hauteurs(t).map((h) => [h, minimumMesure(s, h)]));
+      const telephone = hauteurs(t).map((h) => ({ demiRangees: h, py: hauteurPx(h), ...fiche(4, TELEPHONE, hauteurPx(h)) }));
+      return { carte: s.n, groupe: x.g.n, taille: s.taille, niveau: s.niveau, ajuste: s.ajuste || null,
+               declaration: t, reglages: { ...R }, contenu, declarees, auDela,
+               largeurMinMesureeParDemiRangees: minimums, telephone };
+    } finally { Object.assign(R, avant); }
+  };
 
   /* Appele par `dessineGroupes()` a chaque rafraichissement de la page. On ne
      redessine pas a chaque tour (toutes les 2 s, cela casserait le cadre libre

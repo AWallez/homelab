@@ -1,0 +1,7 @@
+/* Bento : socle commun des styles par carte.
+   La carte est un CONTENEUR : ses styles s adaptent a SA largeur
+   (`@container carte (max-width: …)`), pas a celle de l ecran. Sa hauteur,
+   fixee par la grille, se lit dans `data-h` (en demi-rangees de 44 px).
+   `inline-size` et non `size` : la page actuelle laisse encore la hauteur
+   suivre le contenu. */
+#groups .card{container:carte / inline-size}

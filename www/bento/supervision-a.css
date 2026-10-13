@@ -1,0 +1,4 @@
+/* Bento : styles propres aux cartes de ce lot (supervision-a).
+   Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
+   classe partagee seule. La largeur de la carte se teste avec
+   `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
