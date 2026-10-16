@@ -436,15 +436,80 @@
     };
   }
 
+  /* ---- Donnees modifiees : tester une carte dans TOUS ses etats ----
+     Option `donnees` d `analyser` et de `rendre` :
+     - une FONCTION, qui recoit une copie des donnees du moment et la renvoie
+       modifiee (ou la modifie sur place) : `d => { delete d.wan; }` ;
+     - ou un OBJET fusionne avec cette copie : `{ wan: { debit: null } }`. Les
+       tableaux et `null` remplacent ; une cle a `undefined` est supprimee.
+     Les donnees de la page ne sont jamais touchees. */
+  function fusion(base, patch) {
+    if (patch === null || typeof patch !== "object" || Array.isArray(patch)) return patch;
+    const res = base && typeof base === "object" && !Array.isArray(base) ? { ...base } : {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) delete res[k];
+      else res[k] = fusion(res[k], v);
+    }
+    return res;
+  }
+  function copie(d) {
+    try { return structuredClone(d); } catch (e) { return JSON.parse(JSON.stringify(d)); }
+  }
+  function derive(o) {
+    if (o === undefined) return donnees;
+    const c = copie(donnees);
+    return typeof o === "function" ? (o(c) ?? c) : fusion(c, o);
+  }
+  // Execute `f` avec des reglages et des donnees temporaires, puis remet tout.
+  function avec(opts, f) {
+    const { donnees: od, ...reglages } = opts || {};
+    const avantR = { ...R }, avantD = donnees;
+    Object.assign(R, reglages);
+    try { donnees = derive(od); return f(); } finally { Object.assign(R, avantR); donnees = avantD; }
+  }
+
   window.ATELIER.lister = () => GROUPS.map((g) => ({ groupe: g.n, cartes: g.s.map((s) => s.n) }));
   window.ATELIER.reglages = () => ({ ...R });
+  /** Copie des donnees du moment, pour voir les champs qu une carte lit. */
+  window.ATELIER.donnees = () => copie(donnees);
+
+  /** Rendu d une carte a UNE taille, avec des donnees eventuellement modifiees :
+   *  ce qu elle affiche reellement et ses defauts. Taille par `modules` (au module
+   *  regle) ou `px`, hauteur par `demiRangees` ou `py`. */
+  window.ATELIER.rendre = (nom, opts = {}) => {
+    if (!banc) return { erreur: "l'atelier n'est pas encore affiché" };
+    const x = trouve(nom);
+    if (!x) return { erreur: "carte inconnue : " + nom };
+    const { modules, demiRangees, px, py, ...reste } = opts;
+    return avec(reste, () => {
+      const t = tailleDe(x.s);
+      const w = modules ?? Math.max(t.l, modulesPour(t.min));
+      const lx = px ?? largeurPx(w), ly = py ?? hauteurPx(demiRangees ?? t.h[1]);
+      const defs = mesure(x.s, modulesPour(lx), lx, ly);
+      const c = banc.querySelector(".card");
+      const tete = c && c.querySelector(".head");
+      const texte = c ? c.innerText.replace(/\s+/g, " ").trim() : "";
+      const corps = c ? [...c.children].filter((e) => e !== tete).map((e) => e.innerText).join(" ").replace(/\s+/g, " ").trim() : "";
+      const graphique = !!(c && [...c.children].some((e) => e !== tete && e.querySelector("svg, img, canvas")));
+      return {
+        taille: `${modulesPour(lx)}×${Math.max(1, Math.round((ly + R.espace) / (R.rangee + R.espace)))} (${lx}×${ly} px)`,
+        defauts: defs,
+        // rien sous l en-tete : ni texte ni graphique (une carte de donnees
+        // ne doit jamais rester muette, meme sans donnees)
+        vide: !corps && !graphique,
+        illisible: /Données illisibles/.test(texte),
+        muet: /ne répond pas/.test(texte),
+        texte: texte.length > 500 ? texte.slice(0, 497) + "…" : texte,
+        ...lisibilite(banc),
+      };
+    });
+  };
+
   window.ATELIER.analyser = (nom, opts = {}) => {
     if (!banc) return { erreur: "l'atelier n'est pas encore affiché" };
     const x = trouve(nom);
     if (!x) return { erreur: "carte inconnue : " + nom };
-    const avant = { ...R };
-    Object.assign(R, opts);
-    try {
+    return avec(opts, () => {
       const s = x.s, t = tailleDe(s);
       const fiche = (w, px, py) => {
         const defs = mesure(s, w, px, py);
@@ -469,7 +534,7 @@
       return { carte: s.n, groupe: x.g.n, taille: s.taille, niveau: s.niveau, ajuste: s.ajuste || null,
                declaration: t, reglages: { ...R }, contenu, declarees, auDela,
                largeurMinMesureeParDemiRangees: minimums, telephone };
-    } finally { Object.assign(R, avant); }
+    });
   };
 
   /* Appele par `dessineGroupes()` a chaque rafraichissement de la page. On ne
