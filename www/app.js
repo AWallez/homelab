@@ -1470,12 +1470,19 @@ const hst = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } c
 const lienSurRacc = (u) => /^https?:\/\//i.test(u || "") ? u : "#";
 const dlg = () => document.getElementById("dlg");
 
+/* ⚠️ LES GESTIONNAIRES DE MOTS DE PASSE A L ECART (17/10/2026). La fenetre
+   porte le champ du mot de passe des actions : Bitwarden y voyait un
+   formulaire de connexion et remplissait le champ texte le plus proche, le
+   NOM du raccourci, avec l identifiant. `autocomplete="off"` ne l arrete pas ;
+   chaque gestionnaire a son attribut. Le mot de passe, lui, reste rempli. */
+const SANS_GESTIONNAIRE = 'autocomplete="off" data-bwignore="true" data-1p-ignore="true" data-lpignore="true"';
+
 function editShortcut(i) {
   const it = i === null ? { url: "", name: "" } : rd()[i];
   const d = dlg();
   d.innerHTML = `<form><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
-    <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required>
-    <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple">
+    <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required ${SANS_GESTIONNAIRE}>
+    <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple" ${SANS_GESTIONNAIRE}>
     ${champMdp()}
     <div class="row">${i === null ? "" : '<button type="button" id="dsup" class="danger">Supprimer</button>'}
     <span class="sp"></span><button type="button" id="dann">Annuler</button>
@@ -1547,7 +1554,7 @@ function shortcuts() {
   const tactile = TACTILE();
   if (!tactile) EDITION = false;
   const tuile = (cl, ico, txt) => `<button class="t ${cl}" type="button"><span class="i">${svg(ico, 1.8)}</span><span class="l">${txt}</span></button>`;
-  w.innerHTML = rd().map((it, i) => `<a class="t" rel="noreferrer" href="${esc(lienSurRacc(it.url))}" title="${esc(it.url)}">
+  w.innerHTML = rd().map((it, i) => `<a class="t" rel="noreferrer" href="${esc(lienSurRacc(it.url))}" title="${esc(it.url)}" data-n="${i}">
       <span class="i" data-h="${esc(hst(it.url))}">${esc((it.name || hst(it.url)).slice(0, 2).toUpperCase())}</span>
       <span class="l">${esc(it.name || hst(it.url))}</span>
       <button class="e" type="button" data-i="${i}">${svg('<path d="M4 20h4L20 8l-4-4L4 16z"/>', 2.4)}</button></a>`).join("")
@@ -1568,10 +1575,11 @@ function shortcuts() {
     im.src = "icons/sites/" + f;
   });
   w.querySelectorAll(".e").forEach(b => b.onclick = ev => { ev.preventDefault(); editShortcut(+b.dataset.i); });
-  /* En edition, toucher l icone l ouvre en modification au lieu du lien. */
-  w.querySelectorAll("a.t").forEach((t, i) => t.onclick = ev => {
+  /* En edition, toucher l icone l ouvre en modification au lieu du lien.
+     Le rang est lu au clic (`data-n`) : un raccourci deplace en change. */
+  w.querySelectorAll("a.t").forEach((t) => t.onclick = ev => {
     if (!EDITION) return;
-    ev.preventDefault(); editShortcut(i);
+    ev.preventDefault(); editShortcut(+t.dataset.n);
   });
   const add = w.querySelector(".add");
   if (add) add.onclick = () => editShortcut(null);
@@ -1602,7 +1610,16 @@ function rangeeRacc() {
   const lignes = Math.min(3, Math.ceil(n / cap));
   const k = Math.ceil(n / lignes);
   w.style.setProperty("--k", k);
+  w.style.setProperty("--k2", 2 * k);
   r.classList.toggle("defile", k > cap);
+  /* La derniere ligne, incomplete, se centre (voir fond.css) ; pas quand la
+     rangee defile : elle part du bord gauche. Repose a chaque appel selon le
+     RANG : un raccourci deplace (`glisseRacc`) emporterait sinon son decalage
+     avec lui. */
+  const debut = (lignes - 1) * k, manque = k * lignes - n;
+  [...w.children].forEach((t, j) => {
+    t.style.gridColumnStart = j === debut && manque > 0 && k <= cap ? String(manque + 1) : "";
+  });
   fleches();
 }
 function fleches() {
@@ -1618,6 +1635,165 @@ function fleches() {
   r.querySelectorAll(".fl").forEach(b => b.addEventListener("click", () =>
     w.scrollBy({ left: (b.classList.contains("g") ? -1 : 1) * w.clientWidth * .8, behavior: defilementDoux() })));
   molette(w);
+  glisseRacc(w);
+}
+
+/* ---- DEPLACER UN RACCOURCI (17/10/2026) ----
+   On l attrape et on le pose ailleurs : les autres s ecartent pour lui faire
+   place pendant le geste, et le nouvel ordre s enregistre sur le NAS au
+   relachement (le mot de passe des actions est demande s il le faut).
+   - A la souris : le geste commence apres 5 px ; en deca, c est un clic et le
+     lien s ouvre.
+   - Au doigt : en mode edition seulement (« Modifier »), apres un appui de
+     250 ms sans bouger ; hors edition, glisser fait defiler la rangee.
+   ⚠️ UNE COPIE SUIT LE POINTEUR, dans `body` : la rangee defile
+   (`overflow-x: auto`) et rognerait une tuile sortie de son cadre. La tuile
+   elle-meme reste dans la grille, estompee (`.vide`) : c est elle qui change
+   de place, et elle montre ou la copie tombera.
+   ⚠️ LES PLACES SONT RELEVEES UNE FOIS, au debut du geste : la grille garde sa
+   forme, seul l ordre change. Relues a chaque mouvement, elles suivraient les
+   tuiles en train de glisser et la cible oscillerait.
+   ⚠️ L ORDRE N EST ADOPTE (`SC`) QU UNE FOIS ECRIT, comme dans la fenetre : un
+   refus remet la rangee comme avant et dit pourquoi. Echap annule le geste. */
+function glisseRacc(w) {
+  const SEUIL = 5, BOUGE = 8, APPUI = 250, BORD = 48;
+  let g = null;
+  const tuiles = () => [...w.querySelectorAll("a.t")];
+  // le glisser natif d un lien (ou de son image) ferait concurrence
+  w.addEventListener("dragstart", (e) => e.preventDefault());
+
+  w.addEventListener("pointerdown", (e) => {
+    const t = e.target.closest("a.t");
+    if (g || !t || !e.isPrimary || e.button !== 0 || e.target.closest(".e")) return;
+    const souris = e.pointerType === "mouse";
+    if (!souris && !EDITION) return;
+    g = { t, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, souris, actif: false };
+    if (!souris) g.appui = setTimeout(prend, APPUI);
+  });
+  addEventListener("pointermove", (e) => {
+    if (!g || e.pointerId !== g.id) return;
+    g.x = e.clientX; g.y = e.clientY;
+    if (g.actif) return suit();
+    const loin = Math.hypot(g.x - g.x0, g.y - g.y0);
+    if (!g.souris) { if (loin > BOUGE) lache(); }   // le doigt fait defiler
+    else if (loin >= SEUIL) prend();
+  });
+  addEventListener("pointerup", (e) => { if (g && e.pointerId === g.id) pose(); });
+  addEventListener("pointercancel", (e) => { if (g && e.pointerId === g.id) pose(); });
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && g && g.actif) pose(true); });
+  // le geste engage, le doigt ne fait plus defiler la page
+  w.addEventListener("touchmove", (e) => { if (g && g.actif) e.preventDefault(); }, { passive: false });
+
+  const lache = () => { if (g) clearTimeout(g.appui); g = null; };
+
+  function prend() {
+    if (!g || g.actif || !g.t.isConnected) return lache();
+    g.actif = true;
+    const wr = w.getBoundingClientRect();
+    // les places, en coordonnees du CONTENU de la rangee : elle peut defiler
+    g.places = tuiles().map((t) => {
+      const r = t.getBoundingClientRect();
+      return { x: r.left - wr.left + w.scrollLeft + r.width / 2, y: r.top - wr.top + r.height / 2 };
+    });
+    const r = g.t.getBoundingClientRect();
+    g.dx = g.x0 - r.left; g.dy = g.y0 - r.top;
+    const c = g.t.cloneNode(true);
+    c.removeAttribute("href"); c.removeAttribute("title"); c.setAttribute("aria-hidden", "true");
+    c.style.cssText = `position:fixed;left:0;top:0;margin:0;z-index:95;pointer-events:none;width:${r.width}px`;
+    document.body.append(c);
+    requestAnimationFrame(() => c.classList.add("prise"));   // se souleve (transition de `.t .i`)
+    g.copie = c;
+    g.t.classList.add("vide");
+    document.documentElement.classList.add("glisse");
+    if (!g.souris && navigator.vibrate) navigator.vibrate(8);
+    suit();
+  }
+
+  // la copie sous le pointeur ; la tuile a la place la plus proche
+  function suit() {
+    g.copie.style.transform = `translate(${g.x - g.dx}px,${g.y - g.dy}px)`;
+    const wr = w.getBoundingClientRect();
+    const px = g.x - wr.left + w.scrollLeft, py = g.y - wr.top;
+    let cible = 0, d = Infinity;
+    g.places.forEach((p, j) => { const e = Math.hypot(p.x - px, p.y - py); if (e < d) { d = e; cible = j; } });
+    const ts = tuiles(), ici = ts.indexOf(g.t);
+    if (cible !== ici) deplace(ts, ici, cible);
+    // pres d un bord d une rangee qui defile, elle defile
+    g.bord = !w.parentElement.classList.contains("defile") ? 0
+      : g.x < wr.left + BORD ? -1 : g.x > wr.right - BORD ? 1 : 0;
+    if (g.bord && !g.boucle) { g.boucle = true; requestAnimationFrame(defile); }
+  }
+  function defile() {
+    if (!g || !g.actif || !g.bord) { if (g) g.boucle = false; return; }
+    const avant = w.scrollLeft;
+    w.scrollLeft += g.bord * 8;
+    if (w.scrollLeft !== avant) suit();
+    requestAnimationFrame(defile);
+  }
+
+  // la tuile change de place ; les autres glissent vers la leur (FLIP)
+  function deplace(ts, ici, cible) {
+    const avant = new Map(ts.map((t) => [t, t.getBoundingClientRect()]));
+    ts.forEach((t) => t.getAnimations().forEach((a) => a.cancel()));
+    w.insertBefore(g.t, cible > ici ? ts[cible].nextSibling : ts[cible]);
+    rangeeRacc();
+    if (doux()) return;
+    for (const t of ts) {
+      if (t === g.t) continue;
+      const a = avant.get(t), b = t.getBoundingClientRect();
+      if (Math.abs(a.left - b.left) + Math.abs(a.top - b.top) < 1) continue;
+      t.animate([{ transform: `translate(${a.left - b.left}px,${a.top - b.top}px)` }, { transform: "none" }],
+        { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }
+
+  // l ordre d avant le geste (rang d origine : `data-n`)
+  function remet() {
+    const bout = w.querySelector("button.t");
+    tuiles().sort((a, b) => a.dataset.n - b.dataset.n).forEach((t) => w.insertBefore(t, bout));
+    rangeeRacc();
+  }
+
+  function pose(annule = false) {
+    const f = g; lache();
+    if (!f || !f.actif) return;
+    document.documentElement.classList.remove("glisse");
+    // le clic qui suit le relachement n ouvre ni le lien ni la fenetre
+    const bloque = (e) => { e.preventDefault(); e.stopPropagation(); };
+    addEventListener("click", bloque, true);
+    setTimeout(() => removeEventListener("click", bloque, true), 0);
+    if (annule) remet();
+    // la copie rejoint la place de la tuile, puis s efface devant elle
+    const fin = () => { f.copie.remove(); f.t.classList.remove("vide"); };
+    const r = f.t.getBoundingClientRect();
+    f.copie.classList.remove("prise");
+    if (doux()) fin();
+    else f.copie.animate([{ transform: f.copie.style.transform }, { transform: `translate(${r.left}px,${r.top}px)` }],
+      { duration: 180, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" }).finished.then(fin, fin);
+    const ordre = tuiles().map((t) => +t.dataset.n);
+    if (!annule && ordre.some((k, j) => k !== j)) enregistre(ordre);
+  }
+
+  async function enregistre(ordre) {
+    const l = ordre.map((k) => rd()[k]);
+    let r = null;
+    // en demonstration, rien ne part (voir `ecritDepuis`)
+    if (!DEMO) try { r = await ecrire("data/shortcuts.json", l); } catch { /* le NAS ne repond pas : dit plus bas */ }
+    if (DEMO || (r && r.ok)) {
+      SC = l;
+      tuiles().forEach((t, j) => { t.dataset.n = j; const e = t.querySelector(".e"); if (e) e.dataset.i = j; });
+      return;
+    }
+    remet();
+    if (r && r.status === 401) return;   // mot de passe non donne : rien de plus a dire
+    const d = dlg();
+    d.classList.remove("large");
+    d.innerHTML = `<form method="dialog"><h3>Ordre non enregistré</h3>
+      <div class="sub">${esc(!r ? "Le NAS ne répond pas." : r.status === 403 ? REFUS : r.status === 429 ? TROP
+        : "Enregistrement impossible (erreur " + r.status + ").")}</div>
+      <div class="row"><span class="sp"></span><button class="pri" value="ok">OK</button></div></form>`;
+    d.showModal();
+  }
 }
 
 /* A la souris, la molette verticale fait defiler une rangee horizontale tant
