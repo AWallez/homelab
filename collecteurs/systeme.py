@@ -483,18 +483,36 @@ def latence():
         return 0
 
 
+def wan_minimal(etat, pourquoi):
+    """La box ne repond pas, ou de travers (17/10/2026) : `wan` restait vide,
+    la carte n avait plus rien a montrer et la coupure n etait jamais notee au
+    journal (la bascule lit `wan.ok`). Un releve minimal a la place : Internet
+    joint-il l exterieur (la sonde de la latence), et les debits deja releves.
+    `muette` dit a la page que le reste (IPv6, abonnement, erreurs fibre,
+    anciennete de la box) manque."""
+    note("internet : " + pourquoi)
+    h = etat.get("wan") or {}
+    lat = latence()
+    return {"ok": 1 if lat > 0 else 0, "muette": 1, "lat": lat, "boxup": -1,
+            "h": h.get("h", []), "h7": h.get("h7", [])}
+
+
 def internet(etat):
     ip, st, dev = box("wan/ip"), box("wan/ip/stats"), box("device")
     if not ip or not st:
-        note("internet : la box ne repond pas")
-        return None
+        return wan_minimal(etat, "la box ne repond pas")
+    # ⚠️ TOUTE LA LECTURE sous le meme filet : un champ absent plus bas
+    # (`bytes`, un compteur non numerique) faisait tomber la section entiere.
     try:
-        w = ip[0]["wan"]
-        s = st[0]["wan"]["ip"]["stats"]
-        d = (dev or [{}])[0].get("device", {})
-    except (KeyError, IndexError, TypeError):
-        note("internet : reponse de la box inattendue")
-        return None
+        return internet_lu(etat, ip, st, dev)
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+        return wan_minimal(etat, "reponse de la box inattendue")
+
+
+def internet_lu(etat, ip, st, dev):
+    w = ip[0]["wan"]
+    s = st[0]["wan"]["ip"]["stats"]
+    d = (dev or [{}])[0].get("device", {})
     # Adresses publiques de la maison, pour `securite_acces` : voir `maison()`.
     wip = w.get("ip", {})
     etat["maison"] = {"v4": wip.get("address", ""),
@@ -1870,7 +1888,10 @@ def journal(etat, out):
         bu = w.get("boxup", -1)
         if bu >= 0 and prec.get("boxup", -1) > bu:
             ev("box:%d" % (MAINTENANT - bu), MAINTENANT - bu, "reseau", "La box a redémarré", "wn")
-        prec["boxup"] = bu
+        # ⚠️ Pas retenu quand la box se tait (-1, `wan_minimal`) : un redemarrage
+        # pendant le silence se voit au retour, l anciennete ayant baisse.
+        if bu >= 0:
+            prec["boxup"] = bu
     l = out.get("lan")
     if l:
         bascule("lan", l.get("up"), "reseau", "Lien réseau du NAS coupé", "Lien réseau du NAS rétabli")

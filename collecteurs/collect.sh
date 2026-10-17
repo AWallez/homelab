@@ -221,6 +221,9 @@ if [ "${LENT_VU:-0}" != "$LENT_V" ] || [ $((NOWS - LENT_T)) -ge 290 ]; then
                  cl = cl (cl != "" ? "," : "") "{\"n\":\"" esc(nm) "\",\"on\":" (on ? "true" : "false") "}" }
     END { printf "%d %d\n%s\n[%s]\n", t, c, noms, cl }')
   if [ "${#WL[@]}" -ge 3 ]; then read -r WT WC <<< "${WL[0]}"; WNAMES=${WL[1]}; WCL=${WL[2]}; fi
+  # wg-easy arrete ou sans reponse : MUET (17/10/2026). La carte disait
+  # « Aucune connexion · 0 enregistré », comme un VPN simplement inutilise.
+  [[ "$WX" == *"@@DUMP@@"* ]] || muetl wireguard
 
   # --- Mises a jour : l etat de compose-auto-update (`maj.json`) ---
   # On en reconstruit le format qu attend la tuile. « total » compte ce qui
