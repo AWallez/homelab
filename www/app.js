@@ -4049,9 +4049,12 @@ addEventListener("hashchange", lisAncre);
 
 /* Cliquer le nom d une carte en alerte y amene (01/09/2026).
    ⚠️ Delegue sur `document` : la barre du haut est reconstruite toutes les deux
-   secondes, un ecouteur pose sur le noeud disparaitrait au premier rendu. */
+   secondes, un ecouteur pose sur le noeud disparaitrait au premier rendu.
+   ⚠️ LES PASTILLES SEULES (`.pil`, 17/10/2026) : les cartes portent elles aussi
+   `data-carte` depuis le bento (leur repere, voir `card`) ; ce clic leur
+   retirait leur lien et leur fenetre, plus aucune carte ne s ouvrait. */
 addEventListener("click", (e) => {
-  const el = e.target.closest && e.target.closest("[data-carte]");
+  const el = e.target.closest && e.target.closest(".pil[data-carte]");
   if (!el) return;
   e.preventDefault();
   /* ⚠️ AU DOIGT, UNE PASTILLE SE TOUCHE DEUX FOIS (09/10/2026) : le premier
