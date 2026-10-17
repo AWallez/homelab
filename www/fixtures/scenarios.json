@@ -73,6 +73,11 @@
    "note": "Radarr et Uptime Kuma ne repondent plus : leur carte le dit, et la page passe en alerte."
   },
   {
+   "id": "releves-absents",
+   "nom": "Releves absents",
+   "note": "Les collecteurs n ont rien rendu pour la plupart des services : chaque carte dit que son releve manque au lieu de rester vide."
+  },
+  {
    "id": "tout-ko",
    "nom": "Tout ce qui peut aller mal",
    "note": "Toutes les conditions d alerte a la fois. Sert a verifier d un coup d oeil le retour a la ligne des pastilles et la lisibilite du fond rouge."

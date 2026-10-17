@@ -142,6 +142,54 @@ main{position:relative;z-index:1;max-width:75rem;margin-inline:auto;padding:1.75
 .search svg{width:16px;height:16px;flex:none;color:var(--mut)}
 .search input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--ink);font:inherit;font-size:.9rem}
 .search input::placeholder{color:var(--mut)}
+/* Propositions sous la recherche (17/10/2026, `#propositions`, app.js) : posees
+   sur la page, sous la barre, a sa largeur. Fond presque plein en plus du flou :
+   la liste passe au-dessus des cartes, dont le texte ne doit pas se lire au
+   travers. */
+/* Le bouton du moteur (17/10/2026), au bout de la barre : discret, comme la
+   loupe, le logo et le nom du moteur choisi. 22 px de haut, comme le champ :
+   la barre garde sa hauteur. La fleche pivote quand la liste est ouverte. */
+.search .moteur{flex:none;display:inline-flex;align-items:center;gap:6px;padding:3px 7px 3px 6px;line-height:16px;border:0;border-radius:99px;
+  background:rgba(255,255,255,.06);color:var(--mut);font:inherit;font-size:.74rem;cursor:pointer;transition:background .15s,color .15s}
+.search .moteur:hover,.search .moteur[aria-expanded="true"]{background:rgba(255,255,255,.12);color:var(--ink)}
+.search .moteur svg{width:12px;height:12px;transition:transform .2s}
+.search .moteur svg.logo{width:14px;height:14px}
+.search .moteur[aria-expanded="true"] svg:not(.logo){transform:rotate(180deg)}
+/* Sa liste : la matiere des propositions ; un titre discret, puis chaque
+   moteur, son logo sur une pastille claire ; le moteur choisi teinte de bleu,
+   sa coche a droite. */
+#moteurs{position:absolute;z-index:40;margin:0;padding:6px;list-style:none;border-radius:18px;min-width:220px;outline:none;
+  background:rgba(20,23,31,.92);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.65),inset 0 0 0 1px rgba(255,255,255,.09)}
+#moteurs[hidden]{display:none}
+#moteurs li{display:flex;align-items:center;gap:11px;padding:.42rem .6rem;border-radius:12px;cursor:pointer;
+  font-size:.86rem;color:var(--ink);transition:background .12s}
+#moteurs li.titre{padding:.35rem .6rem .45rem;cursor:default;font-size:.62rem;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mut)}
+#moteurs li.actif,#moteurs li[role="option"]:hover{background:rgba(255,255,255,.08)}
+#moteurs li[aria-selected="true"]{background:rgba(77,151,238,.16)}
+#moteurs li[aria-selected="true"].actif{background:rgba(77,151,238,.24)}
+#moteurs .pastille{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.07)}
+#moteurs .pastille svg{width:15px;height:15px}
+#moteurs .nom{flex:1;min-width:0}
+#moteurs li>svg{flex:none;width:14px;height:14px;color:#9cc3ff}
+@media(max-width:600px){#moteurs li{font-size:16px;padding:.55rem .65rem}}
+#propositions{position:absolute;z-index:40;margin:0;padding:6px;list-style:none;border-radius:20px;
+  background:rgba(20,23,31,.9);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.65),inset 0 0 0 1px rgba(255,255,255,.09)}
+#propositions[hidden]{display:none}
+#propositions li{display:flex;align-items:center;gap:11px;padding:.5rem .85rem;border-radius:14px;cursor:pointer;
+  font-size:.88rem;color:var(--ink)}
+#propositions li[aria-selected="true"],#propositions li:hover{background:rgba(255,255,255,.08)}
+#propositions li.sep{height:1px;padding:0;margin:5px 10px;border-radius:0;background:rgba(255,255,255,.08);cursor:default}
+#propositions .pi{width:20px;height:20px;flex:none;display:grid;place-items:center;color:var(--mut)}
+#propositions .pi svg{width:15px;height:15px}
+#propositions .pi img{width:20px;height:20px;border-radius:5px;object-fit:contain}
+#propositions .pa{font-size:.6rem;font-weight:700;letter-spacing:-.02em}
+#propositions .pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#propositions .pt b{font-weight:650}
+#propositions .pk{flex:none;font-size:.7rem;color:var(--mut)}
+@media(max-width:600px){#propositions li{font-size:16px;padding:.6rem .85rem}#propositions .pk{font-size:11px}}
 
 /* ---- Filtres ---- */
 .filters{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-bottom:18px}
@@ -370,9 +418,26 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 .leg span{display:flex;align-items:center;gap:6px;font-size:.6rem;color:var(--mut)}
 .leg i{width:10px;height:3px;border-radius:2px;display:block;flex:none}
 
-/* ---- Graphique avec echelle, axe de temps et seuil ---- */
-.gr{display:block;width:100%;height:auto;margin-top:13px}
-.gr text{font-family:ui-monospace,Consolas,monospace;font-size:7px;fill:var(--mut)}
+/* ---- Graphique avec echelle, axe de temps et seuil ----
+   17/10/2026 : `.grb` = gouttiere des graduations (`.gax`, texte de la page,
+   largeur fixe) + trace (`.gr`, qui s etire). Hors grille en bento, le bloc
+   garde les proportions de l ancien dessin (300 x 84) ; dans une carte de
+   hauteur fixee, il prend la hauteur qui reste (bento/base.css). */
+.grb{--gax:34px;display:flex;margin-top:13px;aspect-ratio:300/84;min-height:0}
+.gax{position:relative;flex:0 0 var(--gax);font-family:ui-monospace,Consolas,monospace;font-size:.66rem;color:var(--mut)}
+.gax span{position:absolute;left:0;transform:translateY(-50%);white-space:nowrap;line-height:1}
+.gax .sl{font-size:.92em}
+.gr{display:block;flex:1 1 auto;min-width:0;width:auto;height:100%}
+.gr line,.gr path{vector-effect:non-scaling-stroke}
+/* courbe agitee, plus fine (voir `graphe`, app.js) ; encore un cran dans une
+   carte etroite (telephone), ou les points se serrent le plus */
+.gr .serie.agitee{stroke-width:1.5}
+.gr .serie.tres-agitee{stroke-width:1.25}
+@container carte (max-width:420px){
+  .gr .serie.agitee{stroke-width:1.25}
+  .gr .serie.tres-agitee{stroke-width:1}
+}
+@media(max-width:600px){.gax span{font-size:11px}}
 
 /* ---- Fenetre large et defilante pour la liste des conteneurs ---- */
 .dlg .scroll{overflow:auto;margin-top:4px}
@@ -385,7 +450,9 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 .jours{display:flex;flex-direction:column;}
 .jours .b{display:flex;align-items:flex-end;}
 .jours .b i{flex:1;}
-.jours em{font-style:normal;font-size:.55rem;letter-spacing:.07em;text-transform:uppercase;
+/* 9,6 px au lieu de 8,8 (17/10/2026) : le plus petit texte de la carte
+   Statistiques passait sous le seuil de lisibilite retenu pour les cartes (9 px). */
+.jours em{font-style:normal;font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;
   color:var(--mut);}
 
 /* Les barres occupent la hauteur libre, la note garde son ecart. */
@@ -707,15 +774,28 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
 #compact{margin-left:auto;display:inline-flex;align-items:center;gap:7px}
 #compact svg{width:13px;height:13px;flex:none}
 
-/* ---- Mode compact : une seule grille de tuiles identiques (22/08/2026) ----
-   `display:contents` fait disparaître la boîte des sections et de leurs grilles
-   sans les retirer du DOM : les cartes deviennent enfants directs de #groups,
-   donc toutes rangées dans la même grille, quel que soit leur groupe.
-   Le filtrage par groupe continue de fonctionner : il pose `display:none` en
-   ligne sur la section, ce qui l'emporte sur la règle ci-dessous. */
-#groups.compact{gap:11px;}
-#groups.compact .sec,
-#groups.compact .grid{display:contents}
+/* ---- Mode compact : tuiles RANGEES PAR GROUPE (17/10/2026, option A) ----
+   Remplace la grille unique du 22/08 (sections en `display:contents`, titres
+   masques, tous les groupes fondus en un bloc). Chaque groupe garde son titre
+   et range ses tuiles dans sa propre grille de `k` colonnes (posee en ligne) ;
+   les groupes se suivent en rangees (`tuiles()`, app.js, et
+   `RANGEMENT.rangerTuiles`). Dans une rangee, les sections s etirent a la meme
+   hauteur, et leurs grilles avec elles. `.saut` (pleine largeur, sans hauteur)
+   force le passage a la rangee suivante : le retour a la ligne du flex se
+   decide sur la base des sections, qui tiendraient toutes sur une ligne.
+   Entre deux groupes, 40 px dans les deux sens, le titre pose dans l ecart
+   vertical (17/10/2026, voir bento/base.css). 
+   Ecart vertical porte par les sections : avec un `row-gap`, chaque saut en
+   aurait ajoute un second. */
+#groups.compact{display:flex;flex-wrap:wrap;justify-content:center;align-items:stretch;gap:0 40px}   /* 40 : `RANGEMENT.ENTRE` */
+#groups.compact .sec{display:flex;flex-direction:column;min-width:0;margin-bottom:8px}
+#groups.compact .saut{flex:0 0 100%;height:0}
+/* Les tuiles d un groupe : `--k` par ligne (posee en ligne par `tuiles()`),
+   les lignes s etirent a la hauteur de la section. Les tuiles elargies de la
+   premiere ligne portent leur propre `flex-basis`. Le demi-pixel retire evite
+   qu un arrondi ne renvoie la derniere tuile d une ligne a la suivante. */
+#groups.compact .grid{flex:1 1 auto;display:flex;flex-wrap:wrap;align-content:stretch;gap:12px}
+#groups.compact .grid>.card{flex:1 1 calc((100% - (var(--k) - 1) * 12px) / var(--k) - .5px);min-height:104px}
 
 /* Toutes les tuiles au même gabarit : une colonne, une rangée, quel que soit
    le `c2`/`c4` que la carte porte en affichage complet. */
@@ -731,19 +811,14 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
 /* La pastille d'état reste visible, dans un coin plutôt qu'en bout de ligne. */
 #groups.compact .dot{position:absolute;top:9px;right:9px}
 
-/* ---- Compact : titres de section et adresses conserves (22/08/2026) ----
-   Les sections etant en display:contents, leur titre devient enfant direct de
-   la grille : on lui fait occuper toute la largeur pour qu il coupe la grille
-   en bandeaux au lieu d occuper une cellule. La hauteur minimale evite que les
-   cartes sans adresse soient plus courtes que les autres. */
-#groups.compact .sec h2{grid-column:1/-1;margin:14px 0 0}
-#groups.compact .sec:first-child h2{margin-top:0}
+/* ---- Compact : titres de groupe (de retour le 17/10/2026) et adresses ----
+   Le titre tient sur une ligne : le groupe garde au moins sa largeur
+   (`largeurTitre`, app.js) ; les points de suspension ne sont qu un filet. */
+#groups.compact .sec h2{margin:0 0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #groups.compact .adr{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* ---- Compact : sections masquees, contenu centre (22/08/2026) ----
-   Les titres de section disparaissent : la grille redevient un bloc continu.
+/* ---- Compact : contenu centre (22/08/2026) ----
    Le nom et l adresse sont centres sous le logo. */
-#groups.compact .sec h2{display:none}
 #groups.compact .head h3,
 #groups.compact .head .txt,
 #groups.compact .head .adr{text-align:center;width:100%}
@@ -797,16 +872,8 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
    pour qu elle ne s aligne pas exactement sur le bord des cartes. */
 #filters{border-radius:var(--r);}
 
-/* ---- Compact : tuiles au plus petit, grille centree (22/08/2026) ----
-   Colonnes de largeur FIXE (et non 1fr) : sans quoi elles s etirent pour
-   remplir la ligne et le centrage n a aucun effet. `auto-fit` en pose autant
-   que la largeur le permet, `justify-content` centre le tout. */
-#groups.compact{grid-template-columns:repeat(auto-fit,124px);}
-
-/* ---- Compact : passage en flex pour centrer AUSSI la derniere ligne ----
-   Grid centre la grille entiere mais aligne les colonnes : une derniere ligne
-   incomplete reste callee a gauche. Flex centre chaque ligne separement. */
-#groups.compact{display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start}
+/* (Grille centree du compact, 22/08/2026 : remplacee par le rangement par
+   groupe du 17/10, plus haut.) */
 
 /* ---- Barre de filtres : navbar responsive à menu déroulant (22/08/2026) ----
    Seul le bouton de menu reste dans la barre, et un clic déroule la liste des
@@ -1052,7 +1119,7 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
    les interlignes et la taille de l adresse. ⚠️ Le `!important` est necessaire :
    `.adr` porte deja `font-size:.62rem !important` dans la feuille.
    `overflow:hidden` sert de filet — il ne reste qu un pixel de marge. */
-#groups.compact .card{flex:0 0 104px;width:104px;padding:7px 6px;}
+#groups.compact .card{padding:7px 6px;}   /* largeur : la colonne de sa grille (17/10/2026) */
 #groups.compact .head{gap:5px}
 #groups.compact .head h3{font-size:.7rem;line-height:1.15}
 #groups.compact .head .adr{font-size:.57rem !important;line-height:1.2 !important}
@@ -1063,7 +1130,6 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
    grandit d autant. `align-items:stretch` garde les tuiles d une meme rangee a
    la meme hauteur ; `min-height` evite les tuiles ecrasees quand il n y a ni
    domaine ni port. */
-#groups.compact{align-items:stretch}
 #groups.compact .card{aspect-ratio:auto;height:auto;min-height:104px;overflow:visible}
 #groups.compact .adr .dom,#groups.compact .adr .port{white-space:normal;
   overflow:visible;text-overflow:clip;overflow-wrap:anywhere}

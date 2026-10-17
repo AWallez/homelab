@@ -2,3 +2,25 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Site ----
+   Trois ou quatre pastilles (panne vue d Internet, bilan long) passent sur
+   trois lignes sous 400 px : a 4 demi-rangees, le nombre vedette se met
+   alors en ligne avec son libelle (37 px au lieu de 58) pour qu elles
+   tiennent des 350 px. A la taille ideale (404 px), rien ne change. */
+@container carte (max-width: 366px){
+  .card[data-carte="site"][data-h="4"] .vizb:has(>.past>span:nth-child(3))>.hero{
+    flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 11px}
+}
+
+/* ---- Statistiques ----
+   Les sept barres gardent leurs 180 px jusqu a la taille ideale (4 modules) ;
+   au-dela, elles s elargissent (300 px au plus) pour que la carte de 5 modules
+   ne laisse pas 40 % de sa largeur vide. */
+@container carte (min-width: 400px){
+  .card[data-carte="statistiques"] .jours{flex:1 1 180px;max-width:300px}
+}
+/* Plus haute que l ideale (forme haute et etroite) : les barres passent SOUS
+   le nombre quand elles ne tiennent plus a cote, au lieu de s y tasser
+   (revue, 17/10). A la hauteur ideale, rien ne change. */
+.card[data-carte="statistiques"].haute .stat7{flex-wrap:wrap;row-gap:14px}

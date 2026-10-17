@@ -1,0 +1,6 @@
+{ "site": null, "crm": null, "leads": null, "umami": null,
+  "jellyfin": null, "seerr": null, "fankarr": null,
+  "prowlarr": null, "radarr": null, "sonarr": null, "bazarr": null, "cross": null, "vpn": null,
+  "updates": null, "backup": null, "mem": null,
+  "secu": null, "acces": null, "lan": null, "wan": null,
+  "adguard": null, "wg": null, "pc": null }

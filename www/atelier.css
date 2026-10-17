@@ -30,6 +30,17 @@ body.atelier{--at-ok:#34c759;--at-wn:#ffb340;--at-ko:#ff453a;--at-ligne:rgba(255
 .at-corps{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;align-items:start}
 @media(max-width:900px){.at-corps{grid-template-columns:1fr}}
 
+/* Onglets « Cartes » / « Disposition » (17/10/2026) */
+.at-onglets{flex-basis:100%;display:flex;gap:4px}
+.at-onglets button{padding:6px 14px;border-radius:8px;border:1px solid var(--at-ligne);
+  background:rgba(255,255,255,.05);color:var(--ink);font:inherit;font-size:.8rem;cursor:pointer}
+.at-onglets button.on{border-color:rgba(77,151,238,.7);background:rgba(77,151,238,.18)}
+.at-corps.dispo{grid-template-columns:minmax(0,1fr)}
+.at-corps.dispo .at-liste{display:none}
+/* une page rangee, reduite pour tenir dans la largeur de l atelier */
+.at-dispo{position:relative;overflow:hidden;margin-bottom:26px;border:1px dashed var(--at-ligne);border-radius:10px}
+.at-dispo-page{transform-origin:0 0}
+
 .at-liste{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;padding-right:4px}
 .at-grp h2{margin:14px 0 5px;font-size:.66rem;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);font-weight:600}
 .at-grp:first-child h2{margin-top:0}
@@ -80,6 +91,9 @@ body.atelier{--at-ok:#34c759;--at-wn:#ffb340;--at-ko:#ff453a;--at-ligne:rgba(255
    la grille qui donne sa taille a la carte ; l atelier mesure le contenu. */
 .at-cadre>.card,.at-banc>.card{flex:1;min-width:0;min-height:0 !important;max-width:none}
 .at-cas.ko .at-cadre{outline:2px solid var(--at-ko)}
+/* forme permise, mais trop haute pour le contenu du moment : le rangement l ecartera */
+.at-cas.trop .at-cadre{opacity:.4}
+.at-cas.trop figcaption span{color:#e0b060}
 .at-def{margin:8px 0 0;padding:0 0 0 16px;max-width:360px;font-size:.7rem;color:#ff9d96}
 
 .at-lecture{margin:0 0 8px;font-size:.78rem;color:#8ce8a4;font-variant-numeric:tabular-nums}

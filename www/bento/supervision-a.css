@@ -2,3 +2,36 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Mises a jour ----
+   Etroite, la carte passe le libelle du nombre A COTE du nombre : quatre noms
+   de conteneurs tiennent alors sur trois lignes de pastilles sans deborder. */
+@container carte (max-width: 340px) {
+  .card[data-carte="mises-a-jour"] .hero{flex-direction:row;gap:10px}
+  .card[data-carte="mises-a-jour"] .hero span{text-align:left}
+}
+
+/* ---- Sauvegarde ----
+   Etroite, les pastilles passent sur deux lignes et la note aussi : on reprend
+   les marges autour d elles pour garder la carte sur quatre demi-rangees. */
+@container carte (max-width: 560px) {
+  .card[data-carte="sauvegarde"] .vizb>.past{padding-top:8px}
+  .card[data-carte="sauvegarde"]>.note{margin-top:6px;padding:4px 6px 0}
+}
+
+/* ---- Systeme et Temperatures ----
+   Le plafond de largeur du graphe (16/10) a disparu le 17/10 : le graphe ne
+   grandit plus en hauteur avec la largeur, il prend la hauteur qui reste
+   (bento/base.css). A 6 demi-rangees, retrait des pastilles 14 -> 8 px. */
+.card[data-carte="systeme"][data-h="6"] .vizb>.past{padding-top:8px}
+
+/* ---- Memoire ----
+   Sur une colonne, la carte demande 537 px, soit 10 demi-rangees. Plus basse,
+   elle passe sur DEUX colonnes : a gauche ce que contient la RAM, a droite qui
+   la prend (le second intertitre ouvre la colonne). Seulement assez large pour
+   deux colonnes lisibles ; la page actuelle, sans `data-h`, n est pas touchee. */
+@container carte (min-width: 540px) {
+  .card[data-carte="memoire"]:is([data-h="7"],[data-h="8"],[data-h="9"]) .vizb{display:block;columns:2;column-gap:16px;align-content:center}
+  .card[data-carte="memoire"]:is([data-h="7"],[data-h="8"],[data-h="9"]) .vizb>*{break-inside:avoid}
+  .card[data-carte="memoire"]:is([data-h="7"],[data-h="8"],[data-h="9"]) .vizb>.sh~.sh{break-before:column;margin-top:0}
+}

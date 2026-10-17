@@ -2,3 +2,50 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- WireGuard : des pastilles SEULES au milieu ----
+   Aucun appareil : `.vizb>.past` les poussait au pied, sous un grand vide.
+   (Une note seule se centre pour toutes les cartes : bento/base.css.) */
+.card[data-carte="wireguard"] .vizb>.past:only-child{margin-block:auto}
+
+/* ---- WireGuard ----
+   Les tuiles de 104 px ne font que 3 colonnes a 372 px de contenu : dix
+   appareils prenaient 4 rangees. Sous 544 px (5 tuiles de 104), a partir de
+   7 appareils, tuiles de 68 px (la valeur d origine) : 5 colonnes des 364 px,
+   dix appareils sur 2 rangees. Peu d appareils : les grandes tuiles restent. */
+@container carte (max-width: 543px){
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(7)){grid-template-columns:repeat(auto-fit,68px)}
+}
+/* Telephone (318 px de contenu) : 2 grandes tuiles par rangee, 5 appareils
+   en prenaient 3 ; des 5, 4 tuiles de 68 px par rangee. */
+@container carte (max-width: 359px){
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(5)){grid-template-columns:repeat(auto-fit,68px)}
+}
+/* Petites tuiles un peu plus serrees : un nom de plus de 9 lettres y passe
+   sur 2 lignes, et sa rangee grandissait de 12 px. */
+@container carte (max-width: 543px){
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(7))>.wgt{padding:5px 4px}
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(7))>.wgt i{margin-bottom:4px}
+}
+@container carte (max-width: 359px){
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(5))>.wgt{padding:5px 4px}
+  .card[data-carte="wireguard"] .vizb>.wgg:has(>.wgt:nth-child(5))>.wgt i{margin-bottom:4px}
+}
+/* Un nom demesure (40 caracteres) dressait sa tuile sur 5 lignes : deux au
+   plus, le nom entier reste dans l infobulle (`title`). */
+.card[data-carte="wireguard"] .wgt b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+
+/* ---- PC fixe ----
+   « Injoignable » (ou « — » sans releve) en colonne, boutons et pastille
+   demandaient 226 px : a 4 demi-rangees (212), la pastille mordait de 12 px
+   sur la marge du bas. Le mot et son libelle passent en ligne (37 px au lieu
+   de 58) ; sur une carte trop etroite pour la ligne, ils repassent dessous. */
+.card[data-carte="pc-fixe"][data-h="4"] .vizb>.hero{flex:none;flex-direction:row;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:2px 10px}
+
+/* ---- AdGuard Home ----
+   A 3 demi-rangees (156 px), jauge et pastilles tiennent juste : les
+   pastilles mordaient de 3 px sur la marge du bas. */
+.card[data-carte="adguard-home"][data-h="3"] .vizb>.past{padding-top:9px}
+/* Le pourcentage ne se coupe jamais : a 180 px, « % » passait seul a la ligne
+   (revue, 17/10). Le libelle a cote, lui, peut se replier. */
+.card[data-carte="adguard-home"] .jauge-t b{white-space:nowrap}

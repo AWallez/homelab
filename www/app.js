@@ -527,8 +527,20 @@ const graphe = (series, o) => {
   const m = o.min || 0;
   const M = Math.max(m + 1, ...ok.flatMap(x => x.v));
   const f = o.f || (v => String(Math.round(v)));
+  /* ⚠️ LE TRACE S ETIRE, PAS LES CHIFFRES (17/10/2026). Le graphe gardait les
+     proportions de son dessin (300 x 84) : il ne grandissait qu avec la LARGEUR
+     de la carte, jamais avec sa hauteur, et ses graduations, dessinees dedans,
+     rapetissaient avec lui (pour 9 px, la carte Systeme devait faire 450 px).
+     Les graduations sont maintenant du TEXTE de la page, dans une gouttiere de
+     largeur fixe (`.gax`), et le trace (`preserveAspectRatio="none"`) prend toute
+     la place que la carte lui laisse, en hauteur comme en largeur. Les traits
+     gardent leur epaisseur (`vector-effect`, voir style.css) ; le point terminal
+     est un trait de longueur nulle a bouts ronds : un cercle deviendrait une
+     ellipse. Coordonnees du dessin : trace de 0 a 268 sur 272 (4 de marge pour
+     le point), de 12 a 78 sur 84. */
   const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 66).toFixed(1);
-  const X = (i, n) => (26 + i / (n - 1) * 272).toFixed(1);
+  const X = (i, n) => (i / (n - 1) * 268).toFixed(1);
+  const haut = (y) => (y / 84 * 100).toFixed(2) + "%";
   /* ⚠️ LE MOT « SEUIL » A ETE RETIRE, ce n est pas un oubli. Ecrit en entier,
      l etiquette faisait 36,5 unites pour une gouttiere de 26 : elle debordait
      dans l aire de trace, ou elle traversait la courbe memoire. Reduite au seul
@@ -539,31 +551,45 @@ const graphe = (series, o) => {
      ⚠️ L echelle suivant les donnees, le seuil peut tomber au ras d une
      graduation : son etiquette est alors omise (le trait reste), sinon les deux
      nombres se chevauchent. */
-  const ys = Math.min(+Y(o.seuil) + 2, 77);
+  const ys = +Y(o.seuil);
   const sl = o.seuil == null || o.seuil > M || o.seuil < m ? "" :
-    `<line x1="26" y1="${Y(o.seuil)}" x2="298" y2="${Y(o.seuil)}" stroke="${o.seuilC || "#ff453a"}"
-       stroke-width=".9" stroke-dasharray="3 3" opacity=".75"/>`
-    + ([14, 47, 80].every(y => Math.abs(y - ys) > 7)
-      ? `<text x="0" y="${ys.toFixed(1)}" text-anchor="start"
-       style="fill:${o.seuilC || "#ff8f88"};font-size:6.5px">${esc(f(o.seuil))}</text>` : "");
+    `<line x1="0" y1="${Y(o.seuil)}" x2="268" y2="${Y(o.seuil)}" stroke="${o.seuilC || "#ff453a"}"
+       stroke-width="1.4" stroke-dasharray="4 4" opacity=".75"/>`;
+  const slt = sl && [12, 45, 78].every(y => Math.abs(y - ys) > 7)
+    ? `<span class="sl" style="top:${haut(Math.min(ys, 76))};color:${o.seuilC || "#ff8f88"}">${esc(f(o.seuil))}</span>` : "";
   /* Trois series se superposent depuis la fusion Systeme + swap : on allege
      le remplissage, sinon les aires s additionnent en une soupe. */
   const op = ok.length >= 3 ? ".11" : ".16";
+  /* UNE COURBE QUI S AGITE S AFFINE (17/10/2026, revue au telephone :
+     « quand ca varie trop c est illisible »). Jusqu a 480 points dans 270 px :
+     un debit qui monte et descend a chaque point devenait, en trait de 2 px, un
+     pave plein. L agitation = le trajet vertical de la courbe rapporte a sa
+     largeur (unites du dessin) : calme < 1,5 (trait de 2), agitee (1,5),
+     tres agitee des 4 (1,25) ; un cran de moins dans une carte etroite
+     (style.css). Mesure du 17/10 : debit recu de qBittorrent 16,7, processeur
+     5,1, temperatures 0,7 a 1,6. */
+  const agite = (pts) => {
+    let t = 0;
+    for (let i = 1; i < pts.length; i++) t += Math.abs(pts[i] - pts[i - 1]);
+    const a = t / 268;
+    return a >= 4 ? " tres-agitee" : a >= 1.5 ? " agitee" : "";
+  };
   const ts = o.ts || [];
-  return `<svg class="gr" viewBox="0 0 300 84" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="26" data-x1="298" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : ""}>
-    <rect class="capt" x="26" y="6" width="272" height="78"/>
-    <text x="0" y="14">${esc(f(M))}</text><text x="0" y="47">${esc(f((M + m) / 2))}</text><text x="0" y="80">${esc(f(m))}</text>
-        <g stroke="rgba(255,255,255,.10)" stroke-width=".7">
-      <line x1="26" y1="12" x2="298" y2="12"/><line x1="26" y1="45" x2="298" y2="45"/><line x1="26" y1="78" x2="298" y2="78"/>
+  return `<div class="grb"><div class="gax" aria-hidden="true"><span style="top:${haut(12)}">${esc(f(M))}</span>`
+    + `<span style="top:${haut(45)}">${esc(f((M + m) / 2))}</span><span style="top:${haut(78)}">${esc(f(m))}</span>${slt}</div>`
+    + `<svg class="gr" viewBox="0 0 272 84" preserveAspectRatio="none" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="0" data-x1="268" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : ""}>
+    <rect class="capt" x="0" y="6" width="268" height="78"/>
+        <g stroke="rgba(255,255,255,.10)" stroke-width="1">
+      <line x1="0" y1="12" x2="268" y2="12"/><line x1="0" y1="45" x2="268" y2="45"/><line x1="0" y1="78" x2="268" y2="78"/>
     </g>${sl}
     ${ok.map(x => { const vd = reduis(x.v, 480), n = vd.length;
       const k = x.d0 ? Math.max(0, vd.findIndex(z => z > 0)) : 0;
       const kf = x.d0 ? Math.max(0, x.v.findIndex(z => z > 0)) : 0;
       const pts = vd.slice(k).map((y, i) => X(i + k, n) + "," + Y(y)).join(" L ");
-      return `<path d="M ${pts} L 298,78 L ${X(k, n)},78 Z" fill="${x.c}" fill-opacity="${op}"/>
-      <path class="serie" data-n="${esc(x.n || "")}" data-k="${kf}" data-v="${x.v.map(z => +(+z).toFixed(1)).join(",")}" d="M ${pts}" fill="none" stroke="${x.c}" stroke-width="1.2" stroke-linejoin="round"/>
-      <circle cx="298" cy="${Y(vd[n - 1])}" r="2.6" fill="${x.c}"/>`; }).join("")}
-  </svg>` + (ts.length > 1 ? `<div class="gech">${echelle(ts, o.pas || 3)}</div>` : "");
+      return `<path d="M ${pts} L 268,78 L ${X(k, n)},78 Z" fill="${x.c}" fill-opacity="${op}"/>
+      <path class="serie${agite(vd.slice(k).map(Y))}" data-n="${esc(x.n || "")}" data-k="${kf}" data-v="${x.v.map(z => +(+z).toFixed(1)).join(",")}" d="M ${pts}" fill="none" stroke="${x.c}" stroke-width="2" stroke-linejoin="round"/>
+      <path class="bout" d="M 268,${Y(vd[n - 1])} L 268,${Y(vd[n - 1])}" stroke="${x.c}" stroke-width="7" stroke-linecap="round"/>`; }).join("")}
+  </svg></div>` + (ts.length > 1 ? `<div class="gech">${echelle(ts, o.pas || 3)}</div>` : "");
 };
 
 const pct = v => Math.round(v) + " %";
@@ -573,13 +599,13 @@ const pct = v => Math.round(v) + " %";
 const jours = (a) => {
   const v = (a || []).map(x => +x || 0);
   if (!v.length) return "";
-  const M = Math.max(1, ...v);
+  const M = Math.max(1, ...v), haut = Math.max(0, ...v);   // `haut` : le vrai maximum (une semaine a zero disait « max 1 »)
   // Un jour a zero garde un talon visible : sans lui, la barre disparait et
   // la serie ressemble a un trait casse plutot qu a un jour sans visite.
   return `<div class="jours"><div class="b">${v.map((y, i) =>
       `<i class="${i === v.length - 1 ? "now" : ""}" data-lec="jour" data-v="${y}" data-i="${i}" data-n="${v.length}"
           style="height:${y === 0 ? 8 : Math.max(30, y / M * 100)}%"></i>`).join("")}</div>
-    <em>7 derniers jours · max ${M}/jour</em></div>`;
+    <em>7 derniers jours · max ${haut}/jour</em></div>`;
 };
 
 /* Troisieme element optionnel : la VALEUR INSTANTANEE de la serie. Elle a
@@ -736,9 +762,15 @@ const taille = (o) => o >= 1099511627776 ? vg((o / 1099511627776).toFixed(1)) + 
   : o >= 1073741824 ? vg((o / 1073741824).toFixed(1)) + " Go"
   : Math.max(0, Math.round(o / 1048576)) + " Mo";
 
-/* Duree d une operation en secondes : « 2 min 40 ». */
-const chrono = (s) => s < 60 ? Math.round(s) + " s"
-  : Math.floor(s / 60) + " min " + String(Math.round(s % 60)).padStart(2, "0");
+/* Duree d une operation en secondes : « 40 s », « 2 min 40 », « 5 h 02 ».
+   Arrondie AVANT d etre decoupee : 119,6 s donnait « 1 min 60 » ; et au-dela
+   d une heure, « 302 min 05 » (17/10/2026). */
+const chrono = (s) => {
+  s = Math.round(s);
+  if (s < 60) return s + " s";
+  if (s < 3600) return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0");
+  return Math.floor(s / 3600) + " h " + String(Math.floor(s % 3600 / 60)).padStart(2, "0");
+};
 
 /* Pastille des ventilateurs : compacte quand tout tourne, NOMINATIVE des
    qu un ventilateur faiblit, seul cas ou savoir lequel importe. */
@@ -746,7 +778,9 @@ const ventilos = (f, min) => {
   if (!f || !f.length) return null;
   const lent = f.filter(x => x.rpm < min);
   return lent.length
-    ? ["ventilateur " + lent.map(x => x.n).join(" et ") + " à " + nb(lent[0].rpm) + " tr/min", "wn"]
+    // chacun avec SON regime : deux lents donnaient le regime du premier pour les deux ;
+    // sans le mot « boîtier » des noms du collecteur (« ventilateurs 1 à 450 et 2 à 380 »)
+    ? [(lent.length > 1 ? "ventilateurs " : "ventilateur ") + lent.map(x => String(x.n).replace(/^bo[iî]tier\s+/i, "") + " à " + nb(x.rpm)).join(" et ") + " tr/min", "wn"]
     : ["ventilateurs " + f.map(x => nb(x.rpm)).join(" · ") + " tr/min"];
 };
 
@@ -774,6 +808,11 @@ const surTotal = (a, b) => {
    `cfg` porte les libelles du site (`ESPACE`, `ROLES`) : ce fichier n en sait rien. */
 const RAID = { raid0: "RAID 0", raid1: "RAID 1", raid5: "RAID 5", raid6: "RAID 6", raid10: "RAID 10",
                linear: "JBOD", single: "disque simple" };
+/* Ce qui protege une grappe, selon son RAID (17/10/2026 : un RAID 5 etait dit
+   « miroir actif ») : un miroir (1, 10), une parite (5, 6), ou rien (0, JBOD,
+   disque simple). Un RAID inconnu garde l ancien libelle, « miroir ». */
+const redondance = (g) => !g.raid ? "miroir"
+  : { raid1: "miroir", raid10: "miroir", raid5: "parité", raid6: "parité" }[g.raid] || null;
 const ligneDisque = (x, cfg) => {
   const role = cfg.ROLES[x.role];
   const modele = x.modele.replace(/_/g, " ").replace(/\s*\d+(?:[.,]\d+)?\s*(?:GB|TB|Go|To)$/i, "");
@@ -804,8 +843,10 @@ const fractionIscsi = (e) => {
 
 const grappesDisques = (s, cfg) => {
   const dq = (s && s.d) || [];
-  if (!dq.length) return `<div class="note">Relevé des disques en attente</div>`;
   const gs = ((s && s.grappes) || []).slice().sort((a, b) => (a.sys ? 1 : 0) - (b.sys ? 1 : 0));
+  /* Sans releve SMART, les grappes (et la place du volume) restent affichees :
+     toute la carte devenait « Relevé des disques en attente » (17/10/2026). */
+  if (!dq.length && !gs.length) return `<div class="note">Relevé des disques en attente</div>`;
   /* Sans grappes (collecteur pas encore a jour) : les disques seuls. */
   if (!gs.length) return `<div class="blocs"><div class="dqb">${dq.map(x => ligneDisque(x, cfg)).join("")}</div></div>`;
   const vus = new Set();
@@ -816,9 +857,11 @@ const grappesDisques = (s, cfg) => {
     let tete;
     if (g.sys) tete = `<b>${esc(g.nom || "Système")}</b><span>hors grappe · disque de démarrage</span>`;
     else {
+      const r = redondance(g);
       const etat = g.att < 2 ? ["aucun miroir", "wn"]
-        : g.n < g.att ? ["miroir dégradé : " + g.n + "/" + g.att, "wn"]
-        : ["miroir actif", "ok"];
+        : !r ? ["aucune redondance", "wn"]
+        : g.n < g.att ? [(r === "parité" ? "grappe dégradée : " : "miroir dégradé : ") + g.n + "/" + g.att, "wn"]
+        : [r === "parité" ? "parité active" : "miroir actif", "ok"];
       tete = `<b>${esc(g.nom)}</b><span>${esc([RAID[g.raid] || g.raid,
                 g.att + " disque" + (g.att > 1 ? "s" : ""), g.fs].filter(Boolean).join(" · "))}</span>`
         + `<span class="faits"><span class="${etat[1]}">${esc(etat[0])}</span>`
@@ -870,6 +913,7 @@ const grappesDisques = (s, cfg) => {
     blocs.push(`<div class="libre">${sl.libres} emplacement${sl.libres > 1 ? "s" : ""} M.2 libre${sl.libres > 1 ? "s" : ""} sur ${sl.tot}`
       + (mono ? ` · un second SSD ferait du ${esc(mono.nom.toLowerCase())} un vrai miroir` : "") + `</div>`);
   }
+  if (!dq.length) blocs.push(`<div class="note">Relevé des disques en attente</div>`);
   return `<div class="blocs">${blocs.join("")}</div>`;
 };
 
@@ -937,7 +981,7 @@ const prowlarrFr = (m) => {
   m = String(m || "").trim();
   let r = m.match(/^All (indexers|applications|download clients|indexer proxies) are unavailable due to failures( for more than 6 hours)?\.?$/i);
   if (r) return "Tous les " + PROWLARR_OBJETS[r[1].toLowerCase()] + " sont en échec" + (r[2] ? " depuis plus de 6 h" : "");
-  r = m.match(/^(Indexers|Applications|Download clients|Proxies) unavailable due to failures( for more than 6 hours)?: (.+)$/i);
+  r = m.match(/^(Indexers|Applications|Download clients|Indexer proxies|Proxies) unavailable due to failures( for more than 6 hours)?: (.+)$/i);
   if (r) { const o = PROWLARR_OBJETS[r[1].toLowerCase()];
     return o[0].toUpperCase() + o.slice(1) + " en échec" + (r[2] ? " depuis plus de 6 h" : "") + " : " + r[3]; }
   r = m.match(/^Indexer VIP benefits (expiring soon|have expired): (.+)$/i);
@@ -949,7 +993,36 @@ const prowlarrFr = (m) => {
 const slug = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-function card(s, d) {
+/* `p` (bento, 17/10/2026) : la place donnee par le rangement (rangement.js),
+   `{ x, y, w, h, haute }` en modules et demi-rangees. La carte porte alors son
+   contrat de taille (`data-l`, `data-h`, `haute`) et sa case dans la grille de
+   son groupe ; les classes de l ancienne grille (`c4`, `mini`) se deduisent de
+   cette taille, comme dans l atelier. Sans `p`, la carte d avant (mode Compact).
+   `pre` : son contenu deja calcule (`corpsCarte`), que le rangement a lu pour
+   juger la carte ; sans lui, calcule ici.
+   `p` sans hauteur (`{ style }`) : une tuile du mode Compact, qui ne porte que
+   sa largeur (voir `tuiles`). */
+function card(s, d, p, pre) {
+  const { body, viz, v } = pre || corpsCarte(s, d);
+  const main = s.u || s.x;
+  /* `data-carte` : repere stable de la carte (nom sans accents ni espaces),
+     pour lui donner des styles a elle seule (www/bento/*.css). `data-v` :
+     l empreinte de son contenu ; la meme qu au tour d avant, `fondre` ne
+     compare pas ce contenu, il met seulement la carte a sa place. */
+  const bento = p && p.h != null;
+  const id = `data-carte="${slug(s.n)}" data-v="${v}"` + (bento ? ` data-l="${p.w}" data-h="${p.h}" style="grid-column:${p.x + 1}/span ${p.w};grid-row:${p.y + 1}/span ${p.h}"`
+    : p && p.style ? ` style="${p.style}"` : "");
+  const kl = "card" + (viz ? " viz" : "") + (bento
+    ? (p.w >= 10 ? " c4" : "") + (p.h <= 2 ? " mini" : "") + (p.haute ? " haute" : "")
+    : (s.w === 4 ? " c4" : s.w === 3 ? " c3" : s.w === 2 ? " c2" : "") + (s.mini ? " mini" : ""));
+  /* Focalisable et annoncee comme ouvrant une fenetre (09/10/2026) : au clavier,
+     Tab y arrive, Entree ou Espace l ouvre (voir plus bas). */
+  if (s.pop) return `<div class="${kl} clic" ${id} data-pop="${s.pop}" tabindex="0" role="button" aria-haspopup="dialog">${body}</div>`;
+  return main ? `<a class="${kl}" ${id} rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}" ${id}>${body}</div>`;
+}
+
+// le contenu d une carte, sans son enveloppe (sa place, ses classes)
+function corpsCarte(s, d) {
   /* ⚠️ RENDU PROTEGE : une cle absente de data.json levait une exception, et
      c est TOUTE LA PAGE qui cessait de se mettre a jour. La carte fautive dit
      maintenant qu elle ne peut pas s afficher, les autres continuent. */
@@ -962,14 +1035,8 @@ function card(s, d) {
     viz = `<div class="note muet">Données illisibles pour cette carte</div>`; stats = null;
   }
   const warn = etatCarte(s, d);
-  const main = s.u || s.x;
   const logo = s.ic ? `<img src="icons/${s.ic.includes(".") ? s.ic : s.ic + ".svg"}" alt="">` : esc(s.n.slice(0, 2).toUpperCase());
   const adr = [s.x && `<span class="dom lien" data-lien="${esc(s.x)}" title="${esc(s.x)}">${esc(label(s.x))}</span>`, s.u && `<span class="port">:${esc(s.u.split(":").pop())}</span>`].filter(Boolean).join("");
-  /* `data-carte` : repere stable de la carte (nom sans accents ni espaces),
-     pour lui donner des styles a elle seule (www/bento/*.css). */
-  const id = `data-carte="${slug(s.n)}"`;
-  const kl = "card" + (viz ? " viz" : "")
-    + (s.w === 4 ? " c4" : s.w === 3 ? " c3" : s.w === 2 ? " c2" : "") + (s.mini ? " mini" : "");
   const body = `<div class="head"><span class="chip">${logo}</span>
       <div class="txt"><h3><span class="nom">${esc(s.n)}</span>${adr ? `<span class="adr">${adr}</span>` : ""}</h3>
         <p>${esc(s.d)}</p></div>
@@ -978,11 +1045,14 @@ function card(s, d) {
     ${stats ? `<div class="stats">${stats.map(([v, l]) =>
       `<div class="st"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}
     ${note ? `<div class="note">${esc(note)}</div>` : ""}`;
-  /* Focalisable et annoncee comme ouvrant une fenetre (09/10/2026) : au clavier,
-     Tab y arrive, Entree ou Espace l ouvre (voir plus bas). */
-  if (s.pop) return `<div class="${kl} clic" ${id} data-pop="${s.pop}" tabindex="0" role="button" aria-haspopup="dialog">${body}</div>`;
-  return main ? `<a class="${kl}" ${id} rel="noreferrer" href="${main}">${body}</a>` : `<div class="${kl}" ${id}>${body}</div>`;
+  return { body, viz: !!viz, v: empreinte(body) };
 }
+// FNV-1a, et la longueur : deux contenus differents n ont pas la meme
+const empreinte = (t) => {
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+  return t.length.toString(36) + "." + (h >>> 0).toString(36);
+};
 
 /* Le selecteur « 24 h · 7 j » d une carte a graphe (`per: 1` dans cartes.js),
    pose dans son en-tete. Voir `PERIODES`.
@@ -2513,25 +2583,28 @@ addEventListener("keydown", (e) => {
    l'adresse et la pastille d'état, on masque le widget et les mesures. Réglage
    d'affichage propre à l'appareil, donc gardé en localStorage plutôt que dans
    shortcuts.json qui est partagé entre navigateurs.
-   Le repli est purement CSS (une classe sur #groups) : rien n'est redessiné,
-   et la fusion DOM de `fondre` ne touche pas aux attributs du conteneur. */
+   ⚠️ DEPUIS LE 17/10/2026, LE COMPACT EST UN RANGEMENT (tuiles par groupe,
+   voir `tuiles`) : le bouton change `COMPACT` et redessine ; c est le dessin
+   qui pose la classe sur #groups, APRES avoir lu ou sont les cartes (sinon
+   l animation partirait de cartes deja habillees en tuiles). */
+let COMPACT = false;
 function replier(w) {
-  const g = document.getElementById("groups");
   const b = document.createElement("button");
   b.id = "compact"; b.type = "button";
   const ICO_LISTE = '<path d="M4 7h16M4 12h16M4 17h16"/>';
   const ICO_GRILLE = '<path d="M4 5h6v6H4zM14 5h6v6h-6zM4 13h6v6H4zM14 13h6v6h-6z"/>';
   const pose = (on) => {
-    g.classList.toggle("compact", on);
+    COMPACT = on;
     b.classList.toggle("actif", on);
     b.innerHTML = svg(on ? ICO_GRILLE : ICO_LISTE, 2) + "Compact";
     b.title = on ? "Afficher les widgets" : "Réduire les cartes à leur en-tête";
   };
   pose(localStorage.getItem("compact") === "1");
   b.onclick = () => {
-    const on = !g.classList.contains("compact");
+    const on = !COMPACT;
     localStorage.setItem("compact", on ? "1" : "0");
     pose(on);
+    dessineGroupes();   // bento <-> tuiles : la disposition change, les cartes glissent
   };
   w.appendChild(b);
 }
@@ -2548,7 +2621,8 @@ function filters() {
     b.onclick = () => { w.classList.remove("ouvert");
       const nom = w.querySelector(".menu-nom"); if (nom) nom.textContent = t;
       w.querySelectorAll("button:not(#compact):not(#menu)").forEach(x => x.classList.remove("on")); b.classList.add("on");
-      document.querySelectorAll(".sec").forEach(s => s.style.display = (i === null || +s.dataset.g === i) ? "" : "none"); };
+      // le groupe choisi est RANGE seul, sur toute la largeur (bento comme tuiles)
+      dessineGroupes(); };
     panneau.appendChild(b); };
   // Bouton du menu déroulant, masqué au-dessus du seuil par le CSS.
   const menu = document.createElement("button");
@@ -2575,12 +2649,28 @@ function filters() {
   const al = document.createElement("span");
   al.id = "alertes"; al.setAttribute("role", "button"); al.tabIndex = 0;
   try { if (localStorage.getItem("homelab.notifs") === "0") w.classList.add("sans-notifs"); } catch (x) { /* stockage refuse */ }
+  /* ⚠️ LES PASTILLES CHANGENT LA HAUTEUR DE LA BARRE (17/10/2026, saccade
+     constatee) : tout ce qui suit sautait de 50 px, et sur grand ecran les
+     coins restaient decales jusqu au tour suivant, qui les remettait en place
+     d un second saut. La page se remet en place sur-le-champ (`dessineGroupes`
+     mesure l en-tete, voir `mesureTete`) et chaque bloc glisse de son ancienne
+     place a la nouvelle ; les pastilles qui reviennent apparaissent en fondu. */
   al.onclick = () => {
+    const blocs = ["#bar", "main > .racc", "main > .search", "#nav", "#groups"].map((s) => document.querySelector(s)).filter(Boolean);
+    const avant = blocs.map((b) => b.getBoundingClientRect().top);
     const cache = !w.classList.contains("sans-notifs");
     w.classList.toggle("sans-notifs", cache);
     try { localStorage.setItem("homelab.notifs", cache ? "0" : "1"); } catch (x) { /* stockage refuse */ }
     majAlertes();
     placeEtSerre();
+    if (document.querySelector("main.coins")) dessineGroupes();
+    if (doux()) return;
+    const trajet = { duration: 260, easing: "cubic-bezier(.22,.8,.24,1)" };
+    blocs.forEach((b, i) => {
+      const dy = avant[i] - b.getBoundingClientRect().top;
+      if (Math.abs(dy) > .5) b.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], trajet);
+    });
+    if (!cache) document.getElementById("soucis")?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
   };
   w.appendChild(al);
   majAlertes();
@@ -2596,23 +2686,509 @@ const CADENCE = { "data.json": 10, "live.json": 0, "history.json": 60,
 let TOUR = false;           // un tour de rafraichissement en cours
 /* Les cartes, depuis `DATA`. A part de `refresh` pour qu un selecteur de
    periode redessine sa carte sur-le-champ, sans attendre ni relire le NAS. */
-function dessineGroupes() {
+/* ============ BENTO (17/10/2026) ============
+   Les cartes ne suivent plus une grille de 4 colonnes : `rangement.js` range
+   chaque groupe en un rectangle sans trou, et les groupes en rangees, d apres
+   les formes de chaque carte (cartes.js). Le HTML porte la place de chaque
+   carte (`card(s, d, p)`) : la fusion du DOM (`fondre`) retire tout attribut
+   absent du nouveau HTML, une place posee apres coup ne survivrait pas.
+   ⚠️ LE RANGEMENT N EST PAS REFAIT A CHAQUE TOUR (toutes les 2 s) : seulement
+   quand ce qui le decide change (largeur, alertes, releves absents, formes
+   ecartees, groupe choisi). Sinon, le dernier est repris tel quel.
+   ⚠️ APRES COUP, LA PAGE REGARDE SES CARTES (`RANGEMENT.verifie`) : les formes
+   viennent du pire contenu des scenarios, le contenu reel peut etre plus long
+   ou bien plus court. Une carte qui deborde, ou qui garde deux demi-rangees
+   vides, voit sa forme ecartee et la page se range de nouveau (trois passes au
+   plus). L ecart dure tant que le contenu de la carte garde la meme forme
+   (`sig` : son HTML, chiffres confondus, a 16 caracteres pres). */
+let BENTO = null;               // dernier rangement : { cle, page }
+/* nom de carte → { sig, formes: Set("3x5") vues trop vides, minH: Map(largeur →
+   demi-rangees) mesuree quand la carte debordait } */
+const ECARTEES = new Map();
+const SANS_RELEVE_HTML = /<div class="vizb">\s*<div class="note[^"]*">[^<]*<\/div>\s*<\/div>/;
+const carteDe = (el) => GROUPS.flatMap((g) => g.s).find((s) => slug(s.n) === el.dataset.carte);
+
+/* LES SIX DERNIERS RANGEMENTS SONT GARDES DANS LE NAVIGATEUR : au rechargement,
+   ou en revenant a une largeur deja vue (fenetre agrandie puis remise), le
+   rangement est repris tel quel au lieu d etre recalcule. */
+const GARDES = "homelab.bento";
+const gardes = () => { try { const v = JSON.parse(localStorage.getItem(GARDES) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+const retrouver = (cle) => gardes().find((x) => x.cle === cle) || null;
+const garder = (b) => { try { localStorage.setItem(GARDES, JSON.stringify([b, ...gardes().filter((x) => x.cle !== b.cle)].slice(0, 6))); } catch (e) { /* stockage refuse */ } };
+
+/* UNE LARGEUR NOUVELLE SE CALCULE EN ARRIERE-PLAN (Web Worker : rangement.js,
+   charge une seconde fois). Sur grand ecran, ce calcul figeait la page pres
+   d une seconde apres un redimensionnement. En attendant (`PROVISOIRE`),
+   l ancien rangement reste affiche, etire a la nouvelle largeur ; a la reponse,
+   les cartes glissent a leur nouvelle place. Sans travailleur, comme avant. */
+let TRAVAIL = null, ATTENDU = null, PROVISOIRE = false;
+
+/* LES LARGEURS VOISINES SONT PREPAREES D AVANCE (17/10/2026 :
+   « regle la latence au premier passage a une largeur nouvelle »). Une fois la
+   page affichee, le travailleur range, une par une et en arriere-plan, les
+   largeurs que la fenetre peut prendre : une par tranche de 4 px de module
+   (le rangement change a peine a l interieur d une tranche), les plus proches
+   d abord. Sur ecran tactile, seulement l autre orientation. Au
+   redimensionnement, la page prend le rangement tout pret de sa tranche, sans
+   rien calculer. Une demande reelle passe toujours avant. Tout est a refaire
+   quand l etat des cartes change (alerte, releve absent, forme ecartee).
+   `PRETS` : tranche (« 16:22|etat stable des cartes ») → { page, excl }.
+   ⚠️ LES FORMES ECARTEES (`excl`) NE SONT PAS DANS LA CLE : la page en apprend
+   en route (une carte qui deborde a une largeur jamais vue), et chacune rendait
+   toutes les largeurs preparees introuvables. Un rangement prepare AVANT une
+   forme ecartee est donc affiche quand meme, sur-le-champ, pendant que le
+   travailleur calcule la version qui en tient compte. */
+const PRETS = new Map();
+let A_PREPARER = [], PREPARE_EN_COURS = false, PREPARE_ETAT = null, PREPARE_BASE = null, PREPARE_GROUPES = null, PREPARE_EXCL = null, PREPARE_PERMIS = false;
+let AFFICHEE = null;   // le rangement a l ecran (`BENTO.page`, ou un rangement prepare en attendant)
+const trancheDe = (W, etat) => { const { P, m } = RANGEMENT.grille(W); return P + ":" + Math.round(m / 4) + "|" + etat; };
+// les largeurs a preparer, des plus proches de `W` aux plus lointaines
+function cibles(W, ecart) {
+  const sw = screen.availWidth || innerWidth, sh = screen.availHeight || innerHeight;
+  if (TACTILE()) return [Math.min(sw, sh) - ecart, Math.max(sw, sh) - ecart].filter((w) => Math.abs(w - W) > 8);
+  // au moins 1 920 px : un ecran qui ne dit pas sa taille (ou une fenetre sur un second ecran)
+  const max = Math.max(innerWidth, sw, screen.width || 0, 1920) - ecart, l = [];
+  for (const P of [4, 8, 12, 16, 20, 24]) {
+    const de = P === 4 ? 300 : P * 92 - 12, a = P === 24 ? 2400 : (P + 4) * 92 - 13;  // la plage ou il y a P modules
+    for (let w = de; w <= Math.min(a, max); w += 4 * P) l.push(w);                   // 4 px de module par pas
+  }
+  return l.filter((w) => Math.abs(w - W) > 2).sort((x, y) => Math.abs(x - W) - Math.abs(y - W));
+}
+// `etat` : l etat stable des cartes ; `excl` : leurs formes ecartees (a refaire si elles changent)
+function preparer(etat, excl, groupes, W, ecart, permis) {
+  // les coins font partie de l etat a preparer : leur hauteur depend de l en-tete
+  const e = etat + "|" + permis + "|" + TETE_H;
+  if (!TRAVAIL || (e === PREPARE_ETAT && excl === PREPARE_EXCL)) return;
+  PREPARE_ETAT = e; PREPARE_BASE = etat; PREPARE_EXCL = excl; PREPARE_PERMIS = permis;
+  PREPARE_GROUPES = groupes.map((g) => ({ id: g.id, cartes: g.cartes.map(({ s, ...c }) => c) }));
+  A_PREPARER = cibles(W, ecart);
+  preparerSuite();
+}
+function preparerSuite() {
+  while (TRAVAIL && !PREPARE_EN_COURS && !ATTENDU && A_PREPARER.length) {
+    // la meme cle que `bento()` : l etat des cartes, et les coins de CETTE largeur
+    const W = A_PREPARER.shift(), coins = coinsPour(W, PREPARE_PERMIS);
+    const tranche = trancheDe(W, PREPARE_BASE) + marqueCoins(coins), p = PRETS.get(tranche);
+    if (p && p.excl === PREPARE_EXCL) continue;
+    PREPARE_EN_COURS = true;
+    TRAVAIL.postMessage({ prepare: true, tranche, excl: PREPARE_EXCL, W, coins, groupes: PREPARE_GROUPES });
+  }
+}
+const pret = (tranche, page, excl) => {
+  PRETS.delete(tranche); PRETS.set(tranche, { page, excl });
+  if (PRETS.size > 150) PRETS.delete(PRETS.keys().next().value);
+};
+
+try {
+  TRAVAIL = new Worker("rangement.js");
+  TRAVAIL.onmessage = (e) => {
+    const d = e.data;
+    if (d.prepare) { pret(d.tranche, d.page, d.excl); PREPARE_EN_COURS = false; return preparerSuite(); }
+    if (d.cle !== ATTENDU) return preparerSuite();   // une demande plus recente est partie
+    ATTENDU = null;
+    BENTO = { cle: d.cle, W: d.W, page: d.page };
+    pret(d.tranche, d.page, d.excl);
+    garder(BENTO);
+    dessineGroupes();
+    preparerSuite();
+  };
+  TRAVAIL.onerror = () => { TRAVAIL = null; ATTENDU = null; };
+} catch (e) { TRAVAIL = null; }
+
+/* OPTION A, LES COINS (17/10/2026, pour un ecran de 2 560 px). Sur tres
+   grand ecran, l en-tete (barre, raccourcis, recherche, menu) laissait deux
+   grands vides de part et d autre. Il se resserre a la place laissee entre
+   les coins (1 134 px a 2 560 px, la barre reste sur une ligne) et les deux
+   premiers groupes se logent dans les coins, A SA HAUTEUR (`rangerPage`,
+   option `coins`). L en-tete occupe toute la hauteur de leurs cartes : ses
+   ecarts s allongent d autant (`mesureTete`). Ni en
+   Compact, ni avec un groupe choisi, ni sous 2 100 px de large : les coins y
+   sont trop etroits (mesure : a 1 920 px, 320 px pour des groupes qui en
+   demandent 580 de haut).
+   `TETE_H` : la hauteur de l en-tete resserre (haut de la barre -> bas du
+   menu), mesuree au dessin (`mesureTete`) ; elle decide de la hauteur des
+   coins. ⚠️ LES CARTES DES COINS COMMENCENT AU HAUT DE LA BARRE
+   (17/10/2026) : leur titre, `TITRE` px (25 de titre, 7 de marge, base.css), est
+   au-dessus, et la rangee des coins doit couvrir titre + en-tete. Une section
+   de H demi-rangees fait `56 H + 20` px, titre compris. */
+// `px` : la place minimale de l en-tete, ou la barre tient sur une ligne
+const COINS = { min: 2100, px: 1100 }, TITRE = 32;
+let TETE_H = 425;
+/* `Hplancher` : la hauteur de l en-tete aux ecarts resserres au minimum
+   (`ECARTS_MIN`), si les coins ne peuvent pas atteindre `Hmin`. */
+const ECARTS_TETE = [18, 16, 18], ECARTS_MIN = [8, 6, 8];   // sous la barre, les raccourcis, la recherche (base.css)
+const hauteurCoins = (h) => Math.max(1, Math.ceil((h + TITRE - 20) / (RANGEMENT.RANGEE + RANGEMENT.ESPACE)));
+const coinsPour = (W, permis) => permis && W >= COINS.min
+  ? { px: COINS.px, Hmin: hauteurCoins(TETE_H),
+      Hplancher: hauteurCoins(TETE_H - ECARTS_TETE.reduce((s, x) => s + x, 0) + ECARTS_MIN.reduce((s, x) => s + x, 0)) } : null;
+// dans les cles des rangements : la version du code de rangement, et les coins
+const marqueCoins = (co) => "|" + RANGEMENT.VERSION + "|c" + (co ? co.Hmin + "-" + co.Hplancher : 0);
+
+/* `asynchrone` : un nouveau rangement peut attendre le travailleur (passe de
+   verification, redimensionnement). Une LARGEUR qui a change part aussi au
+   travailleur, quel que soit l appelant : le tour de 2 s passe souvent avant
+   l observateur de taille. Seul le tout premier rangement se calcule sur-le-champ. */
+/* LE CONTENU DES CARTES NE CHANGE QU AVEC LES DONNEES (nouveau tour) ou la
+   periode d un graphe : un rangement refait entre deux tours (largeur, groupe
+   choisi, passe de verification) reprend celui du tour au lieu de le recalculer.
+   `sig` : sa forme, chiffres confondus, a 16 caracteres pres (voir `ECARTEES`). */
+let CORPS = { d: null, per: "", m: new Map() };
+function corpsDu(s) {
+  const per = JSON.stringify(PERIODES);
+  if (CORPS.d !== DATA || CORPS.per !== per) CORPS = { d: DATA, per, m: new Map() };
+  let c = CORPS.m.get(s.n);
+  if (!c) { c = corpsCarte(s, DATA); c.sig = c.body.replace(/\d+/g, "0").length >> 4; CORPS.m.set(s.n, c); }
+  return c;
+}
+
+function bento(racine, visibles, asynchrone) {
+  const usage = RANGEMENT.usage();
+  const groupes = visibles.map((i) => ({ id: i, cartes: RANGEMENT.ordonne(GROUPS[i].s.map((s) => {
+    // le contenu, calcule une fois : il juge la carte ici, et se dessine plus bas
+    const c = corpsDu(s), sig = c.sig;
+    let e = ECARTEES.get(s.n);
+    if (!e || e.sig !== sig) ECARTEES.set(s.n, e = { sig, formes: new Set(), minH: new Map() });
+    return { id: s.n, s, t: tailleDe(s, SANS_RELEVE_HTML.test(c.body)), niveau: s.niveau,
+             alerte: !!etatCarte(s, DATA), exclues: e.formes, minH: e.minH };
+  }), usage) }));
+  const W = racine.clientWidth;
+  // l etat STABLE des cartes (ce qui decide du rangement, sauf la largeur et les
+  // formes ecartees en route) et leurs formes ecartees
+  const etat = JSON.stringify(groupes.map((g) => [g.id, g.cartes.map((c) => [c.id, c.t.h[1], c.t.formes, c.alerte])]));
+  const excl = JSON.stringify(groupes.map((g) => g.cartes.map((c) => [[...c.exclues].join(), [...c.minH].join()])));
+  // les coins : la vraie page, en bento, tous ses groupes affiches
+  const permis = racine.id === "groups" && !COMPACT && visibles.length === GROUPS.length;
+  /* ⚠️ LA HAUTEUR DE L EN-TETE, MESUREE AVANT DE RANGER : estimee, elle pouvait
+     rendre les coins impossibles des le premier rangement ; sans coins a
+     l ecran, `mesureTete` ne passait jamais, et ils ne revenaient plus
+     (« Relevés absents », 17/10/2026). */
+  if (permis && W >= COINS.min) TETE_H = hauteurTete() || TETE_H;
+  const coins = coinsPour(W, permis);
+  const cle = W + "|" + etat + "|" + excl + marqueCoins(coins), tranche = trancheDe(W, etat) + marqueCoins(coins), pr = PRETS.get(tranche);
+  PROVISOIRE = false;
+  if (!BENTO || BENTO.cle !== cle) {
+    /* ⚠️ UN RANGEMENT REPRIS (garde dans le navigateur, ou prepare pour une
+       largeur VOISINE de la meme tranche) doit avoir des coins quand on en
+       demande, et aucun sinon : a quelques pixels pres les coins tiennent ou
+       non, et un rangement sans coins garde sous une cle qui en demande les
+       faisait disparaitre pour de bon (mode sain, 17/10/2026). Sinon, on
+       recalcule ; un rangement calcule a l instant, lui, fait foi. */
+    const conforme = (page) => !!(page && page.rangees[0] && page.rangees[0].coins) === !!coins;
+    const g0 = retrouver(cle);
+    const garde = (g0 && conforme(g0.page) && g0) || (pr && pr.excl === excl && conforme(pr.page) && { cle, W, page: pr.page });
+    if (garde) { BENTO = garde; garder(BENTO); }
+    else if (TRAVAIL && BENTO && (asynchrone || ATTENDU === cle || BENTO.W !== W)) {
+      // en attendant le travailleur (sans les definitions des cartes : des
+      // fonctions ne passent pas au travailleur)
+      if (ATTENDU !== cle) {
+        ATTENDU = cle;
+        TRAVAIL.postMessage({ cle, W, tranche, excl, coins, groupes: groupes.map((g) => ({ id: g.id, cartes: g.cartes.map(({ s, ...c }) => c) })) });
+      }
+      PROVISOIRE = true;
+    } else { BENTO = { cle, W, page: RANGEMENT.rangerPage(groupes, W, { coins }) }; pret(tranche, BENTO.page, excl); garder(BENTO); }
+  }
+  // a l ecran : le rangement retenu ; en attendant le travailleur, le rangement
+  // prepare pour cette largeur s il existe (d avant une forme ecartee), sinon
+  // l ancien, etire
+  AFFICHEE = PROVISOIRE && pr ? pr.page : BENTO.page;
+  // une fois la page rangee, les largeurs voisines se preparent en arriere-plan
+  if (!PROVISOIRE && racine.id === "groups") preparer(etat, excl, groupes, W, innerWidth - W, permis);
+  /* La grille de la vraie page est posee au dessin (`dessineGroupes`), pas
+     ici : posee avant, elle remettait en page l ancien rangement sur la
+     nouvelle grille (11 a 28 ms) avant que l animation lise ou sont les cartes,
+     et l animation partait de cette disposition que personne n a vue. */
+  if (racine.id !== "groups") racine.style.setProperty("--P", AFFICHEE.P);
+  /* Dans l ordre de la grille : rangee, puis gauche a droite (clavier, lecteurs
+     d ecran). Une rangee de groupes est une ligne `flex` : chaque groupe
+     grandit en proportion de ses modules, `RANGEMENT.ENTRE` (28 px) entre deux
+     groupes (le `gap` de #groups), et `.saut` passe a la rangee suivante. Ses
+     cartes gardent leur grille de modules, `ESPACE` (12 px) entre elles. */
+  const G = RANGEMENT.ESPACE;
+  return AFFICHEE.rangees.map((r, ri) => r.groupes.map((gp) => {
+    // la place de l en-tete, entre les deux coins : vide, l en-tete est au-dessus (voir `mesureTete`)
+    if (gp.id === "tete") return `<div class="tete-place" data-g="tete" aria-hidden="true" style="flex:${gp.w} 0 ${(gp.w - 1) * G}px"></div>`;
+    const g = GROUPS[gp.id], par = new Map(groupes.find((x) => x.id === gp.id).cartes.map((c) => [c.id, c]));
+    return `<section class="sec" data-g="${gp.id}" style="flex:${gp.w} 0 ${(gp.w - 1) * G}px"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>`
+      + `<div class="grid" style="grid-template-columns:repeat(${gp.w},minmax(0,1fr));grid-template-rows:repeat(${gp.H},${RANGEMENT.RANGEE}px)">`
+      + [...gp.places].sort((a, b) => a.y - b.y || a.x - b.x).map((p) => {
+          const c = par.get(p.id);
+          return card(c.s, DATA, { ...p, haute: p.h > c.t.h[1] }, corpsDu(c.s));
+        }).join("")
+      + `</div></section>`;
+  }).join("") + `<i class="saut" data-g="saut-${ri}" aria-hidden="true"></i>`).join("");
+}
+
+/* L ANIMATION DU RANGEMENT (17/10/2026, etape 6). Quand la disposition change
+   VRAIMENT (une alerte fait monter une carte, un releve manque, un groupe est
+   choisi, la fenetre change de largeur : demande), les cartes glissent
+   vers leur nouvelle place et prennent leur nouvelle taille, au lieu de sauter.
+   METHODE « FLIP » (`envol`) : on note ou est chaque carte a l ecran, on dessine
+   la nouvelle page, puis chaque carte repart de son ancienne place et de son
+   ancienne taille vers la nouvelle, par une transformation que la carte
+   graphique anime seule, sans recalculer la page a chaque image.
+   ⚠️ PAS DE `document.startViewTransition` (essaye le 17/10) : la photographie
+   de toute la page, cartes floutees comprises, figeait 130 a 140 ms au depart de
+   chaque animation (la saccade constatee), et une animation interrompue
+   (fenetre qu on continue d agrandir) repartait d un saut.
+   ⚠️ JAMAIS a chaque tour (toutes les 2 s) : la disposition est comparee a celle
+   deja a l ecran (`PLACES_VUES`), et seule une difference anime. Ni au premier
+   dessin, ni si le systeme demande moins d animations, ni dans un onglet cache.
+   Une animation interrompue repart de la ou la carte se trouve vraiment. */
+let PLACES_VUES = null;
+const placesDe = (page) => JSON.stringify(page.rangees.map((r) => r.groupes.map((g) =>
+  [g.id, g.x, g.w, g.places.map((p) => [p.id, p.x, p.y, p.w, p.h])])));
+let VOL = [];   // les animations du dernier changement de disposition
+const enVol = () => VOL.some((a) => a.playState === "running");
+const arrete = () => { VOL.forEach((a) => a.cancel()); VOL = []; };
+// les cartes et les titres de groupe, chacun sous un repere stable
+const reperes = (racine) => [...racine.querySelectorAll(".sec>h2, .grid>.card[data-carte]")]
+  .map((el) => [el.tagName === "H2" ? "#" + el.parentElement.dataset.g : el.dataset.carte, el]);
+// ou chacun se trouve A L ECRAN, en plein trajet compris
+const posees = (racine) => new Map(reperes(racine).map(([k, el]) => [k, el.getBoundingClientRect()]));
+
+/* Chaque carte part de `avant` (sa place a l ecran avant le dessin) vers celle
+   qu elle a maintenant. Sa taille change par une mise a l echelle ; pour que son
+   contenu ne s etire pas, ses enfants recoivent l echelle INVERSE, autour du
+   coin de la carte : le texte garde sa taille et sa place, et se decouvre a
+   mesure que la carte s agrandit (`overflow: clip` pendant le trajet). Les
+   titres de groupe glissent seulement. Une carte apparue se fond (`marque`). */
+function envol(racine, avant) {
+  const trajet = { duration: 450, easing: "cubic-bezier(.22,.8,.24,1)" };
+  // toutes les lectures d abord, puis toutes les animations : une seule mise en page
+  const vols = [];
+  for (const [k, el] of reperes(racine)) {
+    const a = avant.get(k), b = el.getBoundingClientRect();
+    if (!a || !b.width || !b.height) continue;
+    const dx = a.left - b.left, dy = a.top - b.top;
+    const sx = el.tagName === "H2" ? 1 : a.width / b.width, sy = el.tagName === "H2" ? 1 : a.height / b.height;
+    const taille = Math.abs(sx - 1) > .004 || Math.abs(sy - 1) > .004;
+    if (!taille && Math.abs(dx) < .5 && Math.abs(dy) < .5) continue;
+    vols.push({ el, b, dx, dy, sx, sy, enfants: taille ? [...el.children].map((c) => [c, c.getBoundingClientRect()]) : null });
+  }
+  for (const { el, b, dx, dy, sx, sy, enfants } of vols) {
+    if (!enfants) { VOL.push(el.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], trajet)); continue; }
+    // autour du centre (l origine par defaut des transformations), ecrit pour que
+    // le coin haut-gauche parte de l ancien coin
+    const cx = b.width / 2, cy = b.height / 2;
+    VOL.push(el.animate([
+      { transform: `translate(${dx - cx}px,${dy - cy}px) scale(${sx},${sy}) translate(${cx}px,${cy}px)` },
+      { transform: `translate(${-cx}px,${-cy}px) scale(1,1) translate(${cx}px,${cy}px)` }], trajet));
+    VOL.push(el.animate([{ overflow: "clip" }, { overflow: "clip" }], trajet));
+    // 1 / echelle n avance pas en ligne droite : 12 etapes, sur la meme courbe de
+    // temps que la carte, pour rester accordees a elle
+    for (const [c, r] of enfants) {
+      const ox = r.left - b.left + r.width / 2, oy = r.top - b.top + r.height / 2, kf = [];
+      for (let i = 0; i <= 12; i++) {
+        const e = i / 12;
+        kf.push({ transform: `translate(${-ox}px,${-oy}px) scale(${1 / (sx + (1 - sx) * e)},${1 / (sy + (1 - sy) * e)}) translate(${ox}px,${oy}px)` });
+      }
+      VOL.push(c.animate(kf, trajet));
+    }
+  }
+}
+
+function dessineGroupes(passe = 0, anime = true, largeur = false) {
   /* Mode atelier (`?atelier`, voir atelier.js) : il dessine les cartes a sa
      facon, chacune seule et a toutes ses tailles. */
   if (window.ATELIER?.actif) return window.ATELIER.dessine(DATA);
-  fondre(document.getElementById("groups"), GROUPS.map((g, i) =>
-    `<section class="sec" data-g="${i}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>
-     <div class="grid">${g.s.map(s => card(s, DATA)).join("")}</div></section>`).join(""));
-  document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
-    if (ev.target.closest("a")) return;
-    if (c.dataset.pop === "conteneurs") popConteneurs();
-    else if (c.dataset.pop === "acces") popAcces();
-    else if (c.dataset.pop === "journal") popJournal();
-    else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
-  });
-  filters();
+  const racine = document.getElementById("groups");
+  filters();   // avant le dessin : « Compact » et le groupe choisi en dependent
+  const compact = COMPACT;
   const a = [...document.querySelectorAll("#filters button:not(#menu):not(#compact)")].findIndex(b => b.classList.contains("on"));
-  if (a > 0) document.querySelectorAll(".sec").forEach(s => s.style.display = +s.dataset.g === a - 1 ? "" : "none");
+  const vis = a > 0 ? [a - 1] : GROUPS.map((_, i) => i);
+  const html = compact ? tuiles(racine, vis) : bento(racine, vis, largeur || passe > 0);
+  // la disposition qu on va dessiner, comparee a celle a l ecran (`PLACES_VUES`)
+  const places = compact ? TUILES_VUES : placesDe(AFFICHEE);
+  const peindre = () => {
+    racine.classList.toggle("bento", !compact);
+    racine.classList.toggle("compact", compact);
+    if (!compact) racine.style.setProperty("--P", AFFICHEE.P);
+    // les coins : l en-tete se resserre et les groupes remontent (voir `COINS`)
+    const coins = !compact && !!(AFFICHEE && AFFICHEE.rangees[0] && AFFICHEE.rangees[0].coins);
+    racine.parentElement.classList.toggle("coins", coins);
+    fondre(racine, html);
+    // l en-tete n a pas la hauteur prevue : les coins se rangent de nouveau
+    if (coins && mesureTete(racine) && passe < 3) return dessineGroupes(passe + 1, false);
+    document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
+      if (ev.target.closest("a")) return;
+      if (c.dataset.pop === "conteneurs") popConteneurs();
+      else if (c.dataset.pop === "acces") popAcces();
+      else if (c.dataset.pop === "journal") popJournal();
+      else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
+    });
+    // des tuiles toutes pareilles : rien a verifier apres coup
+    if (compact) { PLACES_VUES = places; return; }
+    // les passes de verification se dessinent sans animation, DANS celle-ci ;
+    // pas sur un rangement provisoire, etire en attendant le travailleur ; ni
+    // pendant un trajet : les cartes transformees fausseraient la mesure (le
+    // tour suivant verifiera)
+    if (!PROVISOIRE && !enVol() && ecarte(racine) && passe < 3) return dessineGroupes(passe + 1, false);
+    PLACES_VUES = placesDe(AFFICHEE);
+  };
+  const change = passe === 0 && PLACES_VUES !== null && places !== PLACES_VUES;
+  if (!change) return peindre();
+  // les trajets en cours visaient l ancienne disposition : on part de la ou ils en sont
+  const avant = anime && !doux() && !document.hidden && typeof Element.prototype.animate === "function" ? posees(racine) : null;
+  arrete();
+  peindre();
+  if (avant) envol(racine, avant);
+}
+
+/* LE MODE COMPACT, RANGE PAR GROUPE (17/10/2026, option A retenue) : voir
+   `RANGEMENT.rangerTuiles`. Seules les cartes qui menent quelque part (un lien
+   ou une fenetre) deviennent des tuiles, dans l ordre du bento (alerte,
+   niveau, usage). Une rangee pleine couvre la largeur : ses groupes grandissent
+   en proportion de leurs colonnes (`flex`), et leurs tuiles suivent la fenetre
+   sans recalcul. Une rangee courte prend la largeur de tuile de la rangee
+   pleine la plus serree, centree. `.saut` passe a la rangee suivante.
+   ⚠️ AUCUNE CASE VIDE (demande, 17/10) : quand un groupe n a pas de
+   quoi remplir toutes ses lignes, la ligne incomplete s elargit pour couvrir
+   la largeur, et c est la PREMIERE : les tuiles en tete (alerte, niveau,
+   usage) sont les plus grandes, comme dans le bento. Tuiles jusqu a 220 px
+   (160 laissait des rangees courtes, centrees entre deux vides). */
+const TUILE = { min: 100, max: 220 };
+let TUILES_VUES = null;
+/* Largeur des titres de groupe, icone comprise : le groupe garde au moins
+   autant de colonnes. MESUREE dans la page, une fois par titre (et par regle
+   d ecran : le telephone grossit les textes) : un titre est en capitales,
+   espacees de 0,22 em, ce qu une mesure au canevas ignorait (titres coupes au
+   telephone). Tous les titres manquants d un coup : une seule mise en page. */
+const TITRES = new Map();
+function mesureTitres(racine, ids) {
+  const tel = matchMedia("(max-width: 600px)").matches, cle = (i) => i + "|" + tel;
+  const manque = ids.filter((i) => !TITRES.has(cle(i)));
+  if (manque.length) {
+    const s = document.createElement("section");
+    s.className = "sec";
+    s.style.cssText = "position:absolute;visibility:hidden;left:0;top:0";
+    s.innerHTML = manque.map((i) => `<h2 style="width:max-content;white-space:nowrap;margin:0">${svg(ICONS[GROUPS[i].i])}${esc(GROUPS[i].n)}</h2>`).join("");
+    racine.append(s);
+    [...s.children].forEach((h, k) => TITRES.set(cle(manque[k]), Math.ceil(h.getBoundingClientRect().width)));
+    s.remove();
+  }
+  return (i) => TITRES.get(cle(i));
+}
+function tuiles(racine, visibles) {
+  const W = racine.clientWidth, G = RANGEMENT.ESPACE, usage = RANGEMENT.usage();
+  const Cmax = Math.max(1, Math.floor((W + G) / (TUILE.min + G))), tC = (W - (Cmax - 1) * G) / Cmax;
+  const titre = mesureTitres(racine, visibles);
+  const groupes = visibles.map((i) => {
+    const cartes = RANGEMENT.ordonne(GROUPS[i].s.filter((s) => s.u || s.x || s.pop)
+      .map((s) => ({ id: s.n, s, niveau: s.niveau, alerte: !!etatCarte(s, DATA) })), usage);
+    return { id: i, n: cartes.length, cartes, kmin: Math.ceil((titre(i) + G) / (tC + G)) };
+  });
+  // un seul groupe (filtre) : sa rangee peut rester courte, centree, plutot qu une tuile de toute la largeur
+  const { rangs } = RANGEMENT.rangerTuiles(groupes.map(({ cartes, ...g }) => g), W,
+    { tmin: TUILE.min, tmax: TUILE.max, court: visibles.length === 1 });
+  // l ordre des tuiles compte aussi : une alerte qui fait monter une tuile anime
+  TUILES_VUES = "tuiles:" + JSON.stringify(rangs.map((r) => [r.C, r.L, r.court,
+    r.groupes.map(({ id, k }) => [id, k, groupes.find((g) => g.id === id).cartes.map((c) => c.id)])]));
+  /* La tuile de la rangee pleine la plus serree, que reprennent les rangees
+     courtes : `ENTRE` entre ses groupes, `G` entre ses tuiles. */
+  const ref = rangs.filter((r) => !r.court).sort((a, b) => b.C - a.C)[0];
+  const pleine = ref ? `((100% - ${(ref.C - ref.groupes.length) * G + (ref.groupes.length - 1) * RANGEMENT.ENTRE}px) / ${ref.C})` : null;
+  const par = new Map(groupes.map((g) => [g.id, g]));
+  return rangs.map((r, ri) => r.groupes.map(({ id, k }) => {
+    const g = GROUPS[id];
+    const flex = !r.court ? `${k} 0 ${(k - 1) * G}px`
+      : pleine ? `0 0 calc(${pleine} * ${k} + ${(k - 1) * G}px)`
+      : `0 0 ${k * TUILE.max + (k - 1) * G}px`;
+    // `r` tuiles en tete, elargies a toute la ligne ; les autres a `k` par ligne (--k)
+    const cs = par.get(id).cartes, reste = cs.length % k;
+    const large = reste && { style: `flex-basis:calc((100% - ${(reste - 1) * G}px) / ${reste} - .5px)` };
+    return `<section class="sec" data-g="${id}" style="flex:${flex}"><h2>${svg(ICONS[g.i])}${esc(g.n)}</h2>`
+      + `<div class="grid" style="--k:${k}">`
+      + cs.map((c, i) => card(c.s, DATA, i < reste ? large : null, corpsDu(c.s))).join("") + `</div></section>`;
+  }).join("") + `<i class="saut" data-g="saut-${ri}" aria-hidden="true"></i>`).join("");
+}
+
+/* L en-tete dans sa place, entre les coins (bento/base.css, « Option A ») :
+   - sa LARGEUR, celle de la place (`--tete-l`) ;
+   - sa hauteur NATURELLE (barre, raccourcis, recherche, menu et leurs ecarts
+     de base), qui decide de la hauteur des coins (`TETE_H`) ;
+   - l ALLONGEMENT de ses trois ecarts (`--tete-ecart`) pour qu il couvre toute
+     la hauteur des cartes des coins : la barre en haut de leurs cartes, le bas
+     du menu au bas de leurs cartes (demande) ;
+   - la REMONTEE des groupes (`--tete-h`) : la rangee des coins commence au
+     titre de ses groupes, au-dessus de la barre.
+   Calcule d apres les tailles des elements, pas leur position : le menu est
+   COLLANT, sa place a l ecran change au defilement. Vrai si la hauteur des
+   coins doit changer. */
+/* La hauteur naturelle de l en-tete : barre, bandeau des donnees figees (0
+   quand il ne s affiche pas), raccourcis, recherche, menu, et leurs ecarts de
+   base. Hauteurs exactes (fractionnaires) : arrondies au pixel, les coins se
+   decalaient d un pixel. Les memes avec ou sans coins (la barre tient sur une
+   ligne des deux facons). 0 si un element manque. */
+function hauteurTete() {
+  const el = [document.getElementById("bar"), document.querySelector("main > .racc"), document.querySelector("main > .search"), document.getElementById("nav")];
+  if (el.some((e) => !e)) return 0;
+  // le bandeau, s il s affiche : sa hauteur et 8 px au-dessus (base.css)
+  const fige = document.getElementById("fige"), haut = (e) => e.getBoundingClientRect().height;
+  const bandeau = fige && fige.offsetHeight ? haut(fige) + 8 : 0;
+  return el.reduce((s, e) => s + haut(e), 0) + bandeau + ECARTS_TETE.reduce((s, x) => s + x, 0);
+}
+function mesureTete(racine) {
+  const main = racine.parentElement, place = racine.querySelector(".tete-place");
+  const h = hauteurTete(), nav = document.getElementById("nav");
+  if (!place || !h) return false;
+  main.style.setProperty("--tete-l", Math.floor(place.getBoundingClientRect().width) + "px");
+  const H = AFFICHEE.rangees[0].H, cartes = H * RANGEMENT.RANGEE + (H - 1) * RANGEMENT.ESPACE;
+  // allonges, ou resserres (sans descendre sous `ECARTS_MIN`) si les coins sont moins hauts
+  const ecart = Math.max(Math.max(...ECARTS_MIN.map((x, i) => x - ECARTS_TETE[i])), (cartes - h) / ECARTS_TETE.length);
+  main.style.setProperty("--tete-ecart", ecart.toFixed(2) + "px");
+  const navBas = parseFloat(getComputedStyle(nav).marginBottom) || 0;
+  main.style.setProperty("--tete-h", (h + ecart * ECARTS_TETE.length + navBas + TITRE).toFixed(2) + "px");
+  const avant = hauteurCoins(TETE_H);
+  TETE_H = h;
+  return hauteurCoins(h) !== avant;
+}
+
+/* Regarde les cartes posees dans `racine` et retient ce qui ne va pas : une
+   carte trop VIDE ecarte sa forme ; une carte qui DEBORDE retient, pour sa
+   largeur, la hauteur qu il lui faut (ce qui manque, en demi-rangees). Vrai si
+   quelque chose a change : il faut alors ranger de nouveau. */
+function ecarte(racine) {
+  let change = false;
+  for (const el of racine.querySelectorAll(".grid > .card")) {
+    const v = RANGEMENT.verifie(el);
+    const s = v && carteDe(el), e = s && ECARTEES.get(s.n);
+    if (!e) continue;
+    const w = +el.dataset.l, h = +el.dataset.h, px = Math.round(el.getBoundingClientRect().width);
+    if (v.etat === "vide") {
+      if (!e.formes.has(w + "x" + h)) { e.formes.add(w + "x" + h); change = true; }
+    } else {
+      // retenu par largeur en PIXELS : 4 modules ne font pas 4 modules partout
+      const n = h + Math.ceil(v.manque / (RANGEMENT.RANGEE + RANGEMENT.ESPACE));
+      if ((e.minH.get(px) || 0) < n) { e.minH.set(px, n); change = true; }
+    }
+  }
+  return change;
+}
+
+/* La largeur change (fenetre, rotation) : la page se range de nouveau. La
+   hauteur, elle, change a chaque rangement : on ne regarde que la largeur. */
+{
+  const racine = document.getElementById("groups");
+  let largeurVue = 0, attente = 0;
+  const surLargeur = () => {
+    if (racine.clientWidth === largeurVue) return;
+    largeurVue = racine.clientWidth;
+    clearTimeout(attente);
+    // anime aussi : les cartes glissent vers leur place a la nouvelle largeur
+    attente = setTimeout(() => { if (BENTO || COMPACT) dessineGroupes(0, true, true); }, 100);
+  };
+  new ResizeObserver(surLargeur).observe(racine);
+  // l evenement de la fenetre en plus : l observateur ne se declenche pas
+  // toujours (onglet en arriere-plan, fenetre emulee)
+  addEventListener("resize", surLargeur, { passive: true });
+  /* L USAGE : une ouverture = un clic qui ouvre le service ou la fenetre d une
+     carte (voir `RANGEMENT.usage`). Compte dans le navigateur seulement. */
+  racine.addEventListener("click", (e) => {
+    const c = e.target.closest(".card");
+    if (!c || !(c.matches("a[href]") || c.classList.contains("clic") || e.target.closest("a, [data-lien]"))) return;
+    const s = carteDe(c);
+    if (s) RANGEMENT.noter(s.n);
+  }, true);
 }
 
 async function refresh() {
@@ -2643,9 +3219,11 @@ async function refresh() {
     if (sy) { d.tSys = sy.t; d.problemes = sy.problemes; }
     // live.json prime sur data.json : ses valeurs sont rafraichies toutes les 2 s.
     if (l) {
-      d.nas.cpu = l.cpu; d.nas.ram = l.ram; d.nas.net = l.net;
-      if (l.qbit) { d.qbit.dl = l.qbit.dl; d.qbit.ul = l.qbit.ul; }
-      d.jellyfin.now = l.jnow;
+      // chaque objet verifie avant d y ecrire : un objet absent de data.json
+      // (possible en demonstration) arretait tout le tour (17/10/2026)
+      if (d.nas) { d.nas.cpu = l.cpu; d.nas.ram = l.ram; d.nas.net = l.net; }
+      if (l.qbit && d.qbit) { d.qbit.dl = l.qbit.dl; d.qbit.ul = l.qbit.ul; }
+      if (d.jellyfin) d.jellyfin.now = l.jnow;
     }
     DATA = demo(d);
     DERNIER_OK = Date.now();
@@ -2726,8 +3304,34 @@ function fondre(cible, html) {
   fusionne(cible, neuf);
 }
 
+/* PAR REPERE (17/10/2026, bento) : des freres qui portent tous un repere
+   (`data-carte` pour une carte, `data-g` pour un groupe) se retrouvent par lui,
+   et non par leur rang. Quand le rangement change l ordre des cartes, chacune
+   garde son element et son contenu, qui est seulement deplace. Par rang, la 4e
+   carte devenait une autre : tout son contenu etait reecrit, en fondu, au
+   moment meme ou les cartes glissent. */
+const repere = (n) => n.nodeType === 1 ? n.getAttribute("data-carte") ?? n.getAttribute("data-g") : null;
+function parRepere(anc, A, B) {
+  const ks = B.map(repere);
+  if (!B.length || ks.includes(null) || A.some((a) => repere(a) === null) || new Set(ks).size !== ks.length) return false;
+  const vus = new Map(A.map((a) => [a.nodeName + "|" + repere(a), a])), gardes = new Set();
+  B.forEach((b, i) => {
+    const a = vus.get(b.nodeName + "|" + ks[i]);
+    let n = b;
+    if (a && !gardes.has(a)) {
+      // meme empreinte (`data-v`, voir `card`) : meme contenu, rien a comparer dessous
+      const meme = b.hasAttribute("data-v") && a.getAttribute("data-v") === b.getAttribute("data-v");
+      gardes.add(a); majAttributs(a, b); if (!meme) fusionne(a, b); n = a;
+    } else marque(b);
+    if (anc.childNodes[i] !== n) anc.insertBefore(n, anc.childNodes[i] || null);
+  });
+  A.forEach((a) => { if (!gardes.has(a)) a.remove(); });
+  return true;
+}
+
 function fusionne(anc, nou) {
   const A = [...anc.childNodes], B = [...nou.childNodes];
+  if (parRepere(anc, A, B)) return;
   // Structure différente : on remplace ce niveau-là, sans descendre plus bas.
   if (A.length !== B.length) { B.forEach(marque); anc.replaceChildren(...B); return; }
   for (let i = 0; i < A.length; i++) {
@@ -2856,12 +3460,245 @@ function adresseSaisie(q) {
   return m && !RE_FICHIER.test(m[1]) ? "https://" + q : null;
 }
 
+/* ============ Le moteur de recherche au choix (17/10/2026) ============
+   Demande : choisir le moteur, Google restant celui par defaut. Le
+   choix est propre a l appareil (`homelab.moteur`, comme « Compact »).
+   ⚠️ LE FORMULAIRE NE PART QUE VERS GOOGLE : la politique de securite de la
+   page (`form-action https://www.google.com`, nginx) bloquerait tout autre
+   moteur. Pour eux, la page ouvre l adresse de recherche elle-meme
+   (`location.href`), ce que `form-action` ne regarde pas : rien a changer
+   cote nginx, et sans JavaScript la recherche part toujours chez Google.
+   LOGOS : Simple Icons (CC0), dessins `d` sur 24 x 24 (Bing pris dans la
+   version 9.0.0, Microsoft les a retires depuis), dans la couleur de chaque
+   marque ; Qwant (#282B2F) et Ecosia (#008009) eclaircies, illisibles sur le
+   fond sombre. En ligne : la page ne charge aucune image d ailleurs (CSP). */
+const MOTEURS = [
+  { id: "google", n: "Google", url: "https://www.google.com/search?q=", c: "#4285F4",
+    d: "M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" },
+  { id: "duckduckgo", n: "DuckDuckGo", url: "https://duckduckgo.com/?q=", c: "#DE5833",
+    d: "M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 23C5.925 23 1 18.074 1 12S5.926 1 12 1s11 4.925 11 11-4.925 11-11 11zm10.219-11c0 4.805-3.317 8.833-7.786 9.925-.27-.521-.53-1.017-.749-1.438.645.249 1.93.718 2.208.615.376-.144.282-3.149-.14-3.245-.338-.075-1.632.837-2.141 1.209l.034.156c.078.397.144.993.03 1.247-.001.004-.002.01-.004.013a.218.218 0 0 1-.068.088c-.284.188-1.081.284-1.503.188a.516.516 0 0 1-.064-.02c-.694.396-2.01 1.109-2.25.971-.329-.188-.377-2.676-.329-3.288.035-.46 1.653.286 2.442.679.174-.163.602-.272.98-.31-.57-1.389-.99-2.977-.733-4.105 0 .002.002.002.002.002.356.248 2.73 1.05 3.91 1.027 1.18-.024 3.114-.743 2.903-1.323-.212-.58-2.135.51-4.142.324-1.486-.138-1.748-.804-1.42-1.29.414-.611 1.168.116 2.411-.256 1.245-.371 2.987-1.035 3.632-1.397 1.494-.833-.625-1.177-1.125-.947-.474.22-2.123.637-2.889.82.428-1.516-.603-4.149-1.757-5.3-.376-.376-.951-.612-1.603-.736-.25-.344-.654-.671-1.225-.977a5.772 5.772 0 0 0-3.595-.584l-.024.004-.034.004.004.002c-.148.028-.237.08-.357.098.148.016.705.276 1.057.418-.174.068-.412.108-.596.184a.828.828 0 0 0-.204.056c-.173.08-.303.375-.3.515.84-.086 2.082-.026 2.991.246-.644.09-1.235.258-1.661.482-.016.008-.03.018-.048.028-.054.02-.106.042-.152.066-1.367.72-1.971 2.405-1.611 4.424.323 1.824 1.665 8.088 2.29 11.064-3.973-1.4-6.822-5.186-6.822-9.639C1.781 6.356 6.356 1.781 12 1.781S22.219 6.356 22.219 12zM9.095 9.581a.758.758 0 1 0 0 1.516.758.758 0 0 0 0-1.516zm.338.702a.196.196 0 1 1 0-.392.196.196 0 0 1 0 .392zm4.724-1.043a.65.65 0 1 0 0 1.299.65.65 0 0 0 0-1.3zm.29.601a.168.168 0 1 1 0-.336.168.168 0 0 1 0 .336zM9.313 8.146s-.571-.26-1.125.09c-.554.348-.534.704-.534.704s-.294-.656.49-.978c.786-.32 1.17.184 1.17.184zm5.236-.052s-.41-.234-.73-.23c-.654.008-.831.296-.831.296s.11-.688.945-.55a.84.84 0 0 1 .616.484z" },
+  { id: "qwant", n: "Qwant", url: "https://www.qwant.com/?q=", c: "#E8EAED",
+    d: "M9.313 5.163c4.289 0 7.766 2.589 7.766 7.616 0 4.759-3.072 7.301-7.003 7.59 1.87 1.142 4.693 1.143 6.45-.348l.547.297-.615 3.074-.226.285c-3.118.918-5.947-.099-7.921-3.329-3.816-.37-6.765-2.9-6.765-7.568 0-5.03 3.477-7.617 7.766-7.617zm0 13.88c2.756 0 4.08-2.804 4.08-6.264 0-3.46-1.148-6.264-4.08-6.264-2.85 0-4.08 2.805-4.08 6.264 0 3.46 1.182 6.264 4.08 6.264zm8.719-16.319L18.734 0h.263l.703 2.725 2.754.71v.248l-2.754.71-.703 2.725h-.263l-.702-2.725-2.696-.695V3.42z" },
+  { id: "bing", n: "Bing", url: "https://www.bing.com/search?q=", c: "#258FFA",
+    d: "M20.176 15.406a6.48 6.48 0 01-1.736 4.414c1.338-1.47.803-3.869-1.003-4.635-.862-.305-2.488-.85-3.367-1.158a1.834 1.834 0 01-.932-.818c-.381-.975-1.163-2.968-1.548-3.948-.095-.285-.31-.625-.265-.938.046-.598.724-1.003 1.276-.754l3.682 1.888c.621.292 1.305.692 1.796 1.172a6.486 6.486 0 012.097 4.777zm-1.44 1.888c-.264-1.194-1.135-1.744-2.216-2.028-1.527.902-4.853 2.878-6.952 4.13-1.103.68-2.13 1.35-2.919 1.242a2.866 2.866 0 01-2.77-2.325c-.012-.048-.008-.03-.001.01a6.4 6.4 0 00.947 2.653 6.498 6.498 0 005.486 3.022c1.908.062 3.536-1.153 5.099-2.096.292-.188.804-.496 1.332-.831l1.423-1.51c.553-.577.764-1.426.571-2.267zm-12.04 2.97c.422 0 .822-.1 1.173-.29.355-.215.964-.579 1.7-1.018L9.57 4.502c0-.99-.497-1.864-1.257-2.382-.08-.059-2.91-1.901-2.99-1.956-.605-.432-1.523.045-1.5.797v14.887l.417 2.36a2.488 2.488 0 002.455 2.056z" },
+  { id: "ecosia", n: "Ecosia", url: "https://www.ecosia.org/search?q=", c: "#3DB34A",
+    d: "M15.198 6.818H8.786v10.48h6.412v-3.342h-3.98v-1.262H13.8V11.42h-2.584v-1.261h3.981zM11.972.06A12.003 12.003 0 0 0 0 12.064a12.003 12.003 0 0 0 10.083 11.848c.068-1.277.196-2.723.434-3.652v-.014c0-.005 0-.007-.01-.012 0-.005-.01-.007-.012-.009 0-.002-.01-.002-.014-.002h-.356c-2.307 0-5.943-.333-6.916-3.45-1.458-4.642 2.025-6.314 3.484-4.97 0 .004.012.008.019.008.01 0 .014 0 .02-.005.01-.005.013-.009.015-.016v-.021c-.322-.945-2.148-6.867 2.64-8.496 4.08-1.369 8.07 1.491 7.461 5.265v.017c0 .007.01.012.012.014 0 .002.012.005.016.005 0 0 .012-.002.016-.005.298-.246 1.603-1.186 2.919-.148 1.247.982.844 3.73-1.627 5.003-.01.002-.014.007-.02.014v.023c0 .01.01.014.015.02.01.004.016.004.023.001 1.596-.239 4.316 1.193 2.11 4.375-1.447 2.1-4.71 2.365-6.168 2.365h-1.071s-.01 0-.012.002c0 .002-.01.005-.012.007 0 .002 0 .005-.01.009v.012c-.021.751.331 2.304.693 3.688A12.003 12.003 0 0 0 24 12.063 12.003 12.003 0 0 0 11.997.06a12.003 12.003 0 0 0-.03 0z" },
+  { id: "brave", n: "Brave", url: "https://search.brave.com/search?q=", c: "#FB542B",
+    d: "M15.68 0l2.096 2.38s1.84-.512 2.709.358c.868.87 1.584 1.638 1.584 1.638l-.562 1.381.715 2.047s-2.104 7.98-2.35 8.955c-.486 1.919-.818 2.66-2.198 3.633-1.38.972-3.884 2.66-4.293 2.916-.409.256-.92.692-1.38.692-.46 0-.97-.436-1.38-.692a185.796 185.796 0 01-4.293-2.916c-1.38-.973-1.712-1.714-2.197-3.633-.247-.975-2.351-8.955-2.351-8.955l.715-2.047-.562-1.381s.716-.768 1.585-1.638c.868-.87 2.708-.358 2.708-.358L8.321 0h7.36zm-3.679 14.936c-.14 0-1.038.317-1.758.69-.72.373-1.242.637-1.409.742-.167.104-.065.301.087.409.152.107 2.194 1.69 2.393 1.866.198.175.489.464.687.464.198 0 .49-.29.688-.464.198-.175 2.24-1.759 2.392-1.866.152-.108.254-.305.087-.41-.167-.104-.689-.368-1.41-.741-.72-.373-1.617-.69-1.757-.69zm0-11.278s-.409.001-1.022.206-1.278.46-1.584.46c-.307 0-2.581-.434-2.581-.434S4.119 7.152 4.119 7.849c0 .697.339.881.68 1.243l2.02 2.149c.192.203.59.511.356 1.066-.235.555-.58 1.26-.196 1.977.384.716 1.042 1.194 1.464 1.115.421-.08 1.412-.598 1.776-.834.364-.237 1.518-1.19 1.518-1.554 0-.365-1.193-1.02-1.413-1.168-.22-.15-1.226-.725-1.247-.95-.02-.227-.012-.293.284-.851.297-.559.831-1.304.742-1.8-.089-.495-.95-.753-1.565-.986-.615-.232-1.799-.671-1.947-.74-.148-.068-.11-.133.339-.175.448-.043 1.719-.212 2.292-.052.573.16 1.552.403 1.632.532.079.13.149.134.067.579-.081.445-.5 2.581-.541 2.96-.04.38-.12.63.288.724.409.094 1.097.256 1.333.256s.924-.162 1.333-.256c.408-.093.329-.344.288-.723-.04-.38-.46-2.516-.541-2.961-.082-.445-.012-.45.067-.579.08-.129 1.059-.372 1.632-.532.573-.16 1.845.009 2.292.052.449.042.487.107.339.175-.148.069-1.332.508-1.947.74-.615.233-1.476.49-1.565.986-.09.496.445 1.241.742 1.8.297.558.304.624.284.85-.02.226-1.026.802-1.247.95-.22.15-1.413.804-1.413 1.169 0 .364 1.154 1.317 1.518 1.554.364.236 1.355.755 1.776.834.422.079 1.08-.4 1.464-1.115.384-.716.039-1.422-.195-1.977-.235-.555.163-.863.355-1.066l2.02-2.149c.341-.362.68-.546.68-1.243 0-.697-2.695-3.96-2.695-3.96s-2.274.436-2.58.436c-.307 0-.972-.256-1.585-.461-.613-.205-1.022-.206-1.022-.206z" },
+];
+let MOTEUR = MOTEURS[0];
+try { MOTEUR = MOTEURS.find((m) => m.id === localStorage.getItem("homelab.moteur")) || MOTEURS[0]; } catch (e) { /* stockage refuse : Google */ }
+
 document.querySelector("form.search")?.addEventListener("submit", (e) => {
-  const url = adresseSaisie(e.target.querySelector('input[name="q"]')?.value);
-  if (!url) return;            // pas une adresse : recherche Google normale
+  const q = (e.target.querySelector('input[name="q"]')?.value || "").trim();
+  const url = adresseSaisie(q);
+  if (url) { e.preventDefault(); location.href = url; return; }   // une adresse : on y va
+  if (MOTEUR.id === "google" || !q) return;                        // Google : le formulaire part tel quel
   e.preventDefault();
-  location.href = url;
+  location.href = MOTEUR.url + encodeURIComponent(q);
 });
+
+/* Le bouton du moteur, au bout de la barre, et sa liste (posee sur la page,
+   comme les propositions : la barre a son propre flou). Clavier : Entree ou
+   Espace l ouvre, fleches pour choisir, Echap pour fermer. */
+{
+  const form = document.querySelector("form.search"), champ = form?.querySelector('input[name="q"]');
+  if (form && champ) {
+    const CHEVRON = '<path d="M6 9l6 6 6-6"/>', COCHE = '<path d="M5 12l5 5L20 7"/>';
+    const logo = (m) => `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="${m.c}" d="${m.d}"/></svg>`;
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "moteur";
+    bouton.setAttribute("aria-haspopup", "listbox");
+    bouton.setAttribute("aria-expanded", "false");
+    bouton.setAttribute("aria-controls", "moteurs");
+    form.append(bouton);
+    const liste = document.createElement("ul");
+    liste.id = "moteurs";
+    liste.hidden = true;
+    liste.setAttribute("role", "listbox");
+    liste.setAttribute("aria-label", "Moteur de recherche");
+    document.body.append(liste);
+    let actif = 0;
+    const pose = () => {
+      bouton.innerHTML = logo(MOTEUR) + `<span>${esc(MOTEUR.n)}</span>` + svg(CHEVRON, 2);
+      bouton.setAttribute("aria-label", "Moteur de recherche : " + MOTEUR.n);
+      champ.placeholder = "Rechercher sur " + MOTEUR.n + "…";
+      champ.setAttribute("aria-label", "Rechercher sur " + MOTEUR.n);
+    };
+    // un titre, puis chaque moteur : son logo sur une pastille, son nom, la coche du moteur choisi
+    const dessine = () => {
+      liste.innerHTML = `<li class="titre" role="presentation">Moteur de recherche</li>`
+        + MOTEURS.map((m, i) => `<li id="mot-${m.id}" role="option" data-i="${i}" aria-selected="${m === MOTEUR}"${i === actif ? ' class="actif"' : ""}>`
+        + `<span class="pastille">${logo(m)}</span><span class="nom">${esc(m.n)}</span>${m === MOTEUR ? svg(COCHE, 2.4) : ""}</li>`).join("");
+      liste.setAttribute("aria-activedescendant", "mot-" + MOTEURS[actif].id);
+    };
+    const ferme = (rendre) => {
+      liste.hidden = true;
+      bouton.setAttribute("aria-expanded", "false");
+      if (rendre) bouton.focus();
+    };
+    // sous la barre, son bord droit sur celui du bouton ; un court fondu a l ouverture
+    const ouvre = () => {
+      actif = MOTEURS.indexOf(MOTEUR);
+      dessine();
+      const r = form.getBoundingClientRect(), b = bouton.getBoundingClientRect();
+      liste.hidden = false;
+      Object.assign(liste.style, { top: r.bottom + scrollY + 8 + "px", left: Math.max(8, b.right + scrollX - liste.offsetWidth) + "px" });
+      bouton.setAttribute("aria-expanded", "true");
+      liste.focus();
+      if (!doux()) liste.animate([{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { duration: 140, easing: "ease-out" });
+    };
+    const choisit = (i) => {
+      MOTEUR = MOTEURS[i];
+      try { localStorage.setItem("homelab.moteur", MOTEUR.id); } catch (e) { /* stockage refuse : pour cette visite seulement */ }
+      pose();
+      ferme(false);
+      champ.focus();
+    };
+    liste.tabIndex = -1;
+    pose();
+    bouton.addEventListener("click", () => (liste.hidden ? ouvre() : ferme(true)));
+    liste.addEventListener("pointerdown", (e) => e.preventDefault());
+    liste.addEventListener("click", (e) => {
+      const li = e.target.closest("li[data-i]");
+      if (li) choisit(+li.dataset.i);
+    });
+    liste.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        actif = (actif + (e.key === "ArrowDown" ? 1 : MOTEURS.length - 1)) % MOTEURS.length;
+        dessine();
+      } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choisit(actif); }
+      else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); ferme(true); }
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (!liste.hidden && !liste.contains(e.target) && !bouton.contains(e.target)) ferme(false);
+    });
+    addEventListener("resize", () => { if (!liste.hidden) ferme(false); }, { passive: true });
+  }
+}
+
+/* ============ Propositions sous la recherche (17/10/2026) ============
+   Pendant la saisie, comme Google : tes SERVICES et tes RACCOURCIS dont le nom
+   (un de ses mots) ou l adresse commence comme le texte, puis les suggestions
+   de Google. Choix retenu : pas d historique des recherches.
+   ⚠️ GOOGLE PASSE PAR LE NAS : la page ne parle qu a son propre serveur (CSP
+   `connect-src 'self'`) ; `/suggestions` (nginx) relaie la saisie SANS aucun
+   en-tete du navigateur. Sans ce relais (demonstration publique), seules les
+   propositions locales s affichent, et la page cesse de le demander.
+   ⚠️ LA LISTE EST HORS DU FORMULAIRE, posee sur la page a sa hauteur : la barre
+   a son propre flou, et une liste floutee DANS elle ne verrait pas la page.
+   Clavier : fleches pour choisir (une suggestion Google remplit le champ),
+   Entree pour ouvrir le service ou chercher, Echap pour fermer. */
+{
+  const form = document.querySelector("form.search"), champ = form?.querySelector('input[name="q"]');
+  if (champ) {
+    const liste = document.createElement("ul");
+    liste.id = "propositions";
+    liste.hidden = true;
+    liste.setAttribute("role", "listbox");
+    liste.setAttribute("aria-label", "Propositions");
+    document.body.append(liste);
+    for (const [k, v] of [["role", "combobox"], ["aria-autocomplete", "list"], ["aria-controls", "propositions"], ["aria-expanded", "false"]])
+      champ.setAttribute(k, v);
+    const plat = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const LOUPE = '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>';
+    const CACHE = new Map();
+    let tape = "", items = [], actif = -1, ctrl = null, delai = 0, relais = true;
+
+    // le nom commence comme le texte (3), un de ses mots (2), ou l adresse (1)
+    const locaux = (q) => {
+      const p = plat(q), vus = new Set();
+      const note = (n, url) => plat(n).startsWith(p) ? 3 : plat(n).split(/[\s.-]+/).some((m) => m.startsWith(p)) ? 2 : plat(hst(url)).startsWith(p) ? 1 : 0;
+      return [...GROUPS.flatMap((g) => g.s).filter((s) => s.u || s.x).map((s) => ({ type: "service", n: s.n, url: s.u || s.x, ic: s.ic })),
+              ...rd().filter((r) => /^https?:\/\//i.test(r.url || "")).map((r) => ({ type: "raccourci", n: r.name || hst(r.url), url: r.url }))]
+        .map((x) => ({ ...x, note: note(x.n, x.url) }))
+        .filter((x) => x.note && !vus.has(x.url) && vus.add(x.url))
+        .sort((a, b) => b.note - a.note || a.n.localeCompare(b.n, "fr")).slice(0, 4);
+    };
+    const icone = (x) => x.type === "google" ? svg(LOUPE, 2)
+      : x.type === "service" && x.ic ? `<img src="icons/${x.ic.includes(".") ? x.ic : x.ic + ".svg"}" alt="">`
+      : ICONES && ICONES[hst(x.url)] ? `<img src="icons/sites/${ICONES[hst(x.url)]}" alt="">`
+      : `<span class="pa">${esc(x.n.slice(0, 2).toUpperCase())}</span>`;
+    // comme Google : ce qui a ete tape en clair, la suite en gras
+    const texte = (x) => x.type !== "google" || !plat(x.n).startsWith(plat(tape)) ? esc(x.n)
+      : esc(x.n.slice(0, tape.length)) + "<b>" + esc(x.n.slice(tape.length)) + "</b>";
+    const place = () => {
+      const r = form.getBoundingClientRect();
+      Object.assign(liste.style, { left: r.left + scrollX + "px", top: r.bottom + scrollY + 8 + "px", width: r.width + "px" });
+    };
+    const dessine = () => {
+      liste.innerHTML = items.map((x, i) =>
+        (x.type === "google" && i && items[i - 1].type !== "google" ? '<li class="sep" role="presentation"></li>' : "")
+        + `<li id="prop-${i}" role="option" aria-selected="${i === actif}" data-i="${i}"><span class="pi">${icone(x)}</span>`
+        + `<span class="pt">${texte(x)}</span>`
+        + (x.type !== "google" ? `<span class="pk">${x.type === "service" ? "service" : esc(hst(x.url))}</span>` : "") + `</li>`).join("");
+      const ouvert = items.length > 0 && document.activeElement === champ;
+      liste.hidden = !ouvert;
+      champ.setAttribute("aria-expanded", String(ouvert));
+      if (actif >= 0) champ.setAttribute("aria-activedescendant", "prop-" + actif);
+      else champ.removeAttribute("aria-activedescendant");
+      if (ouvert) place();
+    };
+    const cherche = (q) => {
+      tape = q; actif = -1;
+      const k = plat(q.trim());
+      items = k ? [...locaux(q.trim()), ...(CACHE.get(k) || [])].slice(0, 11) : [];
+      dessine();
+      clearTimeout(delai);
+      if (!k || !relais || CACHE.has(k)) return;
+      delai = setTimeout(async () => {
+        ctrl?.abort();
+        ctrl = new AbortController();
+        try {
+          const r = await fetch("suggestions?q=" + encodeURIComponent(q.trim()), { signal: ctrl.signal });
+          if (r.status === 404) { relais = false; return; }   // pas de relais ici : on ne le redemande plus
+          const j = r.ok ? await r.json() : null;
+          CACHE.set(k, (Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [])
+            .filter((s) => typeof s === "string" && s.trim()).slice(0, 7).map((n) => ({ type: "google", n })));
+          if (champ.value === q) cherche(q);   // toujours la meme saisie : on complete la liste
+        } catch (e) { /* relais coupe ou saisie plus recente : les propositions locales restent */ }
+      }, 120);
+    };
+    const choisit = (x) => {
+      if (x.type !== "google") { location.href = x.url; return; }
+      champ.value = x.n;
+      form.requestSubmit();   // passe par le test des adresses, puis Google
+    };
+    champ.addEventListener("input", () => cherche(champ.value));
+    champ.addEventListener("focus", () => { if (champ.value.trim()) cherche(champ.value); });
+    champ.addEventListener("blur", () => { liste.hidden = true; champ.setAttribute("aria-expanded", "false"); });
+    champ.addEventListener("keydown", (e) => {
+      if (liste.hidden || !items.length) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const n = items.length;
+        actif = e.key === "ArrowDown" ? (actif + 1 >= n ? -1 : actif + 1) : (actif <= -1 ? n - 1 : actif - 1);
+        champ.value = actif >= 0 && items[actif].type === "google" ? items[actif].n : tape;
+        dessine();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        champ.value = tape; items = []; actif = -1; dessine();
+      } else if (e.key === "Enter" && actif >= 0 && items[actif].type !== "google") {
+        e.preventDefault();
+        choisit(items[actif]);
+      }
+    });
+    // le champ garde le focus pendant le clic (sinon la liste se ferme avant)
+    liste.addEventListener("pointerdown", (e) => e.preventDefault());
+    liste.addEventListener("mousedown", (e) => e.preventDefault());
+    liste.addEventListener("click", (e) => {
+      const li = e.target.closest("li[data-i]");
+      if (li) choisit(items[+li.dataset.i]);
+    });
+    addEventListener("resize", () => { if (!liste.hidden) place(); }, { passive: true });
+    // un clic ailleurs ferme aussi la liste (le champ peut garder le focus)
+    document.addEventListener("pointerdown", (e) => {
+      if (!liste.hidden && !form.contains(e.target) && !liste.contains(e.target)) { liste.hidden = true; champ.setAttribute("aria-expanded", "false"); }
+    });
+  }
+}
 
 /* ============ Le fond suit l etat du NAS ============
    Aucun couplage avec le calcul interne : on relit ce que la page vient d

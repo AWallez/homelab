@@ -12,6 +12,21 @@
 /* Compteurs sur 24 h quand le collecteur les donne, cumules sinon (08/10/2026). */
 const coup24 = (l) => l.coup24 != null ? l.coup24 : l.coup;
 const err24 = (w) => w.err24 != null ? w.err24 : w.err;
+/* LA CONNEXION INTERNET DE LA MAISON (17/10/2026). Une box qui ne repond pas,
+   ou de travers, laisse `wan` vide et le dit dans `problemes` (`boxMuette`) ;
+   le debut d une coupure EN COURS se lit au journal, ou systeme.py ecrit un
+   evenement quand `wan.ok` bascule (`debutCoupure`, en secondes, null sans
+   coupure). Servent aux cartes Internet, Site et ntfy. */
+const boxMuette = (d) => (d.problemes || []).some(p => /^(internet|wan) :/.test(p));
+const debutCoupure = (d) => {
+  const e = (d.journal || []).find(x => Array.isArray(x) && x[1] === "reseau"
+                                       && /^Connexion Internet (coupée|rétablie)$/.test(x[2]));
+  return e && /coupée$/.test(e[2]) ? e[0] : null;
+};
+const coupureDepuis = (d) => { const t = debutCoupure(d);
+  return t == null ? null : anciennete(Math.max(0, Date.now() / 1000 - t)); };
+// ⚠️ `ok` vaut 1 ou 0 (systeme.py), pas true ou false
+const internetCoupe = (d) => (!!d.wan && !d.wan.ok) || debutCoupure(d) != null;
 /* Au-dela, un ratio de tracker est tenu pour fige (meme seuil que `ratios.sh`). */
 const RATIO_FIGE = 6 * 3600;
 
@@ -92,6 +107,10 @@ const etatCerts = (l) => {
 const dehors = (d, lien) => {
   const u = d.ur;
   if (!u || !Array.isArray(u.m) || !lien || Date.now() / 1000 - (u.t || 0) > 3600) return null;
+  /* Pendant une coupure d Internet de la maison, le releve date d AVANT elle
+     (le NAS ne joint plus UptimeRobot) : il restait vert pendant la premiere
+     heure (17/10/2026). La carte donne alors son age, sans couleur. */
+  if (internetCoupe(d)) return null;
   const h = String(lien).replace(/^[a-z]+:\/\//, "").replace(/[/:?].*$/, "");
   return u.m.find(m => m.h === h) || null;
 };
@@ -106,7 +125,9 @@ const pastDehors = (m) => {
   const pc = (v) => v >= 99.995 ? "100 %" : vg(v.toFixed(2)) + " %";
   const r30 = (m.r || [])[2];
   const b = m.b && Date.now() / 1000 - m.b.t < 7 * 86400 ? m.b : null;
-  const etat = horsDehors(m) ? "injoignable vu d'Internet" : m.s === 2 ? "vu d'Internet" : "vu d'Internet : en pause";
+  // UptimeRobot : 0 en pause, 1 pas encore sonde (« en pause » avant le 17/10/2026), 2 en ligne
+  const etat = horsDehors(m) ? "injoignable vu d'Internet" : m.s === 2 ? "vu d'Internet"
+    : m.s === 1 ? "vu d'Internet : premier contrôle en attente" : "vu d'Internet : en pause";
   return [[etat + (r30 != null ? " · " + pc(r30) + " sur 30 j" : ""),
            horsDehors(m) || (r30 != null && r30 < 99.5) ? "wn" : m.s === 2 ? "ok" : ""],
           b && horsDehors(m) ? ["coupé depuis " + duree((Date.now() / 1000 - b.t) / 60), "wn"] : null];
@@ -149,6 +170,13 @@ const lignesCerts = (l) => {
      max  largeur maximale, en modules, quand il faut boucher un trou.
      h    hauteur [min, ideale, max], en DEMI-RANGEES de 44 px (+ 12 px
           d espace) : 2 font 100 px, 4 font 212, 6 font 324, 8 font 436.
+     formes  (17/10/2026) TOUTES les hauteurs ou la carte s affiche bien, chacune
+          avec sa plage de largeurs EN PIXELS : `{ 5: [210, 400] }` = a 5
+          demi-rangees, de 210 a 400 px. Une carte plus haute peut etre plus
+          etroite (son contenu passe a la ligne) : le rangement a plus de
+          formes pour boucher les trous. Mesurees par l atelier sur tous les
+          scenarios (pire contenu). Le rangement ne garde ensuite que celles
+          ou le contenu DU MOMENT tient sans laisser la carte vide.
    Niveaux : une carte « essentielle » passe en premier et garde sa taille
    ideale ; les « secondaires » s etirent pour boucher les trous.
    ⚠️ Valeurs de depart, a verifier dans l atelier (index.html?atelier). */
@@ -160,8 +188,33 @@ const TAILLES = {
   large:     { min: 560, l: 12, max: 12, h: [4, 5, 6] },
 };
 const NIVEAUX = ["essentielle", "normale", "secondaire"];
-/** Taille d une carte : celle de sa categorie, corrigee par `ajuste`. */
-const tailleDe = (s) => ({ ...TAILLES[s.taille] || TAILLES.moyenne, ...s.ajuste });
+/** Taille d une carte : celle de sa categorie, corrigee par `ajuste`.
+ *  `formes` en sort complete : pour CHAQUE hauteur permise, `{ min, max }`
+ *  (min et max en px) ; `h` devient [plus basse, ideale, plus haute] et `min`
+ *  celui de la hauteur ideale. */
+const tailleDe = (s, sansRel) => {
+  // Sans releve : jamais plus etroite que la forme la plus etroite de la carte,
+  // dont l en-tete (adresse, selecteur « 24 h · 7 j ») reste le meme.
+  const t = sansRel
+    ? { ...SANS_RELEVE, min: Math.max(SANS_RELEVE.min, Math.min(...Object.values(tailleDe(s).formes).map((x) => x.min))) }
+    : { ...TAILLES[s.taille] || TAILLES.moyenne, ...s.ajuste };
+  // sans `formes`, le rectangle de la categorie ; son max en modules devient
+  // des pixels au plus grand module (113 px), pour ne rien retirer
+  const f = {}, enPx = (m) => m * 113 + (m - 1) * 12;
+  const fo = sansRel ? null : (s.ajuste || {}).formes;
+  if (fo) for (const [h, [min, max]] of Object.entries(fo)) f[h] = { min, max };
+  else for (let h = t.h[0]; h <= t.h[2]; h++) f[h] = { min: t.min, max: enPx(t.max) };
+  const hs = Object.keys(f).map(Number).sort((a, b) => a - b);
+  return { ...t, min: (f[t.h[1]] || f[hs[0]]).min, h: [hs[0], t.h[1], hs[hs.length - 1]], formes: f };
+};
+/* SANS RELEVE (17/10/2026) : une carte reduite a une phrase (« Relevé de … en
+   attente », ou « … ne répond pas » d un service muet) gardait la taille pleine
+   de ses donnees et paraissait disproportionnee. Elle prend alors cette petite
+   tuile, `tailleDe(s, true)`. Le service muet aussi (choix retenu, 17/10) :
+   il reste une alerte, en tete de son groupe, mais en petit. */
+const SANS_RELEVE = { min: 220, l: 3, max: 4, h: [3, 3, 3] };
+/** Vrai si la carte rendue `el` n affiche qu une phrase (releve absent, service muet). */
+const sansReleve = (el) => !!el.querySelector(".vizb > .note:only-child");
 
 /* ---- GROUPS ----------------------------------------------------- */
 const GROUPS = [
@@ -192,7 +245,10 @@ const GROUPS = [
        ⚠️ Un bloc qui grandit puis un bloc colle en bas : `.vizb` distribue son
        espace libre par `margin-top: auto`, et deux blocs qui le reclament se le
        partageraient en creusant un trou au milieu. */
-    { n: "Site", taille: "petite", niveau: "normale", d: "Vitrine freelance", x: LIENS["Site"], ic: "portfolio",
+    /* Tailles mesurees le 16/10/2026 (pire etat : panne vue d Internet, quatre
+       pastilles) : 350 px avec l en-tete compact (bento/portfolio.css). Le
+       contenu ne grandit pas : a 5 demi-rangees, 39 % de vide. */
+    { n: "Site", taille: "petite", niveau: "normale", ajuste: { min: 350, l: 4, max: 5, h: [4, 4, 4], formes: { 4: [320, 613], 5: [220, 613], 6: [220, 300] } }, d: "Vitrine freelance", x: LIENS["Site"], ic: "portfolio",
       r: d => {
         const s = d.site || {};
         const ms = Hn(d, "site").filter(v => v > 0);
@@ -207,9 +263,18 @@ const GROUPS = [
           : [(ko > 0 ? "indisponible " + duree(ko) : "aucune coupure")
              + (hs >= 160 ? " sur 7 j" : " depuis " + hs + " h"),
              ko > 0 ? "wn" : "ok"];
+        // Releve du site absent : le dire, plutot qu un « 0 ms » invente.
+        const vu = s.ok != null && (s.ok === false || s.ms != null);
+        /* Releve d UptimeRobot trop vieux (coupure d Internet de la maison) :
+           son age, comme la carte ntfy, au lieu d une pastille qui disparait. */
+        const m = dehors(d, LIENS["Site"]), u = d.ur || {};
+        const hote = String(LIENS["Site"] || "").replace(/^[a-z]+:\/\//, "").replace(/[/:?].*$/, "");
+        const vieux = !m && u.t && (u.m || []).some(x => x.h === hote)
+          ? ["vu d'Internet : relevé il y a " + anciennete(Math.max(0, Date.now() / 1000 - u.t))] : null;
         return (s.ok === false
                  ? hero("injoignable", "le site ne répond pas", "cr")
-                 : hero((s.ms || 0) + " ms", "de temps de réponse"))
+                 : vu ? hero((s.ms || 0) + " ms", "de temps de réponse")
+                 : hero("—", "relevé du site en attente"))
           /* ⚠️ TROIS PASTILLES AU PLUS (09/10/2026) : la carte etroite en
              portait six. Mediane et pointe sur une seule ; le CERTIFICAT est
              parti dans la carte Securite, qui suit les huit domaines avec un
@@ -221,46 +286,67 @@ const GROUPS = [
                          pic >= 1000 ? "wn" : ""] : null,
                   /* Vu d Internet par UptimeRobot (09/10/2026) : le temps de
                      reponse ci-dessus est mesure depuis le NAS. */
-                  ...pastDehors(dehors(d, LIENS["Site"]))]);
+                  ...pastDehors(m), vieux]);
       },
       /* Injoignable : la vitrine est hors service, c est ROUGE. Injoignable VU
          D INTERNET seulement (box, DNS, redirection de port) : ambre, le NAS le
          sert encore mais plus personne dehors ne l atteint. */
       warn: d => (d.site || {}).ok === false ? "crit" : horsDehors(dehors(d, LIENS["Site"])),
       pourquoi: d => (d.site || {}).ok === false ? "le site ne répond pas" : "injoignable vu d'Internet" },
-    { n: "CRM", taille: "petite", niveau: "essentielle", ko: "crm", d: "Suivi des leads et prospects", x: LIENS["CRM"], ic: "crm",
+    /* Tailles mesurees le 16/10/2026 (pire etat : 999 leads, 1234 recus,
+       « il y a 365 j ») : 240 px. A 5 demi-rangees, 42 % de vide. */
+    { n: "CRM", taille: "petite", niveau: "essentielle", ajuste: { min: 240, h: [4, 4, 4], formes: { 4: [220, 488], 5: [180, 488], 6: [180, 200] } }, ko: "crm", d: "Suivi des leads et prospects", x: LIENS["CRM"], ic: "crm",
       r: d => { const c = d.crm || {};
+        // Releve absent ou nul : le dire, plutot que « undefined lead non lu ».
+        if (typeof d.leads !== "number") return `<div class="note">Relevé du CRM en attente</div>`;
         return hero(d.leads, (d.leads > 1 ? "leads non lus" : "lead non lu") + "<br>en attente de réponse", d.leads > 0 ? "ta" : "")
-          + past([[(c.tot || 0) + " reçus"], [(c.traites || 0) + " traités"],
-                  [c.age > 0 ? "il y a " + c.age + " j" : c.age === 0 ? "aujourd'hui" : "—"]]); },
+          // Sans le detail (`crm`), pas de pastilles a zero inventees.
+          + (d.crm ? past([[(c.tot || 0) + " reçus"], [(c.traites || 0) + " traités"],
+                  [c.age > 0 ? "il y a " + c.age + " j" : c.age === 0 ? "aujourd'hui" : "—"]]) : ""); },
       warn: d => d.leads > 0,
       pourquoi: d => pluriel(d.leads, "lead non lu", "leads non lus") },
-    { n: "Statistiques", taille: "graphique", niveau: "normale", ko: "umami", d: "Fréquentation du portfolio", u: go("Statistiques"),
+    /* Tailles mesurees le 16/10/2026 : 163 px de contenu, sept barres de
+       180 x 40 px et non un graphe qui grandit, d ou `petite` et non plus
+       `graphique` (7 demi-rangees laissaient 234 px vides). 330 px : 4 chiffres
+       de visiteurs a cote de barres encore lisibles (140 px). */
+    { n: "Statistiques", taille: "petite", niveau: "normale", ajuste: { min: 330, l: 4, max: 5, h: [4, 4, 4], formes: { 4: [260, 613], 5: [220, 613], 6: [220, 240] } }, ko: "umami", d: "Fréquentation du portfolio", u: go("Statistiques"),
       x: LIENS["Statistiques"], ic: "stats", w: 2,
-      r: d => `<div class="stat7"><div class="s7n"><b>${d.umami.visitors}</b>`
+      r: d => { const u = d.umami;
+        // Releve absent ou nul : le dire, plutot que « Donnees illisibles » ou « null visiteurs ».
+        if (!u || u.visitors == null) return `<div class="note">Relevé d'Umami en attente</div>`;
+        return `<div class="stat7"><div class="s7n"><b>${esc(u.visitors)}</b>`
             + `<span>visiteurs<br>sur 7 jours</span></div>`
-            + jours(d.umami.serie) + `</div>`
-            + past([[d.umami.visits + " visites"], [d.umami.views + " pages vues"]]) },
+            + jours(u.serie) + `</div>`
+            + past([u.visits != null && [u.visits + " visites"], u.views != null && [u.views + " pages vues"]]); } },
   ]},
   { n: "Médiathèque", i: "play", s: [
-    { n: "Jellyfin", taille: "moyenne", niveau: "essentielle", ko: "jellyfin", d: "Films, séries et animés", u: go("Jellyfin"),
+    /* min 310 : trois lectures dont un long titre tiennent des 301 px ; h 4 seule : a 5, 54 % de vide. */
+    { n: "Jellyfin", taille: "moyenne", niveau: "essentielle", ajuste: { min: 310, h: [4, 4, 4], formes: { 4: [280, 988], 5: [240, 988], 6: [240, 260] } }, ko: "jellyfin", d: "Films, séries et animés", u: go("Jellyfin"),
       x: LIENS["Jellyfin"], ic: "jellyfin", w: 2,
-      r: d => d.jellyfin.now
-            ? calme("<b>" + esc(d.jellyfin.now) + "</b>", "bl")
-              + past([[d.jellyfin.films + " films"], [d.jellyfin.series + " séries"],
-                      [d.jellyfin.episodes + " épisodes"]])
-            : mesures([[d.jellyfin.films, "films"], [d.jellyfin.series, "séries"],
-                       [d.jellyfin.episodes, "épisodes"]])
-              + `<div class="note">Aucune lecture en cours</div>` },
-    { n: "Seerr", taille: "moyenne", niveau: "normale", ko: "seerr", d: "Demandes de la famille", u: go("Seerr"),
+      /* Sans releve, une note plutot que « Donnees illisibles » ou « undefined films ». */
+      r: d => { const j = d.jellyfin || {};
+        if (j.films == null) return `<div class="note">Relevé de Jellyfin en attente</div>`;
+        const n = [[j.films, "film"], [j.series, "série"], [j.episodes, "épisode"]];
+        /* Plusieurs lectures (collecteur : « A · B ») : une ligne chacune, lisible d un coup d oeil. */
+        return j.now
+            ? calme("<b>" + String(j.now).split(" · ").map(esc).join("<br>") + "</b>", "bl")
+              + past(n.map(([v, t]) => v != null && [pluriel(v, t)]))
+            : mesures(n.map(([v, t]) => [v != null ? nb(v) : "—", v != null && Math.abs(v) <= 1 ? t : t + "s"]))
+              + `<div class="note">Aucune lecture en cours</div>`; } },
+    /* `petite` comme Radarr : a 6 modules, 36 a 48 % de vide en largeur. h 3 : nombre a cote du libelle (feuille). */
+    { n: "Seerr", taille: "petite", niveau: "normale", ajuste: { min: 250, h: [3, 4, 4], formes: { 3: [250, 488], 4: [250, 488] } }, ko: "seerr", d: "Demandes de la famille", u: go("Seerr"),
       x: LIENS["Seerr"], ic: "seerr", w: 2,
-      r: d => (d.seerr.pending > 0
-            ? hero(d.seerr.pending, (d.seerr.pending > 1 ? "demandes" : "demande") + "<br>en attente", "ta")
+      /* Sans releve, une note plutot que « Aucune demande en attente » ou « Donnees illisibles ». */
+      r: d => { const s = d.seerr || {};
+        if (s.pending == null) return `<div class="note">Relevé de Seerr en attente</div>`;
+        return (s.pending > 0
+            ? hero(nb(s.pending), (s.pending > 1 ? "demandes" : "demande") + "<br>en attente", "ta")
             : calme("<b>Aucune demande en attente</b>"))
-            + past([[d.seerr.done + " complétées", d.seerr.pending > 0 ? "" : "ok"]]),
+            + (s.done != null ? past([[pluriel(s.done, "complétée"), s.pending > 0 ? "" : "ok"]]) : ""); },
       warn: d => d.seerr.pending > 0,
       pourquoi: d => pluriel(d.seerr.pending, "demande") },
-    { n: "FanKarr", taille: "lien", niveau: "secondaire", ajuste: { l: 12, max: 12 }, d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
+    /* Tuile de 3 modules et non bandeau : en ligne, il faut 925 px pour 66 % de vide. */
+    { n: "FanKarr", taille: "lien", niveau: "secondaire", ajuste: { min: 300, l: 3, max: 3, h: [2, 2, 2], formes: { 2: [300, 363], 3: [240, 280] } }, d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
       ic: "fankarr.ico", mini: 1, w: 4,
       /* Ce que FanKarr a telecharge (06/10/2026, demande : « des
          pastilles comme Sonarr et Radarr »), lu par systeme.py dans ses fichiers
@@ -270,7 +356,9 @@ const GROUPS = [
          ⚠️ Aucune alerte : FanKarr ne signale ni manque ni echec exploitable. */
       r: d => { const f = d.fankarr;
         if (!f) return `<div class="note">Relevé de FanKarr en attente</div>`;
-        return past([[f.cours ? f.cours + " en téléchargement" : "aucun téléchargement"], [Go(f.o)]]);
+        /* Comme Radarr : place effacee a zero (fichiers introuvables), en Tio au-dela d un. */
+        return past([[f.cours ? nb(f.cours) + " en téléchargement" : "aucun téléchargement"],
+                     f.o > 0 ? [vol(f.o)] : null]);
       } },
   ]},
 ];
@@ -293,7 +381,8 @@ GROUPS.push(
 
        Les captures par indexeur remplacent le pourcentage — elles bougent tous
        les jours et disent quelle source alimente reellement la bibliotheque. */
-    { n: "Prowlarr", taille: "petite", niveau: "secondaire", ko: "prowlarr", d: "Indexeurs et trackers", u: go("Prowlarr"), ic: "prowlarr",
+    /* h [4,4,4] : a 5 demi-rangees, le contenu calme laisse 60 % de vide. */
+    { n: "Prowlarr", taille: "petite", niveau: "secondaire", ajuste: { h: [4, 4, 4], formes: { 4: [200, 488], 5: [160, 488], 6: [140, 180], 7: [140, 140] } }, ko: "prowlarr", d: "Indexeurs et trackers", u: go("Prowlarr"), ic: "prowlarr",
       r: d => {
         const p = d.prowlarr || {};
         const ix = p.ix || [];
@@ -303,39 +392,57 @@ GROUPS.push(
               ? hero(ko, "problème" + (ko > 1 ? "s" : "") + " signalé"
                         + (ko > 1 ? "s" : "") + "<br>par Prowlarr", "wn")
               : ix.length
-                ? calme("<b>" + ix.length + " indexeurs actifs</b> — "
+                ? calme("<b>" + pluriel(ix.length, "indexeur actif", "indexeurs actifs") + "</b> — "
                         + nb(tot) + " captures")
                 : `<div class="note">Prowlarr ne répond pas</div>`)
+          /* Au-dela de cinq indexeurs, les quatre qui capturent le plus et le
+             reste en nombre : la carte est etroite. */
           + past(ko > 0 && p.msg
                  ? [[prowlarrFr(p.msg), "wn"]]
-                 : ix.map(x => [x.n + " " + nb(x.g)]));
+                 : (ix.length > 5 ? ix.slice().sort((a, b) => (+b.g || 0) - (+a.g || 0)).slice(0, 4) : ix)
+                     .map(x => [x.n + " " + nb(x.g)])
+                     .concat(ix.length > 5 ? [["+ " + (ix.length - 4)]] : []));
       },
       warn: d => ((d.prowlarr || {}).sante || 0) > 0
               || !(((d.prowlarr || {}).ix) || []).length,
       pourquoi: d => { const p = d.prowlarr || {};
         if (!(p.ix || []).length) return "aucun indexeur actif";
         return p.msg ? prowlarrFr(p.msg) : pluriel(p.sante, "problème signalé", "problèmes signalés"); } },
-    { n: "Radarr", taille: "petite", niveau: "normale", ko: "radarr", d: "Films — recherche et import", u: go("Radarr"), ic: "radarr",
-      r: d => (d.radarr.mis > 0
-            ? hero(d.radarr.mis, (d.radarr.mis > 1 ? "films manquants" : "film manquant") + "<br>à retrouver", "ta")
+    /* h [4,4,4] pour Radarr et Sonarr : a 5 demi-rangees, 42 % de vide. */
+    { n: "Radarr", taille: "petite", niveau: "normale", ajuste: { h: [4, 4, 4], formes: { 4: [220, 488], 5: [160, 488], 6: [140, 200], 7: [140, 140] } }, ko: "radarr", d: "Films — recherche et import", u: go("Radarr"), ic: "radarr",
+      /* Sans releve, une note plutot que « Aucun film manquant » ; la place
+         prise s efface a zero (requete en echec) et passe en Tio au-dela d un. */
+      r: d => { const x = d.radarr || {};
+        if (x.mis == null) return `<div class="note">Relevé de Radarr en attente</div>`;
+        return (x.mis > 0
+            ? hero(x.mis, (x.mis > 1 ? "films manquants" : "film manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun film manquant</b>"))
-            + past([[d.radarr.q ? d.radarr.q + " en téléchargement" : "aucun téléchargement"],
-                    [Go(d.radarr.size)]]),
+            + past([[x.q ? nb(x.q) + " en téléchargement" : "aucun téléchargement"],
+                    x.size > 0 ? [vol(x.size)] : null]); },
       warn: d => d.radarr.mis > 0,
       pourquoi: d => pluriel(d.radarr.mis, "film manquant", "films manquants") },
-    { n: "Sonarr", taille: "petite", niveau: "normale", ko: "sonarr", d: "Séries — recherche et import", u: go("Sonarr"), ic: "sonarr",
-      r: d => (d.sonarr.mis > 0
-            ? hero(d.sonarr.mis, (d.sonarr.mis > 1 ? "épisodes manquants" : "épisode manquant") + "<br>à retrouver", "ta")
+    { n: "Sonarr", taille: "petite", niveau: "normale", ajuste: { h: [4, 4, 4], formes: { 4: [220, 488], 5: [160, 488], 6: [140, 200], 7: [140, 140] } }, ko: "sonarr", d: "Séries — recherche et import", u: go("Sonarr"), ic: "sonarr",
+      /* Memes cas que Radarr. */
+      r: d => { const x = d.sonarr || {};
+        if (x.mis == null) return `<div class="note">Relevé de Sonarr en attente</div>`;
+        return (x.mis > 0
+            ? hero(x.mis, (x.mis > 1 ? "épisodes manquants" : "épisode manquant") + "<br>à retrouver", "ta")
             : calme("<b>Aucun épisode manquant</b>"))
-            + past([[d.sonarr.q ? d.sonarr.q + " en téléchargement" : "aucun téléchargement"],
-                    [Go(d.sonarr.size)]]),
+            + past([[x.q ? nb(x.q) + " en téléchargement" : "aucun téléchargement"],
+                    x.size > 0 ? [vol(x.size)] : null]); },
       warn: d => d.sonarr.mis > 0,
       pourquoi: d => pluriel(d.sonarr.mis, "épisode manquant", "épisodes manquants") },
-    { n: "Bazarr", taille: "petite", niveau: "secondaire", ko: "bazarr", d: "Sous-titres français", u: go("Bazarr"), ic: "bazarr",
-      r: d => (d.bazarr.ep + d.bazarr.mv > 0
-            ? hero(d.bazarr.ep + d.bazarr.mv, (d.bazarr.ep + d.bazarr.mv > 1 ? "médias" : "média") + "<br>sans sous-titre", "ta")
-              + past([[pluriel(d.bazarr.ep, "épisode")], [pluriel(d.bazarr.mv, "film")]])
-            : calme("<b>Tout est sous-titré</b> — 0 film, 0 épisode en attente")),
+    /* Contenu court : tient des 173 px (min 180) ; a 4 modules, 35 % de vide
+       a cote du nombre (max 3) ; a 5 demi-rangees, 42 % de vide (h max 4). */
+    { n: "Bazarr", taille: "petite", niveau: "secondaire", ajuste: { min: 180, max: 3, h: [4, 4, 4], formes: { 4: [180, 363], 5: [140, 363], 6: [140, 160] } }, ko: "bazarr", d: "Sous-titres français", u: go("Bazarr"), ic: "bazarr",
+      /* Sans releve, une note plutot que « Tout est sous-titré ». */
+      r: d => { const b = d.bazarr || {};
+        if (b.ep == null && b.mv == null) return `<div class="note">Relevé de Bazarr en attente</div>`;
+        const ep = +b.ep || 0, mv = +b.mv || 0;
+        return ep + mv > 0
+            ? hero(ep + mv, (ep + mv > 1 ? "médias" : "média") + "<br>sans sous-titre", "ta")
+              + past([[pluriel(ep, "épisode")], [pluriel(mv, "film")]])
+            : calme("<b>Tout est sous-titré</b> — 0 film, 0 épisode en attente"); },
       warn: d => d.bazarr.ep + d.bazarr.mv > 0,
       pourquoi: d => nb(d.bazarr.ep + d.bazarr.mv) + " sans sous-titre" },
     /* La carte repond a quatre questions et delegue le detail a sa fenetre.
@@ -366,17 +473,24 @@ GROUPS.push(
        COMBIEN, ET QUELLE TAILLE. La derniere pastille ; la repartition par
        categorie vit dans la fenetre, ou elle a la place de signifier quelque
        chose. */
-    { n: "qBittorrent", taille: "moyenne", niveau: "essentielle", d: "Client torrent, sous VPN", u: go("qBittorrent"), ic: "qbittorrent",
+    /* `graphique` : le trace garde ses proportions, la carte grandit avec sa
+       largeur (336 px de contenu a 612, 375 a 750). min 570 : graduations a
+       9 px ; max 6 : a 7 modules d une tablette (863 px), 7 demi-rangees ne
+       suffisent plus ; h max 8 pour le telephone (384 a 424 px empile), au
+       prix de 34 % de vide a 6 modules. 17/10 : 7 demi-rangees retirees
+       (choix retenu apres revue), la carte fait toujours 8 demi-rangees. */
+    { n: "qBittorrent", taille: "graphique", niveau: "essentielle", ajuste: { min: 570, max: 6, h: [8, 8, 8], formes: { 7: [360, 988], 8: [360, 988], 9: [360, 988], 10: [360, 988], 11: [360, 988] } }, d: "Client torrent, sous VPN", u: go("qBittorrent"), ic: "qbittorrent",
       w: 2, per: 1,
       r: d => {
         const q = d.qbit || {};
+        const INCONNU = ["État inconnu", "qBittorrent n'a pas répondu", 0];
         const E = {
-          connected: [nb(q.pairs || 0) + " pairs connectés",
+          connected: [pluriel(q.pairs || 0, "pair connecté", "pairs connectés"),
                       "connexion établie · port entrant joignable", 1],
           firewalled: ["Port entrant injoignable",
                        "le client tourne, mais plus personne ne peut lui demander", 0],
           disconnected: ["Hors ligne", "qBittorrent n'atteint pas le réseau", 0],
-        }[q.etat] || ["État inconnu", "qBittorrent n'a pas répondu", 0];
+        }[q.etat] || INCONNU;
 
         /* GRAPHE ET NON PLUS SILHOUETTE depuis le 09/10/2026 :
            la silhouette sans axe d avant ne se lisait pas comme les graphes
@@ -490,8 +604,10 @@ GROUPS.push(
         return etatv(E[0], E[1], !!E[2])
           + `<div class="duo tro"><div>`
             + `<div class="trkh">Activité ${surP("qBittorrent")}</div>`
-            + leg([["envoi", "#34c759", Mo(q.ul || 0)],
-                   ["réception", "#4d97ee", Mo(q.dl || 0)]])
+            /* Client muet : les collecteurs ecrivent 0, la legende tait le debit
+               plutot que d afficher un faux « 0 Kio/s ». */
+            + leg([["envoi", "#34c759", E !== INCONNU ? Mo(q.ul || 0) : null],
+                   ["réception", "#4d97ee", E !== INCONNU ? Mo(q.dl || 0) : null]])
             + act
           + `</div><div>`
             + (trs.length ? `<div class="trkh">Ratio chez les trackers</div>`
@@ -548,18 +664,24 @@ GROUPS.push(
        Sans elle, un cross-seed mort continuerait d afficher ses correspondances
        comme si de rien n etait.
        ⚠️ Pas de lien : le port 2468 est une API, pas une interface. */
-    { n: "Cross-seed", taille: "moyenne", niveau: "secondaire", d: "Ratio multi-trackers", ic: "cross-seed", w: 2,
+    /* min 250 : six pastilles sur trois lignes, nombre en ligne (feuille) ;
+       h [4,4,4] : a 5 demi-rangees, 33 a 42 % de vide. */
+    { n: "Cross-seed", taille: "moyenne", niveau: "secondaire", ajuste: { min: 250, h: [4, 4, 4], formes: { 4: [240, 988], 5: [200, 988], 6: [140, 220], 7: [140, 180] } }, d: "Ratio multi-trackers", ic: "cross-seed", w: 2,
       r: d => {
         const c = d.cross || {};
         if (!c.nb && !c.run) return `<div class="note">Relevé cross-seed indisponible</div>`;
         const age = c.run ? Math.max(0, Math.floor(Date.now() / 1000) - c.run) : 0;
         const vieux = !c.run || age > 172800;
-        return hero(nb(c.nb || 0), "torrents<br>cross-seed")
+        /* Sans `nb`, qBittorrent n a pas repondu : le compte des torrents est
+           inconnu, pas nul. Au-dela de 48 h, l age de la recherche en jours. */
+        return (c.nb != null
+              ? hero(nb(c.nb), (c.nb > 1 ? "torrents" : "torrent") + "<br>cross-seed")
+              : `<div class="note">qBittorrent n'a pas répondu</div>`)
           + past([c.purge > 0 ? [nb(c.purge) + " à purger cette nuit", "wn"] : null,
                   c.actifs > 0 ? [nb(c.actifs) + " en partage", "ok"] : null,
                   c.envoye > 0 ? [vol(c.envoye) + " envoyés"] : null,
-                  c.match > 0 ? [nb(c.match) + " correspondances"] : null,
-                  [c.run ? "recherche il y a " + duree(age / 60) : "aucune recherche",
+                  c.match > 0 ? [pluriel(c.match, "correspondance")] : null,
+                  [c.run ? "recherche il y a " + anciennete(age) : "aucune recherche",
                    vieux ? "wn" : ""],
                   c.idxtot > 0 ? [c.idx + "/" + c.idxtot + " indexeurs",
                                   c.idx < c.idxtot ? "wn" : ""] : null]);
@@ -594,7 +716,10 @@ GROUPS.push(
        ⚠️ `vpn.open` vient d un vrai test TCP vers l IP publique du tunnel, PAS du
        contenu de `/tmp/gluetun/forwarded_port`, qui annoncait un numero pendant
        que Proton ne routait plus rien. */
-    { n: "VPN", taille: "large", niveau: "normale", ajuste: { min: 340 }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
+    /* Contenu fixe (216 px) des 5 modules, seul le ruban s etire. l 6 : les
+       pastilles occupent 73 % de la ligne (35 % a 12) et les 145 cases du ruban
+       4 px ; h [4,4,4] : a 5 demi-rangees, 43 % de vide. */
+    { n: "VPN", taille: "large", niveau: "normale", ajuste: { min: 340, l: 6, h: [4, 4, 4], formes: { 4: [340, 1488], 5: [340, 1488] } }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
       x: LIENS["VPN"],
       r: d => {
         const up = Hn(d, "vpnup");
@@ -608,16 +733,23 @@ GROUPS.push(
                            : " depuis " + Math.max(1, Math.round(vus / 6)) + " h"),
              ko > 0 ? "wn" : "ok"];
 
-        return etatv(d.vpn.ip || "aucune IP",
-                d.vpn.health === "healthy"
-                  ? "Tunnel actif · " + (d.vpn.loc || "localisation inconnue")
-                  : "Tunnel en défaut (" + (d.vpn.health || "inconnu") + ")",
-                d.vpn.health === "healthy" && !!d.vpn.ip)
+        /* Sans releve du tunnel, une note a la place de son etat ; le ruban et
+           son bilan, tires de l historique, restent. */
+        const v = d.vpn;
+        return (v ? etatv(v.ip || "aucune IP",
+                v.health === "healthy"
+                  ? "Tunnel actif · " + (v.loc || "localisation inconnue")
+                  // l etat de Docker en francais (« (starting) », « (unhealthy) » avant le 17/10/2026)
+                  : v.health === "starting" ? "Tunnel en cours de démarrage"
+                  : v.health === "unhealthy" ? "Tunnel coupé"
+                  : "Tunnel : état inconnu",
+                v.health === "healthy" && !!v.ip)
+                  : `<div class="note">Relevé du tunnel en attente</div>`)
           + rubanH(d, "vpnup", "Joignabilité du port entrant", 1)
-          + past([[d.vpn.port
-                     ? "port " + d.vpn.port + (d.vpn.open ? " ouvert" : " injoignable")
+          + past([v ? [v.port
+                     ? "port " + v.port + (v.open ? " ouvert" : " injoignable")
                      : "aucun port",
-                   d.vpn.open ? "ok" : "wn"],
+                   v.open ? "ok" : "wn"] : null,
                   bilan,
                   [VPN.nom + " · WireGuard"]]);
       },
@@ -625,7 +757,7 @@ GROUPS.push(
          client marche mais ne partage plus, ambre. */
       warn: d => d.vpn.health !== "healthy" || !d.vpn.ip ? "crit" : !d.vpn.open,
       pourquoi: d => d.vpn.health === "starting" ? "tunnel en cours de démarrage"
-        : d.vpn.health !== "healthy" ? "tunnel en défaut"
+        : d.vpn.health !== "healthy" ? "tunnel coupé"
         : !d.vpn.ip ? "aucune adresse de sortie"
         : d.vpn.port ? "port " + d.vpn.port + " injoignable" : "aucun port attribué" },
   ]},
@@ -656,25 +788,34 @@ GROUPS.push(
        autrement qu un controle simplement vieux, et `undefined` tant que le
        collecteur n a pas ete mis a jour : les deux comparaisons sont alors
        fausses et la carte se comporte comme avant. */
-    { n: "Mises à jour", taille: "moyenne", niveau: "normale", d: "À appliquer à la main", pop: "updates", ic: "maj", w: 2,
+    /* Tailles mesurees le 16/10/2026 (pire etat : 22 en attente, 4 noms longs,
+       controle vieux) : 246 px au plus etroit, contenu fixe de 179 a 204 px. */
+    { n: "Mises à jour", taille: "moyenne", niveau: "normale", ajuste: { min: 250, l: 5, max: 6, h: [4, 4, 4], formes: { 3: [320, 360], 4: [200, 738], 5: [180, 300], 6: [140, 180], 7: [140, 160] } },
+      d: "À appliquer à la main", pop: "updates", ic: "maj", w: 2,
       r: d => {
         const u = d.updates || {};
         const att = (u.items || []).filter(x => x.upd);
         const perdu = u.age < 0;
         const vieux = perdu || u.age > 36;
         const base = (n) => /postgres|db$|broker/.test(n);
+        /* Rien de verifie (outil introuvable, etat illisible, premier passage) :
+           le dire, au lieu de « Tout est a jour — 0 conteneurs verifies ». */
+        const sans = !(u.total > 0) && !u.verifies;
+        const ctl = perdu ? ["contrôle introuvable", "wn"]
+          : vieux ? ["contrôle vieux de " + duree(u.age * 60), "wn"]
+          : u.maj && u.maj !== "?" ? ["contrôle du " + u.maj]
+          : sans ? null : ["contrôle en attente"];
+        const pl = att.slice(0, 4).map(x => [x.n + (base(x.n) ? " · base" : ""),
+                                             base(x.n) ? "wn" : ""])
+          .concat(att.length > 4 ? [["+ " + (att.length - 4)]] : [])
+          .concat(ctl ? [ctl] : []);
         return (u.total > 0
               ? hero(u.total, "conteneur" + (u.total > 1 ? "s" : "")
                      + "<br>à mettre à jour", "ta")
+              : sans ? `<div class="note">Relevé des mises à jour ${perdu ? "indisponible" : "en attente"}</div>`
               : calme("<b>Tout est à jour</b> — "
                       + (u.verifies || 0) + " conteneurs vérifiés"))
-          + past(att.slice(0, 4).map(x => [x.n + (base(x.n) ? " · base" : ""),
-                                           base(x.n) ? "wn" : ""])
-              .concat(att.length > 4 ? [["+ " + (att.length - 4)]] : [])
-              .concat([[perdu ? "contrôle introuvable"
-                        : vieux ? "contrôle vieux de " + duree(u.age * 60)
-                        : "contrôle du " + (u.maj || "?"),
-                        vieux ? "wn" : ""]]));
+          + (pl.length ? past(pl) : "");
       },
       /* ⚠️ « incident » ET NON « true » pour l outil arrete (08/10/2026) : la
          carte est une TACHE (des versions attendent), et une tache ne fait pas
@@ -693,21 +834,28 @@ GROUPS.push(
        donnees deja deposees sur le PC.
        ⚠️ Les pastilles n apparaissent qu avec `t`, l heure de la copie : un
        collecteur qui n ecrit encore que l age laisse la carte telle qu avant. */
-    { n: "Sauvegarde", taille: "moyenne", niveau: "essentielle", d: "Copie chiffrée vers le PC", ic: "sauvegarde", w: 2,
+    /* 4 demi-rangees a la largeur ideale (16/10/2026) : le contenu ne grandit
+       pas, a 5 la carte serait vide a 46 %. Largeur min 340 : en dessous, une
+       copie en retard finissait a moins de 8 px du bord (17/10). Plus haute,
+       elle se replie : 5 demi-rangees des 240 px, 7 des 160 px (`formes`). */
+    { n: "Sauvegarde", taille: "moyenne", niveau: "essentielle", ajuste: { min: 340, h: [4, 4, 4], formes: { 4: [340, 988], 5: [240, 988], 6: [200, 320], 7: [160, 220], 8: [160, 180] } },
+      d: "Copie chiffrée vers le PC", ic: "sauvegarde", w: 2,
       r: d => { const b = d.backup || {};
         const chk = b.chk || null;
+        /* Sans age, la jauge annoncait « il y a undefined h ». */
+        if (b.h == null) return `<div class="note">Relevé de la sauvegarde en attente</div>`;
         return jauge(b.h < 0 ? "jamais" : "il y a " + b.h + " h",
                     "seuil d'alerte à 48 h",
                     b.h < 0 ? 100 : b.h / 48 * 100,
                     (b.h < 0 || b.h > 48) ? "var(--scr)"
                       : b.h > 24 ? "var(--swn)" : "var(--sok)")
-          + (b.t ? past([[b.date],
+          + (b.t ? past([b.date ? [b.date] : null,
                          b.add != null ? ["+ " + taille(b.add) + " envoyés"] : null,
                          b.dur != null ? ["durée " + chrono(b.dur)] : null,
-                         b.snap ? [b.snap + " versions gardées"] : null,
+                         b.snap ? [pluriel(b.snap, "version gardée", "versions gardées")] : null,
                          !chk ? ["intégrité jamais vérifiée"]
-                         : chk.ok ? ["intégrité vérifiée il y a "
-                                     + anciennete(Math.max(0, Date.now() / 1000 - chk.t)), "ok"]
+                         : chk.ok ? ["intégrité vérifiée" + (chk.t ? " il y a "
+                                     + anciennete(Math.max(0, Date.now() / 1000 - chk.t)) : ""), "ok"]
                          : ["contrôle d'intégrité en échec", "wn"]])
                  : "");
       },
@@ -719,8 +867,9 @@ GROUPS.push(
          l ecart minimal, et seulement si le PC repond. Un PC reste eteint se lit
          donc ici bien avant de declencher l alerte des 48 h. */
       note: d => { const b = d.backup || {};
+        if (b.h == null) return null;
         if (b.h < 0) return "Aucune sauvegarde enregistrée";
-        if (!b.t) return "Dernière copie le " + b.date;
+        if (!b.t) return b.date ? "Dernière copie le " + b.date : null;
         const p = b.t + SAUVEGARDE_ECART_H * 3600, on = (d.pc || {}).on;
         if (p <= Date.now() / 1000)
           return on ? "Copie imminente : le PC est allumé" : "Prochaine copie dès que le PC s'allume";
@@ -752,7 +901,12 @@ GROUPS.push(
        sur la carte, au moins au moment ou elle se declenche. */
     /* `per` : selecteur « 24 h · 7 j » dans l en-tete (voir `PERIODES`), d ou
        une description sans duree. */
-    { n: "Système", taille: "graphique", niveau: "essentielle", d: "Processeur, mémoire et swap", ic: "systeme", w: 2, per: 1,
+    /* Tailles mesurees le 16/10/2026 : 450 px au moins pour que l etiquette du
+       seuil (6,5 unites) fasse 9 px ; graphe plafonne selon la hauteur dans
+       bento/supervision-a.css ; a 6 demi-rangees, au-dela de 7 modules, le
+       graphe plafonne laisserait plus d un quart de vide. */
+    { n: "Système", taille: "graphique", niveau: "essentielle", ajuste: { min: 450, max: 7, h: [6, 7, 7], formes: { 5: [400, 863], 6: [360, 863], 7: [360, 863], 8: [360, 863], 9: [360, 863], 10: [360, 863] } },
+      d: "Processeur, mémoire et swap", ic: "systeme", w: 2, per: 1,
       r: d => leg([["processeur", "#4d97ee", pct(d.nas.cpu)],
                    ["mémoire", "#34c759", pct(d.nas.ram)],
                    ["swap", "#ffb340", pct(d.nas.swap)]])
@@ -767,8 +921,11 @@ GROUPS.push(
             + past([["charge " + vg(d.nas.load) + " → " + vg(d.nas.load5 || d.nas.load)
                       + " → " + vg(d.nas.load15 || d.nas.load) + " / " + (d.nas.cores || 1),
                      d.nas.load >= (d.nas.cores || 1) ? "wn" : ""],
-                    ["pointe swap " + Math.round(Math.max(0, ...Hf(d, "swap"))) + " %",
-                     Math.max(0, ...Hf(d, "swap")) >= 60 ? "wn" : ""],
+                    /* Sans historique, pas de pointe : « 0 % » se lirait comme une mesure. */
+                    Hf(d, "swap").length
+                      ? ["pointe swap " + Math.round(Math.max(0, ...Hf(d, "swap"))) + " %",
+                         Math.max(0, ...Hf(d, "swap")) >= 60 ? "wn" : ""]
+                      : null,
                     ["disque " + Mo(d.nas.dr || 0) + " lu"],
                     ["disque " + Mo(d.nas.dw || 0) + " écrit"],
                     d.nas.disk >= 85
@@ -818,7 +975,11 @@ GROUPS.push(
        Son libelle vient de SMART : une capacite parle davantage que « nvme2 ».
        ⚠️ Les series ajoutees en cours de route n ont pas d historique anterieur :
        `d0` les fait demarrer la ou leurs donnees commencent. */
-    { n: "Températures", taille: "graphique", niveau: "secondaire", d: "Capteurs matériels", ic: "temp", w: 2, per: 1,
+    /* Tailles mesurees le 16/10/2026 : 420 px au moins pour des etiquettes de
+       9 px ; 7 demi-rangees fixes (6 ne tient pas avec quatre disques, 8 laisse
+       un tiers de vide) ; graphe plafonne dans bento/supervision-a.css. */
+    { n: "Températures", taille: "graphique", niveau: "secondaire", ajuste: { min: 420, h: [7, 7, 7], formes: { 5: [520, 988], 6: [360, 988], 7: [360, 988], 8: [360, 988], 9: [360, 988], 10: [360, 988] } },
+      d: "Capteurs matériels", ic: "temp", w: 2, per: 1,
       r: d => {
         const L = dern(d);
         const dg = v => v > 0 ? Math.round(v) + " °C" : "—";
@@ -842,8 +1003,9 @@ GROUPS.push(
               .concat([{ v: Hp(d, "Températures", "eth0"), c: "#c07bf0", d0: 1, n: "réseau 10 GbE" }]),
               { min: 30, f: dg, u: "°C", ts: Hp(d, "Températures", "t"),
                 alt: "Températures du NAS " + surP("Températures") })
-          + past([["pointe processeur " + mx("temp") + " °C", mx("temp") >= SEUILS_T.cpu[1] ? "wn" : ""],
-                  ["pointe disques " + pd + " °C", pd >= SEUILS_T.nvme[0] ? "wn" : ""],
+          /* Sans historique, pas de pointe : « 0 °C » se lirait comme une mesure. */
+          + past([mx("temp") ? ["pointe processeur " + mx("temp") + " °C", mx("temp") >= SEUILS_T.cpu[1] ? "wn" : ""] : null,
+                  pd ? ["pointe disques " + pd + " °C", pd >= SEUILS_T.nvme[0] ? "wn" : ""] : null,
                   [val("eth0") > 0
                     ? "réseau ~" + Math.round(val("eth0")) + " °C · normal par conception"
                     : "réseau : relevé en cours"],
@@ -897,7 +1059,11 @@ GROUPS.push(
        ⚠️ RETIRES VOLONTAIREMENT : la pastille de pression (elle compte
        toujours dans le verdict, sans s afficher) et le bandeau des redemarrages
        automatiques des conteneurs. */
-    { n: "Mémoire", taille: "graphique", niveau: "normale", d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
+    /* Tailles mesurees le 16/10/2026 : sur une colonne la carte demande 537 px
+       (10 demi-rangees) ; de 7 a 9 elle passe sur deux colonnes
+       (bento/supervision-a.css), qui tiennent des 572 px dans le pire etat. */
+    { n: "Mémoire", taille: "graphique", niveau: "normale", ajuste: { min: 580, h: [7, 7, 10], formes: { 7: [580, 988], 8: [580, 988], 10: [540, 560], 11: [360, 560], 12: [320, 520] } },
+      d: "Ce que contient la RAM, et qui la prend", ic: "memoire", w: 2, pop: "conteneurs",
       r: d => { const m = d.mem;
         if (!m || !m.tot) return `<div class="note">Relevé de la mémoire en attente</div>`;
         const E = etatMemoire(m);
@@ -930,11 +1096,13 @@ GROUPS.push(
                   : `<span>rien n'a débordé sur le SSD</span>`}</div></div>`
             : "")
           + intertitre("Qui la prend · en mémoire et tassé")
-          + rangsDuo(g.map(x => { const k = grp(x.k);
+          /* Groupes illisibles : l intertitre restait seul, sans rien dessous. */
+          + (!g.length ? `<div class="note">Détail en attente du collecteur</div>`
+            : rangsDuo(g.map(x => { const k = grp(x.k);
               return [k[0] + (x.n ? " (" + x.n + ")" : ""),
                       moGo(x.mo) + (x.t > 0 ? " + " + moGo(x.t) + " tassés" : ""),
                       x.mo / M * 100, (x.t || 0) / M * 100, k[2],
-                      x.p > x.mo * 1.3 ? "pointe " + moGo(x.p) : k[1]]; }))
+                      x.p > x.mo * 1.3 ? "pointe " + moGo(x.p) : k[1]]; })))
           /* Processus tues faute de memoire sur 24 h (09/10/2026), avec leurs noms. */
           + (m.oom ? past([m.oom.n24 > 0
               ? [pluriel(m.oom.n24, "processus tué", "processus tués") + " faute de mémoire sur 24 h"
@@ -956,7 +1124,10 @@ GROUPS.push(
        erreurs ou s use, si un miroir existant perd un disque, ou si btrfs
        compte des erreurs. Le volume presque plein est deja l alerte de la carte
        « Systeme ». */
-    { n: "Stockage", taille: "graphique", niveau: "normale", d: "Volumes et disques", ic: "ssd", w: 2,
+    /* Tailles mesurees le 16/10/2026 : 423 px de contenu des 500 px de large
+       (disque en echec, modele long), d ou 8 demi-rangees. */
+    { n: "Stockage", taille: "graphique", niveau: "normale", ajuste: { min: 500, h: [8, 8, 9], formes: { 8: [500, 988], 9: [400, 988], 10: [320, 480], 11: [300, 380], 12: [280, 300] } },
+      d: "Volumes et disques", ic: "ssd", w: 2,
       r: d => grappesDisques(d.smart, { ESPACE, ROLES }),
       /* Disque en echec, miroir degrade, corruption detectee : ROUGE. L usure
          seule laisse le temps de commander un disque : ambre. */
@@ -971,9 +1142,13 @@ GROUPS.push(
           else if (x.usure >= 80) l.push("disque " + x.n + " usé à " + x.usure + " %"); });
         (s.grappes || []).forEach(g => {
           if (g.err > 0) l.push(pluriel(g.err, "erreur") + " de données");
-          if (!g.sys && g.n < g.att) l.push("miroir dégradé, " + g.n + " disque sur " + g.att); });
+          if (!g.sys && g.n < g.att) l.push((redondance(g) === "parité" ? "grappe dégradée, " : "miroir dégradé, ")
+            + pluriel(g.n, "disque") + " sur " + g.att); });
         return l.join(SEP); } },
-    { n: "Uptime Kuma", taille: "large", niveau: "essentielle", ajuste: { min: 420 }, ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
+    /* Tailles mesurees le 16/10/2026 : 184 px de contenu, 207 quand trois
+       groupes en panne passent sur deux lignes, ce qui exige 840 px. Hauteur
+       fixe : a 5 demi-rangees, 56 px de vide de plus. */
+    { n: "Uptime Kuma", taille: "large", niveau: "essentielle", ajuste: { min: 840, h: [4, 4, 4], formes: { 4: [620, 1488], 5: [400, 1488], 6: [340, 600], 7: [340, 380] } }, ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
       /* ⚠️ NI `calme` NI `hero` ICI, et c'est un retrait délibéré. Le bandeau
          vert répétait l'addition des trois lignes — « 28 sondes en ligne »
          quand elles disent 7, 10 et 11 — et n'apportait en propre que la
@@ -985,14 +1160,16 @@ GROUPS.push(
       r: d => {
         const gs = d.kuma.groupes || [];
         const som = (c) => gs.reduce((a, g) => a + (+g[c] || 0), 0);
-        const ko = som("ko"), att = som("att");
+        /* Sans groupes (page de statut illisible), le compte global : la carte
+           disait « 30 sondes en ligne » en vert avec deux sondes tombees. */
+        const ko = som("ko") || (gs.length ? 0 : +d.kuma.down || 0), att = som("att");
         const tot = som("tot") || (+d.kuma.up || 0) + (+d.kuma.down || 0);
         const pl = (n, s) => nb(n) + " sonde" + (n > 1 ? "s " : " ") + s;
         return rubanH(d, "kumaup", "Stabilité des sondes", 1)
           + grpk(gs)
           + past([ko > 0 ? [pl(ko, "hors ligne"), "wn"] : null,
                   att > 0 ? [pl(att, "en attente"), "wn"] : null,
-                  ko + att === 0 ? [pl(tot, "en ligne"), "ok"]
+                  ko + att === 0 ? [pl(tot, "en ligne"), tot ? "ok" : ""]
                                  : [nb(tot - ko - att) + " en ligne"],
                   d.kuma.pc ? ["stabilité " + vg(d.kuma.pc) + " %"] : null]);
       },
@@ -1009,7 +1186,11 @@ GROUPS.push(
        cinq derniers ici, la semaine entiere au clic (`popJournal`).
        ⚠️ PAS D ALERTE : chaque incident allume deja sa propre carte. Le journal
        dit QUAND, pas QUOI faire. */
-    { n: "Journal", taille: "large", niveau: "normale", ajuste: { min: 600 }, d: "Ce qui s'est passé sur 7 jours", ic: "journal", w: 4, pop: "journal",
+    /* Tailles mesurees le 16/10/2026 : les lignes les plus longues (passe des
+       mises a jour, connexions) tiennent des 550 px sans categorie ; au-dela
+       de 9 modules, plus d un tiers de la largeur reste vide. Cinq lignes
+       font 264 px ; a 4 demi-rangees, trois (feuille bento). */
+    { n: "Journal", taille: "large", niveau: "normale", ajuste: { min: 550, l: 8, max: 9, h: [4, 5, 5], formes: { 4: [500, 1113], 5: [500, 1113] } }, d: "Ce qui s'est passé sur 7 jours", ic: "journal", w: 4, pop: "journal",
       r: d => (d.journal || []).length ? evts(d.journal, 5)
         : `<div class="note">Journal en cours de constitution</div>`,
       note: d => { const l = d.journal || [];
@@ -1019,8 +1200,18 @@ GROUPS.push(
           + (inc ? pluriel(inc, "incident") : "aucun incident"); } },
     /* Injoignable vu d Internet (UptimeRobot) : le telephone ne recoit plus
        rien, puisqu il vient chercher chaque message sur ce domaine. */
-    { n: "ntfy", taille: "lien", niveau: "secondaire", ajuste: { l: 12, max: 12 }, d: "Notifications push", u: go("ntfy"),
+    /* Tailles mesurees le 16/10/2026 : l en-tete seul fait ~250 px, des 4
+       modules la moitie de la carte est vide. 260 px : la pastille d alerte. */
+    { n: "ntfy", taille: "lien", niveau: "secondaire", ajuste: { min: 260, l: 3, max: 3, h: [2, 2, 2], formes: { 2: [260, 363], 3: [220, 240] } }, d: "Notifications push", u: go("ntfy"),
       x: LIENS["ntfy"], ic: "ntfy", mini: 1, w: 4,
+      /* Rien quand tout va bien : la carte reste un lien. Sinon ce que voit
+         UptimeRobot, pour que le voyant s explique dans la carte, ou l age du
+         releve quand il est trop vieux pour juger (coupure d Internet). */
+      r: d => { const m = dehors(d, LIENS["ntfy"]);
+        if (m) { const p = pastDehors(m); return p[0][1] === "ok" ? null : past(p); }
+        const u = d.ur || {}, h = String(LIENS["ntfy"] || "").replace(/^[a-z]+:\/\//, "").replace(/[/:?].*$/, "");
+        return u.t && (u.m || []).some(x => x.h === h)
+          ? past([["vu d'Internet : relevé il y a " + anciennete(Math.max(0, Date.now() / 1000 - u.t))]]) : null; },
       warn: d => horsDehors(dehors(d, LIENS["ntfy"])),
       pourquoi: () => "injoignable vu d'Internet, les notifications n'arrivent plus" },
   ]},
@@ -1034,7 +1225,10 @@ GROUPS.push(
        apres un redemarrage, tous les services deviendraient injoignables. Le
        collecteur verifie que CHAQUE reseau Docker actif a sa regle ; un simple
        compte ne dirait pas lequel manque. */
-    { n: "Sécurité", taille: "moyenne", niveau: "normale", d: "Contrôles du serveur", ic: "securite", w: 2,
+    /* Tailles mesurees le 16/10/2026 : six lignes font 291 px, sept 329 (deux
+       lignes de certificats) ; sous 330 px de large, les lignes passent sur
+       deux rangs. Plus de six lignes a 6 demi-rangees : resserrees (feuille). */
+    { n: "Sécurité", taille: "moyenne", niveau: "normale", ajuste: { min: 360, h: [6, 6, 7], formes: { 6: [360, 988], 7: [340, 988], 8: [300, 340], 9: [260, 320], 10: [260, 280], 11: [240, 240], 12: [220, 240] } }, d: "Contrôles du serveur", ic: "securite", w: 2,
       r: d => { const s = d.secu;
         if (!s) return `<div class="note">Contrôles en attente</div>`;
         const ouv = s.ouverts || [], manq = s.manq || [];
@@ -1043,12 +1237,16 @@ GROUPS.push(
           ouv.length ? ["wn", ouv.length + " fichier" + pl(ouv.length, "s") + " sensible" + pl(ouv.length, "s")
                               + " lisible" + pl(ouv.length, "s") + " par tous",
                         ouv.slice(0, 2).join(", ") + (ouv.length > 2 ? "…" : "")]
-                     : ["ok", "Fichiers sensibles fermés", s.verifies ? s.verifies + " vérifiés" : ""],
-          manq.length ? ["wn", manq.length + " réseau" + pl(manq.length, "x") + " Docker sans règle", manq.slice(0, 2).join(", ")]
+                     /* Aucun fichier verifie (collecteur lance sans root) : rien ne
+                        dit qu ils sont fermes. */
+                     : s.verifies > 0 ? ["ok", "Fichiers sensibles fermés", pluriel(s.verifies, "vérifié")]
+                     : ["in", "Fichiers sensibles : contrôle en attente", ""],
+          manq.length ? ["wn", manq.length + " réseau" + pl(manq.length, "x") + " Docker sans règle",
+                         manq.slice(0, 2).join(", ") + (manq.length > 2 ? "…" : "")]
           /* `fw` vaut null quand les regles n ont pas pu etre lues : on le dit,
              plutot que d afficher « null regles en place ». */
           : s.fw == null ? ["in", "Pare-feu : contrôle en attente", ""]
-          : ["ok", "Pare-feu : " + s.fw + " règles en place", "liste blanche"],
+          : ["ok", "Pare-feu : " + pluriel(s.fw, "règle") + " en place", "liste blanche"],
           ...lignesCerts(d.certs),
           [s.refus > 20 ? "wn" : "ok", nb(s.refus) + " connexion" + pl(s.refus, "s") + " refusée" + pl(s.refus, "s"), "sur 24 h"],
           s.ext > 0 ? ["in", s.ext + " connexion" + pl(s.ext, "s") + " depuis Internet", "voir la carte Accès"]
@@ -1077,10 +1275,16 @@ GROUPS.push(
        client WireGuard) ; une adresse hors du reseau local et du VPN passe a
        l ambre, et c est la seule condition d alerte. Un clic ouvre les 24 h
        entieres, heure par heure puis connexion par connexion (`popAcces`). */
-    { n: "Accès", taille: "moyenne", niveau: "normale", d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
+    /* Tailles mesurees le 16/10/2026 : 293 px d ordinaire, 86 de plus par
+       adresse vue d Internet ; a 6 et 7 demi-rangees, la feuille bento fait
+       ceder les dernieres connexions. Toutes tiennent des 340 px de large. */
+    { n: "Accès", taille: "moyenne", niveau: "normale", ajuste: { min: 340, h: [6, 6, 7], formes: { 6: [320, 988], 7: [260, 988] } }, d: "Qui est connecté, et d'où", ic: "acces", w: 2, pop: "acces",
       r: d => { const a = d.acces;
         if (!a) return `<div class="note">Relevé des connexions en attente</div>`;
-        return depuisInternet(a) + intertitre("Connectés maintenant") + sessions(a.now || [])
+        /* Sans `now` (collecteur d avant), pas d intertitre seul sur du vide :
+           le collecteur rend sinon toujours une tuile par protocole. */
+        return depuisInternet(a)
+          + ((a.now || []).length ? intertitre("Connectés maintenant") + sessions(a.now) : "")
           + intertitre("Dernières connexions")
           + ((a.log || []).length ? journal(a.log, 4) : `<div class="note">Aucune connexion enregistrée</div>`);
       },
@@ -1096,14 +1300,20 @@ GROUPS.push(
        depuis le demarrage : c est ce que produit un switch qui se fige.
        La courbe est la colonne `reseau`, collectee depuis l origine et jamais
        affichee jusqu ici : recu et envoye confondus. */
-    { n: "Réseau local", taille: "graphique", niveau: "secondaire", d: "Lien du serveur vers le switch", ic: "reseau", w: 2, per: 1,
+    /* Tailles mesurees le 16/10/2026 : 374 px a 6 modules, le graphe grandit
+       avec la largeur (plafonne par la feuille bento selon la hauteur). 350 px :
+       graduations du graphe a 9 px reels (8,5 unites sous 430 px). */
+    { n: "Réseau local", taille: "graphique", niveau: "secondaire", ajuste: { min: 350, formes: { 6: [360, 988], 7: [360, 988], 8: [360, 988], 9: [360, 988], 10: [360, 988] } }, d: "Lien du serveur vers le switch", ic: "reseau", w: 2, per: 1,
       r: d => { const l = d.lan;
         if (!l) return `<div class="note">Relevé du lien en attente</div>`;
         const v = Hf(d, "reseau"), red = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
         const lent = l.vit > 0 && l.vit < LIEN.vit, petit = l.mtu < LIEN.mtu;
-        return (l.up ? hero(l.vit >= 1000 ? vg(l.vit / 1000) + " Gb/s" : l.vit + " Mb/s",
-                            "lien vers le switch<br>" + (l.mtu >= 9000 ? "trames géantes " + l.mtu
-                                                                       : "trames de " + l.mtu + " octets"),
+        /* Vitesse 0 ou -1 : le pilote ne la donne pas (lien qui negocie), on
+           ne l affiche pas comme « 0 Mb/s ». */
+        return (l.up ? hero(l.vit >= 1000 ? vg(l.vit / 1000) + " Gb/s" : l.vit > 0 ? l.vit + " Mb/s" : "En ligne",
+                            "lien vers le switch" + (l.vit > 0 ? "" : " · vitesse inconnue")
+                            + (!(l.mtu > 0) ? "" : "<br>" + (l.mtu >= 9000 ? "trames géantes " + l.mtu
+                                                                           : "trames de " + l.mtu + " octets")),
                             lent || petit ? "wn" : "")
                      : hero("Coupé", "le serveur n'a plus de lien réseau", "cr"))
           /* LEGENDE ET GRAPHE DES CARTES SYSTEME ET TEMPERATURES (09/10/2026) : la valeur du moment dans la legende, une
@@ -1140,55 +1350,96 @@ GROUPS.push(
        une panne du port du VPN, qui en suit souvent un, mais c est la carte VPN
        qui porte cette alerte : le dire deux fois teindrait la page pour un
        evenement deja passe. */
-    { n: "Internet", taille: "graphique", niveau: "normale", d: "Fibre et box de la maison", ic: "internet", w: 2, per: 1,
+    /* Tailles mesurees le 16/10/2026 : comme Reseau local ; pendant une
+       coupure, le texte de « Hors ligne » passe sur trois lignes a cote du
+       nombre a 6 demi-rangees (feuille bento). */
+    { n: "Internet", taille: "graphique", niveau: "normale", ajuste: { min: 350, formes: { 6: [360, 988], 7: [360, 988], 8: [360, 988], 9: [360, 988], 10: [360, 988] } }, d: "Fibre et box de la maison", ic: "internet", w: 2, per: 1,
       r: d => { const w = d.wan;
-        if (!w) return `<div class="note">Relevé de la box en attente</div>`;
+        // debut de la coupure EN COURS (16/10/2026), voir `debutCoupure`
+        const coupe = coupureDepuis(d);
+        /* Sans releve, la carte n avait qu une note au pied d un grand vide, et
+           c est ce qu elle montrait pendant une coupure : une box qui ne repond
+           pas, ou de travers, laisse `wan` vide et le dit dans `problemes`. */
+        if (!w) {
+          return (coupe ? hero("Hors ligne", "connexion coupée depuis " + coupe, "cr") : "")
+            + `<div class="note">${boxMuette(d) ? "La box ne répond pas" : "Relevé de la box en attente"}</div>`;
+        }
         const gb = k => k >= 1000000 ? vg(k / 1000000) + " Gb/s" : Math.round(k / 1000) + " Mb/s";
         const recent = w.boxup >= 0 && w.boxup < 86400;
         const h = (w.h || []).filter(x => Array.isArray(x) && x.length >= 3);
-        const rx = h.map(x => +x[1] || 0), tx = h.map(x => +x[2] || 0);
         /* Sur 7 jours : `wan.h7`, une ligne par heure close, meme forme. */
         const g = sept("Internet") ? (w.h7 || []).filter(x => Array.isArray(x) && x.length >= 3) : h;
-        return (w.ok ? hero("En ligne", "fibre · " + (w.v6 ? "IPv4 et IPv6" : "IPv4 seul")
-                                        + "<br>abonnement " + gb(w.cd) + " ↓ · " + gb(w.cu) + " ↑")
-                     : hero("Hors ligne", "la box n'a plus de connexion Internet", "cr"))
+        const der = (h.length ? h : g)[(h.length ? h : g).length - 1] || [];
+        /* `muette` (systeme.py, 17/10/2026) : la box ne repond pas, seule la
+           sonde de latence dit si Internet passe ; ni IPv6, ni abonnement, ni
+           erreurs fibre, ni anciennete de la box. */
+        const mu = !!w.muette;
+        return (mu ? hero(w.ok ? "En ligne" : "Hors ligne", "la box ne répond pas"
+                            + (w.ok ? "<br>Internet reste joignable" : coupe ? "<br>coupure depuis " + coupe : ""), w.ok ? "" : "cr")
+                : w.ok ? hero("En ligne", "fibre · " + (w.v6 ? "IPv4 et IPv6" : "IPv4 seul")
+                                        + (w.cd > 0 && w.cu > 0 ? "<br>abonnement " + gb(w.cd) + " ↓ · " + gb(w.cu) + " ↑" : ""))
+                     : hero("Hors ligne", "la box n'a plus de connexion Internet" + (coupe ? "<br>depuis " + coupe : ""), "cr"))
           /* ⚠️ LA COURBE VIENT DE `wan.h` (09/10/2026), releve par systeme.py :
              [debut du creneau de 10 min, recu, envoye], en octets par seconde.
              Elle lisait des colonnes `wanrx`/`wantx` de l historique qui
              n existaient qu en demonstration : en production, la carte n a
              jamais affiche de courbe. */
-          + (h.length > 1
-             ? leg([["reçu", "#4d97ee", Mo(rx[rx.length - 1])], ["envoyé", "#34c759", Mo(tx[tx.length - 1])]])
+          + (g.length > 1
+             ? leg([["reçu", "#4d97ee", Mo(+der[1] || 0)], ["envoyé", "#34c759", Mo(+der[2] || 0)]])
                + graphe([{ v: g.map(x => +x[1] || 0), c: "#4d97ee", n: "reçu" },
                          { v: g.map(x => +x[2] || 0), c: "#34c759", n: "envoyé" }],
                         { f: MoAxe, u: "dbt", ts: g.map(x => x[0]), alt: "Débit de la box " + surP("Internet") })
              : `<div class="note">Débit en cours d'enregistrement</div>`)
           + past([w.lat > 0 ? ["latence " + w.lat + " ms", w.lat > 40 ? "wn" : ""] : ["latence : sans réponse", "wn"],
-                  ["box en service depuis " + anciennete(w.boxup), recent ? "wn" : ""],
-                  [err24(w) > 0 ? nb(err24(w)) + " erreurs fibre sur 24 h" : "aucune erreur fibre sur 24 h",
+                  /* -1 ou absent : la box n a pas donne son anciennete. */
+                  Number.isFinite(w.boxup) && w.boxup >= 0 ? ["box en service depuis " + anciennete(w.boxup), recent ? "wn" : ""] : null,
+                  mu ? null : [err24(w) > 0 ? pluriel(err24(w), "erreur fibre", "erreurs fibre") + " sur 24 h" : "aucune erreur fibre sur 24 h",
                    err24(w) > 0 ? "wn" : "ok"]]);
       },
-      warn: d => { const w = d.wan; if (w && !w.ok) return "crit"; return !!w && err24(w) > 0; },
-      pourquoi: d => !d.wan.ok ? "la box n'a plus de connexion Internet"
+      /* Sans releve (17/10/2026) : coupure en cours au journal, ROUGE ; box qui
+         ne repond pas, ambre (Internet marche peut-etre, mais on n en sait
+         rien). La carte le disait sans que la pastille s allume. */
+      warn: d => { const w = d.wan;
+        if (!w) return debutCoupure(d) != null ? "crit" : boxMuette(d);
+        if (!w.ok) return "crit"; if (w.muette) return true; return err24(w) > 0; },
+      pourquoi: d => !d.wan ? (debutCoupure(d) != null ? "connexion coupée depuis " + coupureDepuis(d) : "la box ne répond pas")
+        : d.wan.muette ? (d.wan.ok ? "la box ne répond pas" : "Internet injoignable, la box ne répond pas")
+        : !d.wan.ok ? "la box n'a plus de connexion Internet"
         : pluriel(err24(d.wan), "erreur fibre", "erreurs fibre") + " sur 24 h" },
   ]},
   { n: "Bureau et infrastructure", i: "server", s: [
-    { n: "AdGuard Home", taille: "moyenne", niveau: "normale", ko: "adguard", d: "DNS filtrant du réseau", u: go("AdGuard Home"), ic: "adguard-home", w: 2,
-      r: d => { const t = d.adguard.q ? d.adguard.b / d.adguard.q * 100 : 0;
+    /* Tailles mesurees le 16/10/2026 (pire etat : 12 345 678 req., 125 ms) :
+       le contenu fait 144 px de haut a toute largeur, 3 demi-rangees suffisent
+       (4 : 50 % de vide). 260 px : les trois pastilles sur une ligne. */
+    { n: "AdGuard Home", taille: "moyenne", niveau: "normale", ajuste: { min: 260, l: 4, max: 6, h: [3, 3, 4], formes: { 3: [250, 738], 4: [220, 738], 5: [140, 220], 6: [140, 200] } }, ko: "adguard", d: "DNS filtrant du réseau", u: go("AdGuard Home"), ic: "adguard-home", w: 2,
+      r: d => { const a = d.adguard;
+        // Sans releve : une note, pas « Donnees illisibles » ni « undefined ms ».
+        if (!a || a.q == null) return `<div class="note">Relevé d'AdGuard en attente</div>`;
+        const t = a.q ? a.b / a.q * 100 : 0;
         return jauge(vg(t.toFixed(1)) + " %", "des requêtes bloquées", t, "var(--swn)")
-          + past([[nb(d.adguard.q) + " req."], [nb(d.adguard.b) + " bloq."],
-                  [d.adguard.lat + " ms", d.adguard.lat <= 20 ? "ok" : "wn"]]); } },
-    { n: "WireGuard", taille: "moyenne", niveau: "normale", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
+          + past([[nb(a.q) + " req."], [nb(a.b) + " bloq."],
+                  // latence absente, ou nulle faute de requete : pas de « 0 ms » invente
+                  a.lat != null && a.q > 0 ? [a.lat + " ms", a.lat <= 20 ? "ok" : "wn"] : null]); } },
+    /* Tailles mesurees le 16/10/2026 (pire etat : dix appareils, deux noms
+       longs) : 198 px de contenu des 400 px grace aux tuiles de 68 px
+       (bento/bureau.css). Sur telephone, 9 appareils et plus veulent 5
+       demi-rangees. A 6 modules, trois appareils laissent un tiers de vide. */
+    // `ko` : wg-easy sans reponse (collect.sh, 17/10/2026)
+    { n: "WireGuard", taille: "moyenne", niveau: "normale", ajuste: { min: 400, l: 4, max: 5, h: [4, 4, 5], formes: { 4: [400, 560], 5: [340, 613], 6: [220, 380], 7: [220, 320], 8: [180, 200], 9: [180, 200] } }, ko: "wireguard", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
       // Tuiles plutôt que lignes : dix appareils tiennent sur deux rangées au
       // lieu de dix. Grille calibrée à 68 px pour conserver au moins deux
       // colonnes même dans une carte étroite — à 84 px elle tombait à une seule
       // sous 240 px, et la hauteur de la carte augmentait de moitié.
-      r: d => `<div class="wgg">` + (d.wg.clients || []).map(c =>
-              `<div class="wgt${c.on ? " on" : ""}"><i></i><b>${esc(c.n)}</b></div>`).join("")
-            + `</div>`
-            + past([[d.wg.c > 0 ? d.wg.c + " connecté" + (d.wg.c > 1 ? "s" : "") : "Aucune connexion",
-                     d.wg.c > 0 ? "ok" : ""],
-                    [d.wg.t + " enregistré" + (d.wg.t > 1 ? "s" : "")]]) },
+      // Sans releve : une note, pas « Donnees illisibles » ni « undefined enregistre ».
+      // Liste absente mais compteurs presents : les compteurs seuls.
+      r: d => { const w = d.wg, cl = w && Array.isArray(w.clients) ? w.clients : [];
+        if (!w || (w.t == null && !cl.length)) return `<div class="note">Relevé de WireGuard en attente</div>`;
+        const c = w.c != null ? w.c : cl.filter(x => x.on).length, t = w.t != null ? w.t : cl.length;
+        return (cl.length ? `<div class="wgg">` + cl.map(x =>
+              `<div class="wgt${x.on ? " on" : ""}" title="${esc(x.n)}"><i></i><b>${esc(x.n)}</b></div>`).join("")
+            + `</div>` : "")
+            + past([[c > 0 ? c + " connecté" + (c > 1 ? "s" : "") : "Aucune connexion", c > 0 ? "ok" : ""],
+                    [t + " enregistré" + (t > 1 ? "s" : "")]]); } },
     /* Le poste de travail, allumable et extinguible a distance depuis la page.
 
        ⚠️ TROIS ETATS, PAS DEUX. « Eteint » et « injoignable » se ressemblent vus
@@ -1212,13 +1463,21 @@ GROUPS.push(
        une rangee a elle seule et laissait la moitie droite vide ; posee avant,
        le placement automatique empile Vaultwarden et Dockge a sa droite. L ordre
        de cette liste est donc signifiant ici. */
-    { n: "PC fixe", taille: "moyenne", niveau: "essentielle", d: "Poste de travail", ic: "pc", w: 2,
+    /* Tailles mesurees le 16/10/2026 (pire etat : « Extinction en cours »,
+       et « Injoignable » avec le reveil demande) : 320 px, en dessous le
+       libelle du bouton passe sur deux lignes. Les boutons plafonnent a 340 px :
+       au-dela de 5 modules, la carte se vide sur les cotes. */
+    { n: "PC fixe", taille: "moyenne", niveau: "essentielle", ajuste: { min: 320, l: 4, max: 5, h: [4, 4, 5], formes: { 4: [300, 613], 5: [180, 613], 6: [180, 280] } }, d: "Poste de travail", ic: "pc", w: 2,
       r: d => {
         const p = d.pc || {};
         const att = pcEnCours(p);          /* action en attente, ou null */
         const age = p.vu ? Math.max(0, Math.floor(Date.now() / 1000) - p.vu) : null;
         const perdu = !p.on && (age === null || age > 86400);
-        return (p.on ? calme("<b>Allumé</b> — le poste répond")
+        /* Aucun releve du poste (ancien data.json) : le dire, plutot que
+           « Injoignable » ; les boutons restent tels quels. */
+        const rien = p.on == null && !p.vu;
+        return (rien ? hero("—", "relevé du poste en attente")
+                : p.on ? calme("<b>Allumé</b> — le poste répond")
                      : perdu ? hero("Injoignable", "hors du réseau", "wn")
                              : calme("<b>Éteint</b> — prêt à être réveillé"))
           + `<div class="pcb">
@@ -1227,18 +1486,28 @@ GROUPS.push(
                <button data-pc="off" class="${att === "off" ? "att" : ""}"${att || !p.on ? " disabled" : ""}>${
                  att === "off" ? "Extinction en cours" : "Éteindre"}</button>
              </div>`
-          + past([[age === null ? "jamais vu"
-                   : p.on ? "en ligne" : "vu il y a " + duree(Math.floor(age / 60)),
-                   p.on ? "ok" : perdu ? "wn" : ""]]);
+          /* Allume sans derniere vue (premiere passe) : « en ligne », pas
+             « jamais vu ». Au-dela de 48 h, en jours : « 40 j », pas « 960 h ». */
+          + (rien ? "" : past([[p.on ? "en ligne" : age === null ? "jamais vu"
+                   : "vu il y a " + (age >= 172800 ? anciennete(age) : duree(Math.floor(age / 60))),
+                   p.on ? "ok" : perdu ? "wn" : ""]]));
       },
+      /* Sans aucun releve du poste, pas d alerte (17/10/2026) : la carte dit
+         « relevé du poste en attente », la pastille disait « jamais vu ». */
       warn: d => { const p = d.pc || {};
+        if (p.on == null && !p.vu) return false;
         return !p.on && (!p.vu || Math.floor(Date.now() / 1000) - p.vu > 86400); },
       pourquoi: d => { const p = d.pc || {};
         return !p.vu ? "jamais vu sur le réseau"
           : "injoignable depuis " + anciennete(Math.floor(Date.now() / 1000) - p.vu); } },
-    { n: "Vaultwarden", taille: "lien", niveau: "normale", d: "Coffre-fort de mots de passe",
+    /* Tailles mesurees le 16/10/2026 : l en-tete seul, 54 px de haut des
+       3 modules (une demi-rangee de plus : 70 % de vide). Vaultwarden : 210 px
+       avec un domaine de 27 caracteres, la moitie de la carte vide des
+       4 modules. Dockge, plus court : rempli a 2 modules, 3 au plus (un tiers
+       de vide, mais 2 modules de 79 px ne font que 170 px). */
+    { n: "Vaultwarden", taille: "lien", niveau: "normale", ajuste: { min: 210, l: 3, max: 3, h: [2, 2, 2], formes: { 2: [200, 363] } }, d: "Coffre-fort de mots de passe",
       x: LIENS["Vaultwarden"], ic: "vaultwarden", mini: 1, w: 2 },
-    { n: "Dockge", taille: "lien", niveau: "secondaire", d: "Gestion des stacks Docker", u: go("Dockge"), ic: "dockge", mini: 1, w: 2 },
+    { n: "Dockge", taille: "lien", niveau: "secondaire", ajuste: { min: 180, l: 2, max: 3, h: [2, 2, 2], formes: { 2: [180, 363], 3: [140, 160] } }, d: "Gestion des stacks Docker", u: go("Dockge"), ic: "dockge", mini: 1, w: 2 },
   ]},
 );
 

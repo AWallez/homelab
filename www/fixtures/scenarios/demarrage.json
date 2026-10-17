@@ -7,4 +7,4 @@
   "qbit": { "nb": 0, "pairs": 0, "dl": 0, "ul": 0, "tr": [] },
   "cross": { "nb": 0, "match": 0, "suivis": 0, "run": 0, "actifs": 0, "purge": 0 },
   "jellyfin": { "films": 0, "series": 0, "episodes": 0 },
-  "crm": { "tot": 0, "traites": 0, "age": 0 }, "leads": 0 }
+  "crm": { "tot": 0, "traites": 0, "age": -1 }, "leads": 0 }

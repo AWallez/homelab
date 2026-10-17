@@ -5,3 +5,89 @@
    `inline-size` et non `size` : la page actuelle laisse encore la hauteur
    suivre le contenu. */
 #groups .card{container:carte / inline-size}
+
+/* ---- La page en bento (17/10/2026) ----
+   `#groups` est une grille de `--P` modules (pose par app.js, voir
+   rangement.js) ; chaque groupe y prend sa place (`grid-column`, dans le HTML)
+   et range ses cartes dans sa propre grille de demi-rangees de 44 px. Deux
+   groupes cote a cote ont la meme hauteur : leurs titres s alignent. */
+/* GRAND ECRAN : la grille des cartes s elargit jusqu a 2 400 px (16 a 24
+   modules, des groupes cote a cote) ; le haut de page (mesures, raccourcis,
+   recherche, barre des groupes) garde ses 75rem, centre : sa refonte viendra
+   plus tard. */
+main:has(> #groups:is(.bento,.compact)){max-width:150rem}
+/* ⚠️ SANS POIDS (`:where`, 17/10/2026) : une regle plus precise faisait passer
+   la barre de recherche de ses 600 px (`.search`, style.css) a 1 200. Les
+   elements du haut qui ont leur propre largeur la gardent ; les autres
+   s arretent aux 75rem d avant. */
+main:where(:has(> #groups:is(.bento,.compact))) > :where(:not(#groups)){max-width:75rem;margin-inline:auto}
+
+/* L animation du rangement (glissement des cartes) n a besoin d aucune regle
+   ici : voir `envol` (app.js). */
+
+/* `:is(#groups.bento, #groups .bento)` : la page elle-meme, ou une page rangee
+   DANS l atelier (onglet « Disposition ») ; le poids de `#groups` l emporte sur
+   l ancienne grille (`#groups:not(.compact) .card { min-height: 213px }`). */
+/* Les groupes en rangees `flex` (17/10/2026, au lieu d une grille de `--P`
+   modules), avec LE MEME ECART DANS LES DEUX SENS : 40 px (`RANGEMENT.ENTRE`)
+   entre deux groupes cote a cote, et 40 px entre les cartes de deux rangees,
+   le titre du groupe du dessous pose DANS cet ecart (8 px au-dessus, le
+   titre de 25 px, 7 px jusqu a ses cartes). Chaque groupe porte sa part
+   (`flex`, voir `bento()`) ; `.saut` force la rangee suivante ; l ecart
+   vertical est porte par les groupes, un `row-gap` en aurait ajoute un second
+   a chaque saut. */
+:is(#groups.bento, #groups .bento){display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:40px}
+:is(#groups.bento, #groups .bento) .sec{min-width:0;margin-bottom:8px}
+:is(#groups.bento, #groups .bento) .saut{flex:0 0 100%;height:0}
+:is(#groups.bento, #groups .bento) .sec h2{margin:0 0 7px}
+:is(#groups.bento, #groups .bento) .grid{display:grid;gap:12px;grid-auto-rows:44px;align-items:stretch}
+:is(#groups.bento, #groups .bento) .grid>.card{min-height:0;min-width:0;max-width:none;margin:0}
+
+/* ---- Option A : des groupes dans les coins de l en-tete (17/10/2026) ----
+   Sur tres grand ecran (`main.coins`, posee par `dessineGroupes`, voir
+   `COINS` dans app.js) : les groupes remontent (`--tete-h`) et leur premiere
+   rangee loge les deux premiers groupes dans les coins, de part et d autre de
+   `.tete-place`, vide, sous laquelle se tient l en-tete :
+   - a la largeur de la place (`--tete-l`), ou la barre reste sur une ligne ;
+   - sur toute la hauteur des CARTES des coins (demandes) : la barre
+     descend de la hauteur de leur titre (32 px, `TITRE`), pose au-dessus en
+     haut de la page, et ses trois ecarts (18, 16, 18 px, `ECARTS_TETE`)
+     s allongent de `--tete-ecart` jusqu au bas des cartes (`mesureTete`).
+   ⚠️ Les groupes recouvrent alors l en-tete : seules leurs sections recoivent
+   les clics, l en-tete reste cliquable. */
+main.coins > :is(#bar,#fige,#nav){max-width:var(--tete-l,1100px)}
+main.coins .bar{margin:32px auto calc(18px + var(--tete-ecart,0px))}
+main.coins > .racc{margin-bottom:calc(16px + var(--tete-ecart,0px))}
+main.coins > .search{margin-bottom:calc(18px + var(--tete-ecart,0px))}
+/* Le bandeau des donnees figees, quand il s affiche entre la barre et les
+   raccourcis : 8 px sous la barre, puis l ecart allonge comme les autres. Ses
+   propres marges (14 et 36 px, fond.css) l emportaient et decalaient les coins
+   de 14 px (« Collecte arrêtée », 17/10/2026). */
+main.coins .bar:has(+ .fige:not(:empty)){margin-bottom:8px}
+main.coins > .fige:not(:empty){margin-bottom:calc(18px + var(--tete-ecart,0px))}
+main.coins > #groups{margin-top:calc(-1 * var(--tete-h,0px));pointer-events:none}
+main.coins > #groups > :not(.tete-place){pointer-events:auto}
+.tete-place{align-self:stretch;pointer-events:none}
+
+/* Une note SEULE (releve en attente, service muet) se pose au milieu de la
+   carte : `.vizb>.note` la poussait au pied, sous un grand vide. Une seule
+   regle pour toutes les cartes (17/10/2026), au lieu d une par groupe. */
+#groups .card .vizb>.note:only-child{margin-block:auto}
+
+/* Graphe dans une carte de hauteur fixee (17/10/2026) : il prend toute la
+   hauteur qui reste au lieu de garder les proportions de son dessin. Une carte
+   plus haute a donc un graphe plus haut, sans trou (voir `graphe()`). */
+#groups .card[data-h] .grb{aspect-ratio:auto;flex:1 1 72px;min-height:72px}
+
+/* Forme haute (17/10/2026) : une carte plus haute que sa hauteur ideale
+   (classe `haute`, posee par le rangement) garde son contenu groupe, comme a
+   l ideale, et le centre dans la hauteur. Sans cela le nombre vedette
+   s etire et les pastilles tombent au pied : un trou entre les deux.
+   Une note posee SOUS le bloc (Sauvegarde, Journal) reste collee a lui : le
+   groupe entier se centre (marge auto au-dessus du bloc, sous le dernier). */
+#groups .card.haute .vizb:not(:has(.grb)){flex:0 0 auto;margin-top:auto}
+#groups .card.haute:not(:has(.grb))>:last-child{margin-bottom:auto}
+/* Ce qui etait pousse en bas (marge auto) se collait alors au bloc du dessus
+   (« Aucune lecture en cours » sous les compteurs de Jellyfin) : un ecart
+   ordinaire a la place. */
+#groups .card.haute .vizb>:is(.note,.calme,.stats,.stat7):not(:first-child){margin-top:14px}

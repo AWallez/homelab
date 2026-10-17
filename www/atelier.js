@@ -30,13 +30,14 @@
   // il sert aussi d outil de mesure, dans un onglet qu on ne regarde pas.
   try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (e) { /* tant pis */ }
 
-  /* ---- Reglages ---- */
-  // la largeur d un module selon l ecran (voir la base de grille proposee)
-  const ECRANS = [
-    ["Téléphone", 79], ["Écran 1 920", 83], ["Portable 1 280", 92],
-    ["Écran 1 440", 106], ["Tablette couchée", 113],
-  ];
-  const TELEPHONE = 350; // largeur utile d un telephone de 390 px
+  /* ---- Reglages ----
+     PLANCHE UNIVERSELLE (17/10/2026, demande) : plus de taille d ecran
+     a choisir. Une carte est montree a toutes les largeurs qu elle peut
+     recevoir, de son minimum (en px) a son maximum en modules AU PLUS GRAND
+     module (113 px, tablette couchee). Le module de 92 px ne sert plus qu a
+     situer la largeur ideale, et aux outils (`analyser`, `rendre`). */
+  const MODULE_MAX = 113;
+  const TELEPHONE = 350; // `analyser` seulement : largeur utile d un telephone de 390 px
   // rangees de 44 px : des DEMI-rangees (2 = 100 px, 4 = 212, 6 = 324)
   const R = { module: 92, espace: 12, rangee: 44 };
   const NIV = { essentielle: "E", normale: "N", secondaire: "S" };
@@ -50,9 +51,26 @@
   // modules necessaires pour atteindre une largeur en pixels
   const modulesPour = (px) => Math.max(1, Math.ceil((px + R.espace) / (R.module + R.espace)));
   const plage = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
-  const largeurs = (t) => { const a = modulesPour(t.min); return plage(a, Math.max(a, t.max)); };
-  const hauteurs = (t) => plage(t.h[0], t.h[2]);
-  const toutes = () => GROUPS.flatMap((g) => g.s.map((s) => ({ s, g })));
+  // Chaque hauteur a sa plage de largeurs (`formes`, voir tailleDe) : une
+  // carte plus haute peut etre plus etroite. Sans hauteur : l ideale.
+  const largeurs = (t, h = t.h[1]) => {
+    const f = t.formes[h], a = modulesPour(f.min);
+    return plage(a, Math.max(a, Math.floor((f.max + R.espace) / (R.module + R.espace))));
+  };
+  const hauteurs = (t) => Object.keys(t.formes).map(Number).sort((a, b) => a - b);
+  // La planche : pour chaque hauteur, des largeurs en px reparties de la min a
+  // la max (en px depuis le 17/10), plus l ideale sur la rangee ideale.
+  const maxPx = (f) => f.max;
+  const idealPx = (t) => largeurPx(Math.max(t.l, modulesPour(t.min)));
+  const largeursPx = (t, h) => {
+    const f = t.formes[h], a = f.min, b = Math.max(a, maxPx(f));
+    const n = Math.min(7, Math.max(2, Math.ceil((b - a) / 80) + 1));
+    const l = new Set(Array.from({ length: n }, (_, i) =>
+      i === 0 ? a : i === n - 1 ? b : Math.round((a + (b - a) * i / (n - 1)) / 10) * 10));
+    if (h === t.h[1]) l.add(idealPx(t));
+    return [...l].sort((x, y) => x - y);
+  };
+  const toutes =() => GROUPS.flatMap((g) => g.s.map((s) => ({ s, g })));
   const trouve = (nom) => toutes().find((x) => x.s.n === nom);
   const court = (t) => { t = String(t).replace(/\s+/g, " ").trim(); return t.length > 38 ? t.slice(0, 37) + "…" : t; };
 
@@ -63,11 +81,14 @@
   // par `@container carte` (voir bento/base.css).
   // Les classes de l ANCIENNE grille (c4, mini) changent aussi le contenu (une
   // carte `mini c4` se met en ligne) : on les recalcule d apres la taille.
-  function habille(el, w, py) {
+  // `haute` : plus haute que sa hauteur ideale (une forme haute et etroite),
+  // pour que la feuille repartisse le contenu au lieu d y laisser un trou.
+  function habille(el, w, py, hIdeale) {
     const c = el.querySelector(".card");
     if (!c) return;
     c.dataset.l = w;
     c.dataset.h = Math.max(1, Math.round((py + R.espace) / (R.rangee + R.espace)));
+    c.classList.toggle("haute", !!hIdeale && +c.dataset.h > hIdeale);
     c.classList.remove("c2", "c3", "c4", "mini");
     if (py <= 100) c.classList.add("mini");
     if (w >= 10) c.classList.add("c4");
@@ -82,7 +103,7 @@
     cadre.innerHTML = card(s, donnees);
     cadre.style.width = px + "px";
     cadre.style.height = py + "px";
-    habille(cadre, w, py);
+    habille(cadre, w, py, tailleDe(s).h[1]);
   }
 
   /* ---- Detection des defauts ---- */
@@ -119,10 +140,38 @@
     return [...new Set(res)];
   }
 
+  // Contenu qui MORD sur la marge interieure du bas (14 px) sans sortir de la
+  // carte : `defauts` ne le voit pas, l oeil si (pastilles collees au bord).
+  // On mesure ce qui se voit (texte, pastilles, dessins), pas les boites.
+  // Tolere jusqu a 6 px : il reste 8 px d air (controles des 16 et 17/10).
+  function mordBas(cadre) {
+    const c = cadre.querySelector(".card");
+    if (!c) return [];
+    const cr = c.getBoundingClientRect(), bas = cr.bottom - parseFloat(getComputedStyle(c).paddingBottom);
+    let m = 0;
+    const voit = (r) => { if (r.width > 0 && r.height > 0 && r.width < cr.width - 1) m = Math.max(m, r.bottom - bas); };
+    const tw = document.createTreeWalker(c, NodeFilter.SHOW_TEXT), rg = document.createRange();
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const p = n.parentElement;
+      if (!n.nodeValue.trim() || !p.getClientRects().length) continue;
+      const k = getComputedStyle(p);
+      if (k.visibility === "hidden" || k.position === "absolute") continue;
+      rg.selectNodeContents(n);
+      for (const r of rg.getClientRects()) voit(r);
+    }
+    for (const el of c.querySelectorAll("*")) {
+      if (!el.getClientRects().length || el.parentElement.closest("svg")) continue;
+      const k = getComputedStyle(el);
+      if (k.visibility === "hidden" || k.position === "absolute") continue;
+      if (el.tagName === "svg" || k.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(k.borderTopWidth) > 0) voit(el.getBoundingClientRect());
+    }
+    return m > 6 ? [`colle au bord du bas (${Math.round(m)} px dans la marge)`] : [];
+  }
+
   // Cadre de mesure, hors de la vue mais bien mis en page (dans #groups, pour
   // que les regles qui le visent s appliquent).
   let banc;
-  const mesure = (s, w, px, py) => { poseCarte(banc, s, w, px, py); return defauts(banc); };
+  const mesure = (s, w, px, py) => { poseCarte(banc, s, w, px, py); return [...defauts(banc), ...mordBas(banc)]; };
 
   // Plus petite largeur, en pixels, sans aucun defaut, pour une hauteur donnee.
   // ⚠️ PAS de dichotomie sur toute la plage : un graphique qui garde ses
@@ -160,25 +209,37 @@
   // rangees necessaires pour une hauteur, et place perdue en bas de la carte
   const rangeesPour = (py) => Math.max(1, Math.ceil((py + R.espace) / (R.rangee + R.espace)));
 
+  // Taille d une carte DANS LES DONNEES DU MOMENT : reduite a sa note
+  // d attente (sans releve), elle prend la petite tuile `SANS_RELEVE`.
+  function tailleVue(s) {
+    const t = tailleDe(s), w = Math.max(t.l, modulesPour(t.min));
+    poseCarte(banc, s, w, largeurPx(w), hauteurPx(t.h[1]));
+    return sansReleve(banc) ? { ...tailleDe(s, true), sansReleve: true } : t;
+  }
+
   // Bilan complet d une carte pour les reglages du moment.
   function bilan(s) {
-    const t = tailleDe(s);
+    const t = tailleVue(s);
     const wIdeal = Math.max(t.l, modulesPour(t.min));
     const hc = hauteurContenu(s, largeurPx(wIdeal));
     const besoin = hc === null ? null : { px: hc, rangees: rangeesPour(hc), perte: hauteurPx(rangeesPour(hc)) - hc };
+    const graphe = !!banc.querySelector(".grb"); // `tailleVue` vient de la poser
     const tailles = [];
     for (const h of hauteurs(t))
-      for (const w of largeurs(t)) {
-        const d = mesure(s, w, largeurPx(w), hauteurPx(h));
-        tailles.push({ w, h, d });
+      for (const px of largeursPx(t, h)) {
+        const d = mesure(s, modulesPour(px), px, hauteurPx(h));
+        // TROP HAUTE POUR CES DONNEES : le contenu du moment tiendrait avec deux
+        // demi-rangees de moins. Le rangement ne la prendra pas (un graphe, lui,
+        // remplit toute hauteur).
+        const trop = !graphe && !d.length && h > 2 && !mesure(s, modulesPour(px), px, hauteurPx(h - 2)).length;
+        tailles.push({ px, h, d, trop });
       }
-    const tel = hauteurs(t).map((h) => ({ h, d: mesure(s, 4, TELEPHONE, hauteurPx(h)) }));
     const minis = Object.fromEntries(hauteurs(t).map((h) => [h, minimumMesure(s, h)]));
     const enDefaut = tailles.filter((x) => x.d.length);
-    const mid = minis[t.h[1]];
-    const etat = enDefaut.length || mid === null || mid > t.min ? "ko"
-      : tel.some((x) => x.d.length) ? "tel" : "ok";
-    return { t, tailles, tel, minis, enDefaut, etat, wIdeal, besoin };
+    // a CHAQUE hauteur, le contenu doit tenir a la largeur min declaree
+    const tropBas = hauteurs(t).some((h) => minis[h] === null || minis[h] > t.formes[h].min);
+    const etat = enDefaut.length || tropBas ? "ko" : "ok";
+    return { t, tailles, minis, enDefaut, etat, wIdeal, besoin };
   }
 
   /* ---- Interface ---- */
@@ -196,15 +257,15 @@
           <p>Chaque carte, seule, à toutes les tailles que sa déclaration permet.
              <a href="${location.pathname}">Revenir à la page</a></p></div>
         <div class="at-reglages">
-          <div class="at-ecrans" role="group" aria-label="Taille du module">${ECRANS.map(([n, m]) =>
-            `<button type="button" data-module="${m}">${n}<b>${m} px</b></button>`).join("")}</div>
-          <label>Module <input id="at-module" type="number" min="60" max="160" value="${R.module}"> px</label>
           <label>Espace <input id="at-espace" type="number" min="0" max="40" value="${R.espace}"> px</label>
           <label>Rangée <input id="at-rangee" type="number" min="60" max="200" value="${R.rangee}"> px</label>
           <label class="at-coche"><input id="at-direct" type="checkbox"> Données en direct</label>
           <button type="button" id="at-tout" class="at-action">Tester toutes les cartes</button>
         </div>
         <p id="at-resume" class="at-resume" role="status"></p>
+        <div class="at-onglets" role="tablist">
+          <button type="button" role="tab" data-vue="cartes" class="on">Cartes</button>
+          <button type="button" role="tab" data-vue="dispo">Disposition</button></div>
       </header>
       <div class="at-corps">
         <nav class="at-liste" aria-label="Cartes"></nav>
@@ -213,24 +274,58 @@
       <div id="at-banc" class="at-banc" aria-hidden="true"></div>`;
     banc = racine.querySelector("#at-banc");
 
-    racine.querySelectorAll("[data-module]").forEach((b) => b.onclick = () => regle({ module: +b.dataset.module }));
-    for (const k of ["module", "espace", "rangee"])
+    for (const k of ["espace", "rangee"])
       racine.querySelector("#at-" + k).onchange = (e) => regle({ [k]: +e.target.value });
     racine.querySelector("#at-direct").onchange = (e) => { direct = e.target.checked; };
     racine.querySelector("#at-tout").onclick = toutTester;
+    racine.querySelectorAll("[data-vue]").forEach((b) => b.onclick = () => {
+      vue = b.dataset.vue;
+      racine.querySelectorAll("[data-vue]").forEach((x) => x.classList.toggle("on", x === b));
+      racine.querySelector(".at-corps").classList.toggle("dispo", vue === "dispo");
+      detail();
+    });
+  }
+
+  /* ---- Onglet « Disposition » (17/10/2026) ----
+     La page ENTIERE, rangee par le bento exactement comme la vraie (`bento()`
+     d app.js, `RANGEMENT`), a cinq largeurs d ecran, avec les donnees du
+     scenario choisi. Meme verification apres coup que la page : une carte qui
+     deborde ou reste vide voit sa forme ecartee, et la page se range de nouveau.
+     Les grandes largeurs sont reduites a l ecran (`scale`) APRES le rangement et
+     les mesures. ⚠️ Le telephone n a pas ici ses textes a 11 px : cette regle
+     depend de la largeur de l ECRAN (fond.css, section 41), pas de la carte. */
+  const ECRANS_DISPO = [["Téléphone", 343], ["Tablette", 736], ["Portable", 1136], ["Écran 1 920", 1877], ["Écran 2 560", 2495]];
+  let vue = "cartes";
+  function disposition(zone) {
+    zone.innerHTML = `<p class="at-note">La page entière, rangée comme sur la vraie page, à cinq largeurs d'écran, avec les données du scénario choisi. Le téléphone n'a pas ici ses textes à 11 px (règle liée à l'écran).</p>`
+      + ECRANS_DISPO.map(([n, W]) => `<h3 class="at-sous">${n} <small>${W} px de large</small></h3>
+        <div class="at-dispo"><div class="at-dispo-page bento" style="width:${W}px"></div></div>`).join("");
+    zone.querySelectorAll(".at-dispo").forEach((cadre) => {
+      const page = cadre.firstElementChild;
+      for (let passe = 0; passe < 4; passe++) {
+        BENTO = null;
+        page.innerHTML = bento(page, GROUPS.map((_, i) => i));
+        if (!ecarte(page)) break;
+      }
+      // ni lien ni fenetre : un clic n y doit rien ouvrir
+      page.querySelectorAll("a[href]").forEach((a) => a.removeAttribute("href"));
+      page.querySelectorAll("[data-lien], .clic").forEach((x) => { x.removeAttribute("data-lien"); x.classList.remove("clic"); });
+      const k = Math.min(1, cadre.clientWidth / page.offsetWidth);
+      page.style.transform = `scale(${k})`;
+      cadre.style.height = Math.ceil(page.offsetHeight * k) + "px";
+    });
   }
 
   function regle(r) {
     Object.assign(R, r);
-    for (const k of ["module", "espace", "rangee"]) racine.querySelector("#at-" + k).value = R[k];
+    for (const k of ["espace", "rangee"]) racine.querySelector("#at-" + k).value = R[k];
     resultats.clear(); // les bilans dependaient des anciens reglages
     liste(); detail();
   }
 
-  const PASTILLE = { ok: "tient à toutes ses tailles", tel: "à revoir sur téléphone", ko: "à corriger" };
+  const PASTILLE = { ok: "tient à toutes ses tailles", ko: "à corriger" };
 
   function liste() {
-    racine.querySelectorAll("[data-module]").forEach((b) => b.classList.toggle("on", +b.dataset.module === R.module));
     racine.querySelector(".at-liste").innerHTML = GROUPS.map((g) => `
       <div class="at-grp"><h2>${esc(g.n)}</h2>${g.s.map((s) => {
         const r = resultats.get(s.n);
@@ -245,13 +340,22 @@
 
   function resume() {
     const n = toutes().length, faits = [...resultats.values()];
-    const ko = faits.filter((r) => r.etat === "ko").length, tel = faits.filter((r) => r.etat === "tel").length;
+    const ko = faits.filter((r) => r.etat === "ko").length;
     racine.querySelector("#at-resume").textContent = faits.length
-      ? `${faits.length}/${n} cartes testées avec un module de ${R.module} px : ${ko} à corriger, ${tel} à revoir sur téléphone.`
+      ? `${faits.length}/${n} cartes testées à toutes leurs largeurs : ${ko} à corriger.`
       : `${n} cartes. Choisis-en une, ou teste-les toutes.`;
   }
 
+  /* ⚠️ PAS DE MESURE SUR UN ECRAN DE 600 PX OU MOINS (17/10/2026) : la page y
+     passe tous les petits textes a 11 px (fond.css, section 41), et les
+     mesures de l atelier, faites pour un ordinateur, s en trouvaient faussees.
+     Le telephone se juge sur la vraie page, dont la verification apres coup
+     (`ecarte`, app.js) voit ces textes. Meme requete que la regle du CSS. */
+  const petitEcran = () => matchMedia("(max-width: 600px)").matches;
+  const AVIS_PETIT = `<p class="at-avis ko">Écran de 600 px ou moins : la page y agrandit les petits textes à 11 px, et les mesures de l'atelier, faites pour un ordinateur, seraient fausses. Ouvre l'atelier sur un écran plus large ; le téléphone se vérifie sur la vraie page.</p>`;
+
   async function toutTester() {
+    if (petitEcran()) return detail();
     const b = racine.querySelector("#at-tout");
     b.disabled = true;
     const tout = toutes();
@@ -269,6 +373,8 @@
 
   function detail() {
     const zone = racine.querySelector(".at-detail");
+    if (petitEcran()) { zone.innerHTML = AVIS_PETIT; return; }
+    if (vue === "dispo") return disposition(zone);
     const x = choisie && trouve(choisie);
     if (!x) {
       zone.innerHTML = tableauBilan();
@@ -290,42 +396,33 @@
         <dl>
           <div><dt>Catégorie</dt><dd>${s.taille}</dd></div>
           <div><dt>Niveau</dt><dd>${s.niveau}</dd></div>
-          <div><dt>Largeur min</dt><dd>${t.min} px <small>= ${modulesPour(t.min)} modules ici</small></dd></div>
-          <div><dt>Idéale</dt><dd>${t.l}×${t.h[1]}</dd></div>
-          <div><dt>Largeur max</dt><dd>${t.max} modules</dd></div>
-          <div><dt>Hauteur</dt><dd>${t.h[0]} à ${t.h[2]} rangées</dd></div>
+          <div><dt>Idéale</dt><dd>${idealPx(t)} × ${hauteurPx(t.h[1])} px <small>${t.l} modules × ${t.h[1]} demi-rangées</small></dd></div>
+          <div><dt>Formes</dt><dd>${hauteurs(t).map((h) => `${h} demi-rangées : ${t.formes[h].min} à ${maxPx(t.formes[h])} px`).join(" · ")}</dd></div>
           <div><dt>Hauteur du contenu</dt><dd>${r.besoin ? `${r.besoin.px} px à ${largeurPx(r.wIdeal)} px de large <small>= ${r.besoin.rangees} rangées, ${r.besoin.perte} px perdus</small>` : "ne tient pas"}</dd></div>
           <div><dt>Minimum mesuré</dt><dd>${hauteurs(t).map((h) => `${h} rg : ${fmt(r.minis[h])}`).join(" · ")}</dd></div>
         </dl>
         ${avis}
-        ${s.ajuste ? `<p class="at-note">Corrige sa catégorie : ${esc(JSON.stringify(s.ajuste))}</p>` : ""}
+        ${t.sansReleve ? `<p class="at-note">Sans relevé dans ces données : petite tuile (${esc(JSON.stringify(SANS_RELEVE))}) au lieu de sa taille pleine.</p>`
+          : s.ajuste ? `<p class="at-note">Corrige sa catégorie : ${esc(JSON.stringify(s.ajuste))}</p>` : ""}
       </div>
-      <h3 class="at-sous">Tailles permises <small>module de ${R.module} px, espace ${R.espace} px, rangée ${R.rangee} px</small></h3>
+      <h3 class="at-sous">Tailles permises <small>chaque hauteur, de sa largeur min à sa largeur max (au plus grand module, ${MODULE_MAX} px)</small></h3>
       ${hauteurs(t).map((h) => `
-        <div class="at-rang">${largeurs(t).map((w) => {
-          const d = r.tailles.find((y) => y.w === w && y.h === h).d;
-          const ideal = w === Math.max(t.l, modulesPour(t.min)) && h === t.h[1];
-          return `<figure class="at-cas${d.length ? " ko" : ""}${ideal ? " ideal" : ""}">
-            <figcaption>${w}×${h}<span>${largeurPx(w)} × ${hauteurPx(h)} px${ideal ? " · idéale" : ""}</span></figcaption>
-            <div class="at-cadre" data-w="${w}" data-h="${h}"></div>
+        <div class="at-rang">${largeursPx(t, h).map((px) => {
+          const { d, trop } = r.tailles.find((y) => y.px === px && y.h === h);
+          const ideal = px === idealPx(t) && h === t.h[1];
+          return `<figure class="at-cas${d.length ? " ko" : ""}${ideal ? " ideal" : ""}${trop ? " trop" : ""}">
+            <figcaption>${px} px<span>${hauteurPx(h)} px de haut, ${h} demi-rangées${ideal ? " · idéale" : ""}${trop ? " · trop haute pour ces données" : ""}</span></figcaption>
+            <div class="at-cadre" data-px="${px}" data-h="${h}"></div>
             ${d.length ? `<ul class="at-def">${d.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : ""}
           </figure>`;
         }).join("")}</div>`).join("")}
-      <h3 class="at-sous">Sur téléphone <small>toute la largeur, ${TELEPHONE} px</small></h3>
-      <div class="at-rang">${r.tel.map(({ h, d }) => `
-        <figure class="at-cas${d.length ? " ko" : ""}">
-          <figcaption>${h} demi-rangée${h > 1 ? "s" : ""}<span>${TELEPHONE} × ${hauteurPx(h)} px</span></figcaption>
-          <div class="at-cadre" data-tel="1" data-h="${h}"></div>
-          ${d.length ? `<ul class="at-def">${d.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : ""}
-        </figure>`).join("")}</div>
       <h3 class="at-sous">Cadre libre <small>tire le coin en bas à droite</small></h3>
       <p class="at-lecture" id="at-lecture"></p>
       <div class="at-libre"><div class="at-cadre" id="at-libre"></div></div>`;
 
     zone.querySelectorAll(".at-cadre[data-h]").forEach((c) => {
-      const h = +c.dataset.h;
-      if (c.dataset.tel) poseCarte(c, s, 4, TELEPHONE, hauteurPx(h));
-      else { const w = +c.dataset.w; poseCarte(c, s, w, largeurPx(w), hauteurPx(h)); }
+      const px = +c.dataset.px;
+      poseCarte(c, s, modulesPour(px), px, hauteurPx(+c.dataset.h));
     });
     libre(s, t);
   }
@@ -338,7 +435,7 @@
     const maj = () => {
       const px = Math.round(c.getBoundingClientRect().width), py = Math.round(c.getBoundingClientRect().height);
       const mw = (px + R.espace) / (R.module + R.espace), mh = (py + R.espace) / (R.rangee + R.espace);
-      habille(c, Math.floor(mw), py);
+      habille(c, Math.floor(mw), py, t.h[1]);
       const d = defauts(c);
       lecture.className = "at-lecture" + (d.length ? " ko" : "");
       lecture.textContent = `${px} × ${py} px, soit ${mw.toFixed(1)} modules × ${mh.toFixed(1)} rangées. `
@@ -354,13 +451,12 @@
     const perte = faits.reduce((n, { s }) => n + (resultats.get(s.n).besoin?.perte ?? 0), 0);
     return `<p class="at-note">Rangées de ${R.rangee} px et espace de ${R.espace} px : ${perte} px perdus au total en bas des cartes, à leur largeur idéale.</p>
       <table class="at-table"><thead><tr><th>Carte</th><th>Catégorie</th><th>Contenu</th><th>Rangées</th><th>Perdu</th><th>Min déclaré</th>
-      <th>Min mesuré</th><th>Tailles en défaut</th><th>Téléphone</th></tr></thead><tbody>${faits.map(({ s }) => {
+      <th>Min mesuré</th><th>Tailles en défaut</th></tr></thead><tbody>${faits.map(({ s }) => {
         const r = resultats.get(s.n), mid = r.minis[r.t.h[1]], b = r.besoin;
         return `<tr class="${r.etat}"><td><button type="button" data-carte="${esc(s.n)}">${esc(s.n)}</button></td>
           <td>${s.taille}</td><td>${b ? b.px + " px" : "—"}</td><td>${b ? b.rangees + (b.rangees !== r.t.h[1] ? ` <small>(déclaré ${r.t.h[1]})</small>` : "") : "—"}</td>
           <td>${b ? b.perte + " px" : "—"}</td><td>${r.t.min} px</td><td>${fmt(mid)}</td>
-          <td>${r.enDefaut.length ? r.enDefaut.map((y) => `${y.w}×${y.h}`).join(", ") : "aucune"}</td>
-          <td>${r.tel.some((y) => y.d.length) ? "à revoir" : "tient"}</td></tr>`;
+          <td>${r.enDefaut.length ? r.enDefaut.map((y) => `${y.px} px × ${y.h}`).join(", ") : "aucune"}</td></tr>`;
       }).join("")}</tbody></table>`;
   }
 
@@ -482,7 +578,7 @@
     if (!x) return { erreur: "carte inconnue : " + nom };
     const { modules, demiRangees, px, py, ...reste } = opts;
     return avec(reste, () => {
-      const t = tailleDe(x.s);
+      const t = tailleVue(x.s);
       const w = modules ?? Math.max(t.l, modulesPour(t.min));
       const lx = px ?? largeurPx(w), ly = py ?? hauteurPx(demiRangees ?? t.h[1]);
       const defs = mesure(x.s, modulesPour(lx), lx, ly);
@@ -510,7 +606,7 @@
     const x = trouve(nom);
     if (!x) return { erreur: "carte inconnue : " + nom };
     return avec(opts, () => {
-      const s = x.s, t = tailleDe(s);
+      const s = x.s, t = tailleVue(s);
       const fiche = (w, px, py) => {
         const defs = mesure(s, w, px, py);
         return { defauts: defs, remplissage: remplissage(banc), ...lisibilite(banc) };
@@ -520,7 +616,7 @@
         contenu.push({ modules: w, px: largeurPx(w), hauteurContenu: hauteurContenu(s, largeurPx(w)) });
       const declarees = [];
       for (const h of hauteurs(t))
-        for (const w of largeurs(t))
+        for (const w of largeurs(t, h))
           declarees.push({ modules: w, demiRangees: h, px: largeurPx(w), py: hauteurPx(h), ...fiche(w, largeurPx(w), hauteurPx(h)) });
       const w0 = largeurs(t)[0];
       const auDela = [

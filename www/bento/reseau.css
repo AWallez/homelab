@@ -2,3 +2,58 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Securite ----
+   Six lignes d ordinaire, sept ou huit quand des certificats s ajoutent (un
+   expire, d autres proches, un illisible). A 6 demi-rangees au-dela de six
+   lignes, a 7 au-dela de sept, on resserre les lignes plutot que de couper
+   la derniere. */
+.card[data-carte="securite"][data-h="6"] .chk:has(li:nth-child(7)),
+.card[data-carte="securite"][data-h="7"] .chk:has(li:nth-child(8)){gap:4px}
+.card[data-carte="securite"][data-h="6"] .chk:has(li:nth-child(7)) li,
+.card[data-carte="securite"][data-h="7"] .chk:has(li:nth-child(8)) li{padding-block:4px}
+/* Huit lignes a 6 (scenario tout-ko) : encore un cran, pour tenir des 350 px. */
+.card[data-carte="securite"][data-h="6"] .chk:has(li:nth-child(8)){gap:3px}
+.card[data-carte="securite"][data-h="6"] .chk:has(li:nth-child(8)) li{padding-block:3px;line-height:1.2}
+
+/* ---- Acces ----
+   Une machine inconnue garde son adresse : une IPv6 entiere ne tenait pas
+   dans sa tuile et sortait de la carte. Elle passe a la ligne. */
+.card[data-carte="acces"] .ses span{max-width:100%;overflow-wrap:anywhere}
+/* Des connexions depuis Internet ajoutent leur bloc EN TETE (c est la raison
+   de l alerte) : 86 px par adresse. A 6 et 7 demi-rangees, la carte cede
+   d abord les dernieres connexions, qui repetent alors souvent ces memes
+   adresses (le clic ouvre les 24 h entieres), puis resserre les adresses,
+   puis les sessions ouvertes (3 adresses a 6, 4 a 7). */
+.card[data-carte="acces"][data-h="6"] .vizb:has(.dint) :is(.sh:has(+.jr),.jr),
+.card[data-carte="acces"][data-h="7"] .vizb:has(.dint>div:nth-child(2)) :is(.sh:has(+.jr),.jr),
+.card[data-carte="acces"][data-h="6"] .vizb:has(.dint>div:nth-child(3)) :is(.sh:has(+.ses),.ses),
+.card[data-carte="acces"][data-h="6"] .vizb:has(.dint):has(.ses>span:nth-child(5)) :is(.sh:has(+.ses),.ses),
+.card[data-carte="acces"][data-h="7"] .vizb:has(.dint):has(.ses>span:nth-child(7)) :is(.sh:has(+.ses),.ses),
+.card[data-carte="acces"][data-h="7"] .vizb:has(.dint>.note) :is(.sh:has(+.ses),.ses){display:none}
+.card[data-carte="acces"][data-h="7"] .vizb:has(.dint) .jr>div:nth-child(n+3){display:none}
+.card[data-carte="acces"][data-h="6"] .dint>div:not(.note),
+.card[data-carte="acces"][data-h="7"] .dint:has(>div:nth-child(3))>div:not(.note){padding-block:3px}
+.card[data-carte="acces"][data-h="6"] .dint{margin-bottom:8px}
+.card[data-carte="acces"]:is([data-h="6"],[data-h="7"]) .dint>.note{margin-top:4px;padding-block:4px}
+/* Cinq sessions ouvertes et plus passent sur deux rangees de tuiles, sept sur
+   trois : les dernieres connexions cedent la place, ligne par ligne. */
+.card[data-carte="acces"][data-h="6"] .vizb:has(.ses>span:nth-child(5)) .jr>div:nth-child(n+4),
+.card[data-carte="acces"][data-h="7"] .vizb:has(.ses>span:nth-child(7)) .jr>div:nth-child(n+3),
+.card[data-carte="acces"][data-h="6"] .vizb:has(.ses>span:nth-child(7)) :is(.sh:has(+.jr),.jr){display:none}
+
+/* ---- Reseau local et Internet : le graphe ----
+   Le plafond de largeur du graphe (16/10) a disparu le 17/10 : le graphe prend
+   la hauteur qui reste (bento/base.css), il ne grandit plus avec la largeur.
+   A 6 demi-rangees, les marges autour de la legende, du graphe et des
+   pastilles se resserrent : 27 px rendus au graphe. */
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .vizb{margin-top:10px}
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .vizb>.hero+.leg{margin-top:8px}
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .grb{margin-top:6px}
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .vizb>.past{padding-top:6px}
+/* Et le texte du nombre vedette reste A COTE du nombre, quitte a passer sur
+   trois lignes : passe dessous, il coutait 35 px (« Hors ligne » pendant une
+   coupure, sous 390 px de large). */
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .hero{flex-wrap:nowrap}
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .hero b{flex:none;white-space:nowrap}
+.card:is([data-carte="reseau-local"],[data-carte="internet"])[data-h="6"] .hero span{min-width:0}

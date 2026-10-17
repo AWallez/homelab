@@ -32,8 +32,11 @@ const HOTE = "nas";
 const ENVOIE = process.argv.includes("--envoie");
 
 /* La liste blanche. Un fichier absent d ici ne sera jamais deploye. */
-const FRONT = ["index.html", "cartes.js", "app.js", "style.css", "fond.css", "manifest.json"];
-const DOSSIERS = ["icons"];
+/* 17/10/2026 : le rangement en bento (`rangement.js`, aussi charge en
+   travailleur), ses feuilles par groupe (`bento/`) et l atelier des cartes
+   (`atelier.js`, que la page charge toujours, et `atelier.css`). */
+const FRONT = ["index.html", "cartes.js", "app.js", "rangement.js", "style.css", "fond.css", "atelier.js", "atelier.css", "manifest.json"];
+const DOSSIERS = ["icons", "bento"];
 
 /* Noms interdits, verifies malgre la liste blanche : deux garde-fous valent
    mieux qu un quand l erreur consiste a ecraser des mesures irremplacables. */
@@ -141,7 +144,7 @@ if (!ENVOIE) {
 
 /* ---- depot dans /tmp ---------------------------------------------------- */
 console.log("\n  depot dans " + HOTE + ":" + DEPOT);
-ssh("rm -rf " + DEPOT + " && mkdir -p " + DEPOT + "/icons");
+ssh("rm -rf " + DEPOT + " && mkdir -p " + DOSSIERS.map((d) => DEPOT + "/" + d).join(" "));
 for (const f of aEnvoyer) {
   execFileSync(SCP, ["-O", "-q", path.join(RACINE, f), HOTE + ":" + DEPOT + "/" + f],
     { stdio: ["ignore", "pipe", "pipe"] });

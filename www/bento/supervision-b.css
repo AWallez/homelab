@@ -2,3 +2,55 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Stockage ---- */
+/* A 8 demi-rangees, un volume a deux disques ou plus (miroir) ne tient qu en
+   laissant tomber la ligne des emplacements libres, simple information. */
+.card[data-carte="stockage"][data-h="8"]:has(.dqs .dq + .dq) .libre { display: none }
+/* Tres etroite (telephone), le modele passe sous le nom au lieu d etre coupe. */
+@container carte (max-width: 400px) {
+  .card[data-carte="stockage"] .dq .dn { white-space: normal }
+  .card[data-carte="stockage"] .dq .dn small { display: block; margin-left: 0 }
+}
+
+/* ---- Uptime Kuma ---- */
+/* A 4 demi-rangees, une panne large replie les groupes sur deux lignes : ecart
+   vertical resserre (sans effet sur une ligne seule) et retrait des pastilles
+   reduit (poussees en bas de toute facon quand il reste de la place). */
+.card[data-carte="uptime-kuma"][data-h="4"] .grps { row-gap: 4px }
+.card[data-carte="uptime-kuma"][data-h="4"] .vizb > .past { padding-top: 5px }
+/* Groupes sur deux lignes : les pastilles mordaient encore de 10 px sur la
+   marge du bas (controle du 16/10) ; ecarts du ruban et de l echelle resserres. */
+.card[data-carte="uptime-kuma"][data-h="4"] .vizb > .batt { margin-top: 4px }
+.card[data-carte="uptime-kuma"][data-h="4"] .vizb > .ech { margin-top: 4px }
+
+/* ---- Journal ---- */
+/* L heure prend la largeur de la plus longue affichee (« 08:42 » le jour meme,
+   « hier 08:42 » ensuite) au lieu de 76 px fixes : plus de vide avant la
+   pastille (revue, 17/10). Une grille commune (subgrid) garde les
+   pastilles alignees d une ligne a l autre. */
+.card[data-carte="journal"] .jx { display: grid; grid-template-columns: max-content 7px 92px minmax(0, 1fr); column-gap: 9px }
+.card[data-carte="journal"] .jx > div { grid-column: 1 / -1; grid-template-columns: subgrid }
+/* Etroite, la carte laisse tomber la categorie comme sur telephone : la
+   pastille dit le niveau, le texte garde la place. */
+@container carte (max-width: 650px) {
+  .card[data-carte="journal"] .jx { grid-template-columns: max-content 7px minmax(0, 1fr) }
+  .card[data-carte="journal"] .jx .s { display: none }
+}
+@media (max-width: 600px) {
+  .card[data-carte="journal"] .jx { grid-template-columns: max-content 7px minmax(0, 1fr) }
+}
+/* A 4 demi-rangees, les trois derniers evenements ; le compte reste dessous. */
+.card[data-carte="journal"][data-h="4"] .jx > div:nth-child(n+4) { display: none }
+/* A 4 et 5 demi-rangees, le compte sous la liste mordait de 7 a 10 px sur la
+   marge du bas (controle du 16/10) : marges de la note resserrees. */
+.card[data-carte="journal"]:is([data-h="4"], [data-h="5"]) > .note { margin-top: 6px; padding-block: 6px }
+
+/* ---- ntfy ---- */
+/* Sur une rangee, la pastille d alerte tient sous l en-tete : marges
+   resserrees. Etroite, seule la premiere (l etat vu d Internet) reste. */
+.card[data-carte="ntfy"].mini:not(.c4) .vizb { margin-top: 8px }
+.card[data-carte="ntfy"].mini:not(.c4) .vizb > .past { margin-top: 0; padding-top: 0 }
+@container carte (max-width: 480px) {
+  .card[data-carte="ntfy"] .past span + span { display: none }
+}

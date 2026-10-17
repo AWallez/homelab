@@ -1196,7 +1196,9 @@ dialog.dlg::after {
    contre la boite de PADDING de son ancetre positionne : un padding ne
    deplacerait aucun repere, il elargirait seulement la boite. Une marge retrecit
    vraiment le conteneur, et les pourcentages suivent. */
-.gech { margin: 0 .667% 0 8.667% }
+/* 17/10/2026 : la gouttiere des graduations a une largeur FIXE (34 px, `--gax`
+   de `.grb`) ; le trace occupe le reste, moins sa marge droite (4 sur 272). */
+.gech { margin: 0 calc((100% - 34px) * .0147) 0 34px }
 
 /* ---- 29. Les pastilles, dans la barre collante (09/10/2026) ------------
    Une pastille par carte allumee, avec sa RAISON (`pastilles()` dans app.js),

@@ -2,3 +2,63 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Prowlarr ---- */
+/* Etroite, cinq indexeurs passent sur trois lignes de pastilles : retrait
+   au-dessus d elles reduit pour tenir dans 4 demi-rangees. La largeur testee
+   est celle du CONTENU (carte moins 32 px) : 250 = carte de 282 px. */
+@container carte (max-width: 250px) {
+  .card[data-carte="prowlarr"] .vizb > .past { padding-top: 8px }
+}
+
+/* ---- Radarr et Sonarr ---- */
+/* Etroites (carte de 262 px ou moins), les deux pastilles ne tenaient plus sur
+   une ligne a 2 px pres : retrait lateral 9 -> 7 px, comme `.past` a trois. */
+@container carte (max-width: 230px) {
+  .card[data-carte="radarr"] .past span,
+  .card[data-carte="sonarr"] .past span { padding-inline: 7px }
+}
+
+/* ---- qBittorrent ----
+   17/10/2026 (revue) : le graphe en PLEINE LARGEUR, qui prend la
+   hauteur restante, et les ratios EN LIGNE dessous (comme les groupes de Kuma),
+   a toutes les largeurs. Les deux colonnes cote a cote laissaient un grand vide
+   sous la ligne de connexion, et imposaient 570 px de large. */
+.card[data-carte="qbittorrent"] .vizb > .etatv { flex: none }
+.card[data-carte="qbittorrent"] .duo.tro { flex: 1 1 auto; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 12px }
+.card[data-carte="qbittorrent"] .duo.tro > * { flex: none; min-width: 0 }
+.card[data-carte="qbittorrent"] .duo.tro > :first-child { flex: 1 1 auto }
+.card[data-carte="qbittorrent"] .duo.tro .trks {
+  flex: none; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px 16px }
+.card[data-carte="qbittorrent"] .duo.tro .trk .n,
+.card[data-carte="qbittorrent"] .duo.tro .trk b { flex: 0 0 auto }
+/* Etroite : retrait des pastilles reduit. */
+@container carte (max-width: 340px) {
+  .card[data-carte="qbittorrent"] .vizb > .past { padding-top: 8px }
+}
+
+/* ---- Cross-seed ----
+   Etroite (carte de 372 px ou moins), le libelle du nombre passe A COTE du
+   nombre, comme la carte Mises a jour : les six pastilles prennent trois lignes
+   et la carte tient sur quatre demi-rangees. */
+@container carte (max-width: 340px) {
+  .card[data-carte="cross-seed"] .hero { flex-direction: row; gap: 10px }
+  .card[data-carte="cross-seed"] .hero span { text-align: left }
+}
+/* A 4 demi-rangees, retrait des pastilles 14 -> 8 px : sur trois lignes, elles
+   mordaient de 7 px sur la marge du bas (controle du 16/10). */
+.card[data-carte="cross-seed"][data-h="4"] .vizb > .past { padding-top: 8px }
+
+/* ---- VPN ----
+   Sur 4 demi-rangees, le contenu (216 px) depassait de 4 px : retrait
+   au-dessus des pastilles 14 -> 8 px. */
+.card[data-carte="vpn"][data-h="4"] .vizb > .past { padding-top: 5px }
+/* Les pastilles finissaient encore a 2 px du bord (marge du bas, non vue par
+   l atelier) : ecarts autour du ruban et de l echelle resserres, 12 px rendus. */
+.card[data-carte="vpn"][data-h="4"] .vizb > .rleg { margin-top: 7px }
+.card[data-carte="vpn"][data-h="4"] .vizb > .ech { margin-top: 4px }
+/* Etroite (carte de 492 px ou moins), la pastille du fournisseur, la derniere,
+   que l en-tete nomme deja, s efface : les autres tiennent sur une ligne. */
+@container carte (max-width: 460px) {
+  .card[data-carte="vpn"] .past span:nth-child(n+2):last-child { display: none }
+}

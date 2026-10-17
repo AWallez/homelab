@@ -2,3 +2,32 @@
    Chaque regle cible une carte par `.card[data-carte="…"]`, jamais une
    classe partagee seule. La largeur de la carte se teste avec
    `@container carte (…)`, sa hauteur avec `[data-h]` (demi-rangees). */
+
+/* ---- Jellyfin ---- */
+/* Plusieurs lectures (une ligne chacune) a 4 demi-rangees : marges resserrees,
+   les compteurs restent sous les lectures au lieu de deborder. */
+.card[data-carte="jellyfin"][data-h="4"] .vizb:has(.calme br){margin-top:10px}
+.card[data-carte="jellyfin"][data-h="4"] .vizb:has(.calme br)>.calme{padding-block:7px}
+.card[data-carte="jellyfin"][data-h="4"] .vizb:has(.calme br)>.past{padding-top:8px}
+
+/* Les trois compteurs : quand ils ne tiennent plus sur une ligne, le troisieme
+   se centre sous les deux autres au lieu de laisser un trou a sa droite
+   (revue, 17/10). Sur une ligne, rien ne change (un tiers chacun). */
+.card[data-carte="jellyfin"] .stats{display:flex;flex-wrap:wrap;justify-content:center}
+.card[data-carte="jellyfin"] .stats>.st{flex:1 1 68px;max-width:calc(50% - 4px)}
+
+/* ---- Seerr ---- */
+/* A 3 demi-rangees, le nombre en attente passe a gauche de son libelle (une
+   ligne de moins) et les pastilles remontent : tient sans rien masquer. */
+/* Marges a 6 et 4 px : a 261 px de large, l adresse passe sur deux lignes et
+   les pastilles mordaient de 12 px sur la marge du bas (controle du 16/10). */
+.card[data-carte="seerr"][data-h="3"] .vizb{margin-top:6px}
+.card[data-carte="seerr"][data-h="3"] .vizb>.hero{flex-direction:row;gap:4px 11px;text-align:left}
+.card[data-carte="seerr"][data-h="3"] .vizb>.past{padding-top:4px}
+
+/* ---- FanKarr ---- */
+/* Tuile d une rangee : les pastilles (ou la note) tiennent sous l en-tete,
+   marges resserrees comme ntfy. */
+.card[data-carte="fankarr"].mini:not(.c4) .vizb{margin-top:8px}
+.card[data-carte="fankarr"].mini:not(.c4) .vizb>.past{margin-top:0;padding-top:0}
+.card[data-carte="fankarr"].mini:not(.c4) .vizb>.note{margin-top:0;padding-block:4px}
