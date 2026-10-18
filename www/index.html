@@ -51,7 +51,11 @@
   <div id="nav" class="nav">
     <div id="filters" class="filters"><div id="soucis" class="soucis" aria-live="polite"></div></div>
   </div>
-  <div id="groups"></div>
+  <!-- `bento` DES LE DEPART (18/10/2026) : c est cette classe qui elargit
+       `main` (bento/base.css). Posee au premier dessin seulement, le premier
+       rangement se calculait a 75rem, sans les coins, puis la page
+       s elargissait et se rangeait une seconde fois, avec. -->
+  <div id="groups" class="bento"></div>
 </main>
 <!-- `tabindex="-1"` : la fenetre peut recevoir le focus d ouverture elle-meme,
      voir « focus d ouverture » dans app.js. -->

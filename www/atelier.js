@@ -245,7 +245,7 @@
   /* ---- Interface ---- */
   const racine = document.getElementById("groups");
   document.body.classList.add("atelier");
-  racine.classList.remove("compact");
+  racine.classList.remove("compact", "bento");
   const lien = document.createElement("link");
   lien.rel = "stylesheet"; lien.href = "atelier.css";
   document.head.append(lien);

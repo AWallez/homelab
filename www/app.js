@@ -3408,6 +3408,10 @@ async function refresh() {
     fondre(document.getElementById("soucis"), pastilles(DATA));
     majAlertes();
     placeEtSerre();
+    /* Les raccourcis d abord (18/10/2026) : leur hauteur entre dans celle de
+       l en-tete, qui decide de celle des coins. Arrives apres le premier
+       dessin, ils faisaient ranger la page une seconde fois. */
+    await RACCOURCIS;
     dessineGroupes();
     sante();
     suisAncre();
@@ -3421,7 +3425,7 @@ async function refresh() {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) { refresh(); checkVersion(); }
 });
-load(); refresh();
+const RACCOURCIS = load(); refresh();
 
 // Champ de recherche vide et actif a CHAQUE affichage.
 // `pageshow` est le seul evenement declenche aussi au retour arriere, quand le

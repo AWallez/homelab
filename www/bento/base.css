@@ -56,6 +56,12 @@ main:where(:has(> #groups:is(.bento,.compact))) > :where(:not(#groups)){max-widt
    ⚠️ Les groupes recouvrent alors l en-tete : seules leurs sections recoivent
    les clics, l en-tete reste cliquable. */
 main.coins > :is(#bar,#fige,#nav){max-width:var(--tete-l,1100px)}
+/* Le rembourrage du haut reduit a 6 px (18/10/2026, demande) : le titre des
+   coins en tient lieu, et 6 px l ecartent juste du bord (a 0, ses icones
+   touchaient le haut de la fenetre). La barre, sous ce titre, reste ainsi
+   pres de la hauteur qu elle a sans les coins (38 px du haut au lieu de 28) ;
+   avec les 28 px, elle descendait a 60. */
+main.coins{padding-top:6px}
 main.coins .bar{margin:32px auto calc(18px + var(--tete-ecart,0px))}
 main.coins > .racc{margin-bottom:calc(16px + var(--tete-ecart,0px))}
 main.coins > .search{margin-bottom:calc(18px + var(--tete-ecart,0px))}
