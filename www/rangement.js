@@ -33,7 +33,7 @@ const RANGEMENT = (() => {
      resultats. Elle entre dans les cles des rangements gardes (navigateur,
      `homelab.bento`) et prepares : sans elle, un rangement calcule par l ancien
      code revenait tel quel (17/10/2026 : des coins absents, gardes d avant). */
-  const VERSION = "2026-10-17f";
+  const VERSION = "2026-10-18b";
   /* L ECART ENTRE DEUX GROUPES (17/10/2026, demande) : le MEME dans
      les deux sens, pour distinguer les groupes d un coup d oeil (12 px, celui
      des cartes, les fondait l un dans l autre). Entre deux rangees, le titre du
@@ -74,8 +74,15 @@ const RANGEMENT = (() => {
   /* `elastique` : DERNIER RECOURS avant un trou. Si aucun rangement plein
      n existe, une carte peut s elargir AU-DELA de sa largeur maximale, a un cout
      tel que seules les secondaires (puis les normales) s y resolvent : une carte
-     un peu vide vaut mieux qu un trou (revue, 17/10). */
-  const AU_DELA = 15;
+     un peu vide vaut mieux qu un trou (revue, 17/10).
+     ⚠️ COUT AU CARRE des modules en trop (18/10/2026) : au cout lineaire, une
+     seule carte prenait tout l excedent d une rangee, aussi cher que de le
+     partager. Bureau seul sur 24 modules (demonstration, 2 560 px) :
+     WireGuard sur 16 modules, 1 553 px pour trois appareils. Au carre,
+     l excedent se repartit entre les cartes. Et 30 par module au lieu de 15 :
+     a 15, Bureau seul et etire (164) battait encore Bureau a cote de Reseau,
+     plein (168). */
+  const AU_DELA = 30;
   /* `c.minH` (Map largeur en px → demi-rangees) : la page a vu la carte
      DEBORDER a cette largeur, et de combien. A cette largeur ou moins, plus
      basse n y tient pas. Le cas du telephone (textes a 11 px) et d un contenu
@@ -90,17 +97,33 @@ const RANGEMENT = (() => {
       if (c.minH) for (const [x, v] of c.minH) if (x >= l - 1) n = Math.max(n, v);
       return n;
     };
-    const res = [];
-    for (const [hs, f] of Object.entries(t.formes)) {
-      const h = +hs;
-      for (let w = 1; w <= C; w++) {
-        const l = largeur(w, m);
-        if (l < f.min - 0.5 || h < bas(w) || (c.exclues && c.exclues.has(w + "x" + h))) continue;
-        const trop = l > f.max + 0.5 ? Math.ceil((l - f.max) / (m + ESPACE)) : 0;
-        if (trop && !elastique) continue;
-        res.push({ w, h, cout: k * ((w > wi ? (w - wi) * COUT.elargie : (wi - w) * COUT.retrecie)
-                                   + (h > hi ? (h - hi) * COUT.haute : (hi - h) * COUT.basse) + trop * AU_DELA) });
+    const liste = (au) => {
+      const l0 = [];
+      for (const [hs, f] of Object.entries(t.formes)) {
+        const h = +hs;
+        for (let w = 1; w <= C; w++) {
+          const l = largeur(w, m);
+          if (l < f.min - 0.5 || h < bas(w) || (c.exclues && c.exclues.has(w + "x" + h))) continue;
+          const trop = l > f.max + 0.5 ? Math.ceil((l - f.max) / (m + ESPACE)) : 0;
+          if (trop && !au) continue;
+          l0.push({ w, h, trop, cout: k * ((w > wi ? (w - wi) * COUT.elargie : (wi - w) * COUT.retrecie)
+                                    + (h > hi ? (h - hi) * COUT.haute : (hi - h) * COUT.basse) + trop * trop * AU_DELA) });
+        }
       }
+      return l0;
+    };
+    let res = liste(elastique);
+    /* ⚠️ AUCUNE LARGEUR ENTIERE ENTRE LES BORNES (18/10/2026) : a 1 280 px,
+       FanKarr veut 240 a 280 px sur 3 demi-rangees, 300 a 363 sur 2 ; 2
+       modules font 190 px, 3 en font 291. Elle tombait dans le secours
+       ci-dessous, fait pour l ecran trop etroit, et prenait toute la largeur
+       (1 201 px). Les formes au-dela du maximum, au cout du recours elastique,
+       et seulement LES PLUS PROCHES (3 modules, 11 px de trop) : toutes, la
+       recherche des rangements pleins les essayait une a une et le calcul de
+       la page doublait. */
+    if (!res.length) {
+      const au = liste(true), min = Math.min(...au.map((o) => o.trop));
+      res = au.filter((o) => o.trop === min);
     }
     if (!res.length) {
       // Rien ne tient dans `C` colonnes (ecran trop etroit, contenu plus long
@@ -190,10 +213,16 @@ const RANGEMENT = (() => {
      un (quelques pixels d ecart par carte ; une carte qui deborderait est
      rattrapee par la verification de la page). */
   const MEMOIRE = new Map();
+  const cleDe = (cartes, C, m, genre) => C + "|" + Math.round(m / 4) + "|" + genre + "|" + cartes.map((c) =>
+    [c.id, c.alerte ? 1 : 0, c.niveau, c.t.h[1], JSON.stringify(c.t.formes), [...(c.exclues || [])].join(),
+     [...(c.minH || [])].join()].join(":")).join("/");
+  const garder = (cle, v) => {
+    if (MEMOIRE.size > 400) MEMOIRE.delete(MEMOIRE.keys().next().value);
+    MEMOIRE.set(cle, v);
+    return v;
+  };
   function parHauteur(cartes, C, m, elastique) {
-    const cle = C + "|" + Math.round(m / 4) + "|" + (elastique ? "e|" : "") + cartes.map((c) =>
-      [c.id, c.alerte ? 1 : 0, c.niveau, c.t.h[1], JSON.stringify(c.t.formes), [...(c.exclues || [])].join(),
-       [...(c.minH || [])].join()].join(":")).join("/");
+    const cle = cleDe(cartes, C, m, elastique ? "e" : "");
     if (MEMOIRE.has(cle)) return MEMOIRE.get(cle);
     const opts = cartes.map((c) => options(c, C, m, elastique));
     let aMin = 0, aIdeal = 0;
@@ -204,17 +233,62 @@ const RANGEMENT = (() => {
       const r = chercher(cartes, opts, C, H);
       if (r) res.set(H, { cout: r.cout + H * PAR_RANGEE * C / 12, places: r.places, H, C });
     }
-    const v = { res, opts };
-    if (MEMOIRE.size > 400) MEMOIRE.delete(MEMOIRE.keys().next().value);
-    MEMOIRE.set(cle, v);
-    return v;
+    return garder(cle, { res, opts });
+  }
+
+  /* ETIRER UN RANGEMENT PLEIN (18/10/2026). Le recours elastique essaie les
+     formes des moins cheres (les etroites) aux plus cheres : pour un petit
+     groupe seul sur une rangee large, il epuisait son budget dans des formes
+     etroites qui ne rempliront jamais la rangee, et ne trouvait qu un rangement
+     ou UNE carte prenait tout l excedent (Bureau dans la demonstration a
+     2 560 px : WireGuard sur 15 modules pour trois appareils). Ici : le
+     rangement PLEIN le plus large qui existe en moins de colonnes, etire d une
+     colonne a la fois. Doubler une colonne elargit d un module chaque carte qui
+     la couvre et decale celles de droite : le rangement reste plein. On double
+     chaque fois la colonne qui coute le moins (formes ecartees comprises :
+     elles coutent l infini), et l excedent se repartit entre les cartes. */
+  function etirer(cartes, C, m) {
+    const couts = cartes.map((c) => new Map(options(c, C, m, true).map((o) => [o.w + "x" + o.h, o.cout])));
+    const rang = new Map(cartes.map((c, k) => [c.id, k]));
+    const cout = (p, w) => couts[rang.get(p.id)].get(w + "x" + p.h) ?? Infinity;
+    for (let Cp = C - 1; Cp >= Math.max(1, C - 12); Cp--) {
+      const res = new Map();
+      for (const r of parHauteur(cartes, Cp, m).res.values()) {
+        const places = r.places.map((p) => ({ ...p }));
+        let ok = true;
+        for (let n = Cp; n < C && ok; n++) {
+          let x0 = -1, d = Infinity;
+          for (let x = 0; x < n; x++) {
+            let s = 0;
+            for (const p of places) if (p.x <= x && x < p.x + p.w) s += cout(p, p.w + 1) - cout(p, p.w);
+            if (s < d) { d = s; x0 = x; }
+          }
+          if (x0 < 0) ok = false;
+          else for (const p of places) { if (p.x <= x0 && x0 < p.x + p.w) p.w++; else if (p.x > x0) p.x++; }
+        }
+        if (ok) res.set(r.H, { cout: places.reduce((s, p) => s + cout(p, p.w), 0) + r.H * PAR_RANGEE * C / 12, places, H: r.H, C });
+      }
+      if (res.size) return res;
+    }
+    return new Map();
+  }
+  /* Le recours elastique : pour chaque hauteur, le moins cher de la recherche
+     sur toutes les formes et du rangement plein etire. Marque `etire` : un
+     groupe ainsi range SEUL sur sa rangee fera chercher a la page un partage
+     qu elle ecarte d ordinaire (voir `essaie`). */
+  function elastique(cartes, C, m) {
+    const cle = cleDe(cartes, C, m, "t");
+    if (MEMOIRE.has(cle)) return MEMOIRE.get(cle);
+    const res = new Map([...parHauteur(cartes, C, m, true).res].map(([H, r]) => [H, { ...r, etire: true }]));
+    for (const [H, r] of etirer(cartes, C, m)) if (!res.has(H) || r.cout < res.get(H).cout) res.set(H, { ...r, etire: true });
+    return garder(cle, res);
   }
 
   /** Le meilleur rangement d un groupe sur `C` colonnes (plein, ou de secours). */
   function rangerGroupe(cartes, C, m) {
     const meilleur = (res) => { let b = null; for (const r of res.values()) if (!b || r.cout < b.cout) b = r; return b; };
     const exact = parHauteur(cartes, C, m);
-    return meilleur(exact.res) || meilleur(parHauteur(cartes, C, m, true).res) || secours(cartes, exact.opts, C);
+    return meilleur(exact.res) || meilleur(elastique(cartes, C, m)) || secours(cartes, exact.opts, C);
   }
 
   /* LA PAGE : les groupes, dans leur ordre fixe, en rangees de 1 a 3 groupes
@@ -241,7 +315,7 @@ const RANGEMENT = (() => {
       // sans rangement plein a cette largeur, le recours elastique (plus cher)
       if (!memo.has(k)) {
         const exact = parHauteur(groupes[gi].cartes, w, mn).res;
-        memo.set(k, exact.size ? exact : parHauteur(groupes[gi].cartes, w, mn, true).res);
+        memo.set(k, exact.size ? exact : elastique(groupes[gi].cartes, w, mn));
       }
       return memo.get(k);
     };
@@ -269,9 +343,17 @@ const RANGEMENT = (() => {
        (le groupe seul, qui laisse des cases vides) : un groupe de petites
        tuiles et de grands graphes (Supervision, « Relevés absents ») ne se
        remplit qu a cote d un autre, dans un partage que le tri jugeait
-       improbable (17/10/2026). */
-    const essaie = (i, strict) => {
-      for (let k = 1; k <= 3 && i + k <= n; k++) {
+       improbable (17/10/2026).
+       ⚠️ LE SECOND ESSAI AUSSI QUAND UN GROUPE EST SEUL SUR SA RANGEE ET ETIRE
+       (`seul` : ce groupe ou le suivant ; 18/10/2026). Bureau seul sur
+       24 modules (2 560 px) etirait ses cinq petites cartes sur 2 336 px,
+       WireGuard en tete ; a cote de Reseau (16 + 8 modules), partage que le tri
+       ecartait (rapport 1,44), tout est plein sans rien etirer. Ce second essai
+       la ne cherche qu un partage A DEUX (`kmin`, `kmax`), et PLEIN (`plein` :
+       sans le recours elastique, le plus cher a calculer) : complet, il
+       doublait le temps de calcul a 2 560 px. */
+    const essaie = (i, strict, kmin = 1, kmax = 3, plein = false) => {
+      for (let k = kmin; k <= kmax && i + k <= n; k++) {
         if (!dp[i + k]) continue;
         const ids = Array.from({ length: k }, (_, j) => i + j);
         const reparts = [];
@@ -283,13 +365,13 @@ const RANGEMENT = (() => {
         if (k === 1) reparts.push([P]); else rec(0, P, []);
         for (const ws of reparts) {
           if (strict && k > 1 && !plausible(ids, ws)) continue;
-          const tabs = ws.map((w, j) => tableau(ids[j], w, k));
+          const tabs = ws.map((w, j) => plein ? parHauteur(groupes[ids[j]].cartes, w, mDe(k)).res : tableau(ids[j], w, k));
           for (const H of tabs[0].keys()) {
             if (!tabs.every((t) => t.has(H))) continue;
             const total = tabs.reduce((s, t) => s + t.get(H).cout, 0) + H * PAR_RANGEE + dp[i + k].cout;
             if (!dp[i] || total < dp[i].cout) {
               let x = 0;
-              dp[i] = { cout: total, rangees: [{ H, groupes: ws.map((w, j) => {
+              dp[i] = { cout: total, seul: k === 1 && tabs[0].get(H).etire, rangees: [{ H, groupes: ws.map((w, j) => {
                 const r = tabs[j].get(H), o = { id: groupes[ids[j]].id, x, w, places: r.places, H };
                 x += w; return o; }) }, ...dp[i + k].rangees] };
             }
@@ -297,33 +379,45 @@ const RANGEMENT = (() => {
         }
       }
     };
-    for (let i = n - 1; i >= 0; i--) {
-      essaie(i, true);
-      if (!dp[i]) essaie(i, false);
-      // aucun rangement plein : le groupe seul, sur toute la largeur, au mieux
-      if (!dp[i] && dp[i + 1]) {
-        let d = rangerGroupe(groupes[i].cartes, P, m);
-        /* Pas de rangement plein sur toute la largeur : un rangement PLEIN sur
-           la moitie, le tiers ou le quart, elargi d autant (des cartes plus
-           larges que prevu plutot que des cases vides ; Supervision dans
-           « Relevés absents » : plein a 12 modules, pas a 24). */
-        for (const f of [2, 3, 4]) {
-          if (!d.trous || P % f) continue;
-          const e = rangerGroupe(groupes[i].cartes, P / f, m);
-          if (!e.trous) d = { ...e, places: e.places.map((p) => ({ ...p, x: p.x * f, w: p.w * f })) };
+    /* LA PAGE SANS LES COINS, calculee seulement s il le faut : quand les coins
+       tiennent, elle ne servait a rien et doublait le calcul. */
+    const ordinaire = () => {
+      for (let i = n - 1; i >= 0; i--) {
+        essaie(i, true);
+        if (!dp[i]) essaie(i, false);
+        // `seul` : ce groupe, ou le suivant, seul sur sa rangee et etire ; un
+        // partage a deux pourrait les remplir sans etirer
+        else if (dp[i].seul || (dp[i + 1] && dp[i + 1].seul)) essaie(i, false, 2, 2, true);
+        // aucun rangement plein : le groupe seul, sur toute la largeur, au mieux
+        if (!dp[i] && dp[i + 1]) {
+          let d = rangerGroupe(groupes[i].cartes, P, m);
+          /* Pas de rangement plein sur toute la largeur : un rangement PLEIN sur
+             la moitie, le tiers ou le quart, elargi d autant (des cartes plus
+             larges que prevu plutot que des cases vides ; Supervision dans
+             « Relevés absents » : plein a 12 modules, pas a 24).
+             ⚠️ RANGE A LA LARGEUR QU AURONT LES CARTES, ELARGIES : un module de
+             `f` modules (18/10/2026). Range avec le module ordinaire, chaque carte
+             recevait la hauteur de sa largeur d avant, et s affichait deux fois
+             plus large : Stockage en 4x14 a 600 px, faite pour 274 px de large,
+             a moitie vide. */
+          for (const f of [2, 3, 4]) {
+            if (!d.trous || P % f) continue;
+            const e = rangerGroupe(groupes[i].cartes, P / f, f * m + (f - 1) * ESPACE);
+            if (!e.trous) d = { ...e, places: e.places.map((p) => ({ ...p, x: p.x * f, w: p.w * f })) };
+          }
+          dp[i] = { cout: d.cout + dp[i + 1].cout, seul: true,
+                    rangees: [{ H: d.H, groupes: [{ id: groupes[i].id, x: 0, w: P, places: d.places, H: d.H, trous: d.trous }] }, ...dp[i + 1].rangees] };
         }
-        dp[i] = { cout: d.cout + dp[i + 1].cout,
-                  rangees: [{ H: d.H, groupes: [{ id: groupes[i].id, x: 0, w: P, places: d.places, H: d.H, trous: d.trous }] }, ...dp[i + 1].rangees] };
       }
-    }
-    const ordinaire = { P, m, rangees: dp[0].rangees };
-    if (!o.coins || groupes.length < 3) return ordinaire;
+      return { P, m, rangees: dp[0].rangees };
+    };
+    if (!o.coins || groupes.length < 3) return ordinaire();
     // l en-tete au milieu : le plus petit nombre PAIR de modules qui le couvre, des coins egaux
     const m3 = mDe(3);
     let wt = 2;
     while (wt * m3 + (wt - 1) * ESPACE < o.coins.px) wt += 2;
     const c = (P - wt) / 2;
-    if (c < 2 || c < wMin(groupes[0], m3) || c < wMin(groupes[1], m3)) return ordinaire;
+    if (c < 2 || c < wMin(groupes[0], m3) || c < wMin(groupes[1], m3)) return ordinaire();
     const a = tableau(0, c, 3), b = tableau(1, c, 3);
     /* La hauteur, la meme pour les deux coins : celle de l en-tete (`Hmin`), ou
        un peu plus, ses ecarts s allongent ; ou un peu moins, jusqu a
@@ -335,7 +429,7 @@ const RANGEMENT = (() => {
       const cout = a.get(H).cout + b.get(H).cout + 3 * Math.abs(H - o.coins.Hmin);
       if (!mieux || cout < mieux.cout) mieux = { cout, H };
     }
-    if (!mieux) return ordinaire;
+    if (!mieux) return ordinaire();
     const H = mieux.H, reste = rangerPage(groupes.slice(2), W);
     return { P, m, rangees: [{ H, coins: true, groupes: [
       { id: groupes[0].id, x: 0, w: c, places: a.get(H).places, H },

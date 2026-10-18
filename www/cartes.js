@@ -1423,9 +1423,14 @@ GROUPS.push(
     /* Tailles mesurees le 16/10/2026 (pire etat : dix appareils, deux noms
        longs) : 198 px de contenu des 400 px grace aux tuiles de 68 px
        (bento/bureau.css). Sur telephone, 9 appareils et plus veulent 5
-       demi-rangees. A 6 modules, trois appareils laissent un tiers de vide. */
+       demi-rangees. A 6 modules, trois appareils laissent un tiers de vide.
+       ⚠️ 4 DEMI-RANGEES JUSQU A 613 PX, comme 5 (18/10/2026) : arretee a 560,
+       la carte passait a 5 des 568 px (un groupe de 6 modules a 2 560 px) et
+       trois appareils y flottaient dans 268 px de haut. Plus large, le contenu
+       est moins haut, pas plus ; s il deborde (beaucoup d appareils), la page
+       le voit et redonne 5 (`verifie`). */
     // `ko` : wg-easy sans reponse (collect.sh, 17/10/2026)
-    { n: "WireGuard", taille: "moyenne", niveau: "normale", ajuste: { min: 400, l: 4, max: 5, h: [4, 4, 5], formes: { 4: [400, 560], 5: [340, 613], 6: [220, 380], 7: [220, 320], 8: [180, 200], 9: [180, 200] } }, ko: "wireguard", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
+    { n: "WireGuard", taille: "moyenne", niveau: "normale", ajuste: { min: 400, l: 4, max: 5, h: [4, 4, 5], formes: { 4: [400, 613], 5: [340, 613], 6: [220, 380], 7: [220, 320], 8: [180, 200], 9: [180, 200] } }, ko: "wireguard", d: "VPN d'accès distant", u: go("WireGuard"), ic: "wireguard", w: 2,
       // Tuiles plutôt que lignes : dix appareils tiennent sur deux rangées au
       // lieu de dix. Grille calibrée à 68 px pour conserver au moins deux
       // colonnes même dans une carte étroite — à 84 px elle tombait à une seule
