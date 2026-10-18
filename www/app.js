@@ -4081,7 +4081,8 @@ const ETATB = {
 
 /* SONDES EN CAUSE SOUS UNE CASE DU RUBAN KUMA (05/10/2026). Le ruban disait
    QU une sonde avait lache, jamais LAQUELLE. Le collecteur garde, sonde par
-   sonde, ses periodes hors ligne ou en attente sur 24 h (`kuma.inc`) ; on
+   sonde, ses periodes hors ligne ou en attente sur 7 jours (`kuma.inc`, 24 h
+   avant le 18/10/2026 : la vue « 7 j » ne nommait personne) ; on
    retient celles qui chevauchent la case visee, avec le temps passe DANS la
    case. Hors ligne d abord, puis par duree.
    ⚠️ Au-dela de cinq on abrege : passe cinq, c est un groupe entier qui tombe,

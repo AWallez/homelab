@@ -1685,12 +1685,15 @@ def utc(s):
 
 
 def kuma(etat):
-    """Periodes hors ligne (0) ou en attente (2) de CHAQUE sonde sur 24 h, pour
-    que l infobulle du ruban nomme les sondes en cause (05/10/2026).
+    """Periodes hors ligne (0) ou en attente (2) de CHAQUE sonde sur 7 jours,
+    pour que l infobulle du ruban nomme les sondes en cause (05/10/2026).
     La page de statut ne rend que les 100 derniers battements de chaque sonde,
     soit 1 h 40 environ : c est le passage de chaque minute qui accumule les
-    24 h. Un battement en echec vaut jusqu au battement suivant ; les periodes
-    revues d un passage a l autre se fondent, rien n est compte deux fois."""
+    7 jours. Un battement en echec vaut jusqu au battement suivant ; les
+    periodes revues d un passage a l autre se fondent, rien n est compte deux
+    fois.
+    ⚠️ 7 JOURS ET NON PLUS 24 H (18/10/2026) : le ruban a aussi une vue « 7 j »,
+    dont les cases rouges ou ambre ne nommaient personne au-dela d un jour."""
     base = CONF.get("kuma", "url", fallback="")
     page = CONF.get("kuma", "page", fallback="")
     if not base or not page:
@@ -1706,7 +1709,7 @@ def kuma(etat):
         for m in g.get("monitorList", []):
             noms[str(m["id"])] = (m.get("name", "?"), gn)
     st = etat.setdefault("kuma", {})
-    debut = MAINTENANT - 86400
+    debut = MAINTENANT - 7 * 86400
     for mid, b in (hb.get("heartbeatList") or {}).items():
         for i, x in enumerate(b):
             if x.get("status") not in (0, 2):
