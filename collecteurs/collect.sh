@@ -530,6 +530,28 @@ GX=$(docker exec arr-gluetun sh -c 'printf "%s\n%s\n" "$(cat /tmp/gluetun/ip)" "
 GIP=""; GPORT=""
 { read -r GIP; read -r GPORT; } <<< "$GX"
 GH=$(docker inspect -f '{{.State.Health.Status}}' arr-gluetun 2>/dev/null)
+# --- Debit du tunnel (18/10/2026) : TOUT ce qui passe par le VPN, qBittorrent
+# compris, et ce qui emprunte le proxy HTTP de gluetun (la PS5). Compare a la
+# courbe de qBittorrent, l ecart montre le reste.
+# Compteurs de `tun0` lus DEPUIS L HOTE, dans /proc/<pid>/net/dev du conteneur :
+# aucun `docker exec`. Le passage precedent est garde a part ; un compteur qui
+# RECULE (gluetun recree, compteurs remis a zero) ne donne pas de mesure : vide
+# dans l historique, plutot qu un faux pic ou un faux zero.
+TRX=""; TTX=""
+TUNST=$ETATS/nas-tunnel.state
+GPID=$(docker inspect -f '{{.State.Pid}}' arr-gluetun 2>/dev/null)
+if [[ "$GPID" =~ ^[1-9][0-9]*$ ]] && TL=$(grep -m1 ' tun0:' "/proc/$GPID/net/dev" 2>/dev/null); then
+  read -r TRB _ _ _ _ _ _ _ TTB _ <<< "${TL#*:}"
+  if [[ "$TRB" =~ ^[0-9]+$ ]] && [[ "$TTB" =~ ^[0-9]+$ ]]; then
+    PRB=0; PTB=0; PTS=0
+    [ -r "$TUNST" ] && read -r PRB PTB PTS < "$TUNST"
+    printf '%s %s %s\n' "$TRB" "$TTB" "$NOWS" > "$TUNST"
+    TDT=$(( NOWS - ${PTS:-0} ))
+    if [ "${PTS:-0}" -gt 0 ] && [ "$TDT" -gt 0 ] && [ "$TRB" -ge "${PRB:-0}" ] && [ "$TTB" -ge "${PTB:-0}" ]; then
+      TRX=$(( (TRB - PRB) / TDT )); TTX=$(( (TTB - PTB) / TDT ))
+    fi
+  fi
+fi
 # ⚠️ CES DEUX VALEURS VIENNENT DE L INTERIEUR D UN CONTENEUR, et ce script tourne
 # en root : elles sont VALIDEES avant tout usage. Collees telles quelles dans le
 # `bash -c` et dans le JSON, un conteneur compromis pouvait faire executer du
@@ -579,7 +601,7 @@ if jq -n --argjson m "{\"cpu\":$CPU,\"ram\":$RAM,\"up\":$UP,\"run\":$RUN,\"all\"
   --argjson ag "{\"q\":$AQ,\"b\":$AB,\"lat\":$AL}" \
   --argjson k "{\"up\":$KU,\"down\":$KD,\"pc\":$KPC}" \
   --argjson w "{\"c\":$WC,\"t\":$WT}" --arg wn "${WNAMES:-}" \
-  --argjson v "{\"port\":$GPORT,\"open\":$GOPEN}" --arg vip "$GIP" --arg vh "$GH" --arg vloc "$GLOC" \
+  --argjson v "{\"port\":$GPORT,\"open\":$GOPEN,\"rx\":${TRX:-null},\"tx\":${TTX:-null}}" --arg vip "$GIP" --arg vh "$GH" --arg vloc "$GLOC" \
   --argjson u "{\"visitors\":$UV,\"views\":$UP7,\"visits\":$UVI}" \
   --argjson upd "$UPD" --argjson updh "$UPDH" --argjson leads "$LEADS" \
   --argjson bago "$BAGO" --arg bdate "${BDATE:-jamais}" --arg ts "$TS" \
@@ -594,7 +616,7 @@ if jq -n --argjson m "{\"cpu\":$CPU,\"ram\":$RAM,\"up\":$UP,\"run\":$RUN,\"all\"
     bazarr:$b,qbit:({dl:$q.dl,ul:$q.ul,ratio:$qrt,adl:$q.adl,aul:$q.aul,etat:$qcx,pairs:$q.pairs,nb:$q.nb,dette:$q.dette}+{tr:$qtr}),
     jellyfin:($j+{now:$jnow}),seerr:$se,adguard:$ag,
     kuma:($k+{groupes:$kg}),wg:($w+{noms:$wn,clients:$wcl}),
-    vpn:{ip:$vip,port:$v.port,health:$vh,open:$v.open,loc:$vloc},
+    vpn:{ip:$vip,port:$v.port,health:$vh,open:$v.open,loc:$vloc,rx:$v.rx,tx:$v.tx},
     umami:($u+{serie:$us}),site:$site,certs:$certs,ur:$ur,crm:$crm,updates:($upd+{age:$updh}),leads:$leads,
     backup:{h:$bago,date:$bdate},cross:($csq+$cs),pc:$pc}' > "$OUT.tmp" 2>"$TMP/jq.err" && [ -s "$OUT.tmp" ]; then
   mv "$OUT.tmp" "$OUT"; chmod 644 "$OUT"
@@ -613,8 +635,8 @@ fi
 [ "$ESSAI" = 1 ] && exit 0
 (
   flock -w 5 9 || true
-  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$NOWS" "$CPU" "$RAM" "$DPC" "$NET" \
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$NOWS" "$CPU" "$RAM" "$DPC" "$NET" \
     "$LOAD1" "$TEMP" "$DR" "$DW" "$LOAD5" "$LOAD15" "$SWP" "$NVT" "$NV0" "$NV1" "$ETH" "$NV2" "$NV3" \
-    "$H_SMS" "$SUP" "$H_QDL" "$H_QUL" "$VUP" "$KUP" "$NV4" \
+    "$H_SMS" "$SUP" "$H_QDL" "$H_QUL" "$VUP" "$KUP" "$NV4" "$TRX" "$TTX" \
     >> "$ICI/history.csv"
 ) 9>/var/lock/homelab-history.lock
