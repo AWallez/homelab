@@ -34,6 +34,9 @@ fi
 # ⚠️ LA SERIE DE 7 JOURS PORTE AUSSI LES COURBES DES CARTES (09/10/2026) :
 # processeur, memoire, swap, temperatures, reseau et qBittorrent, pour le
 # bouton « 7 j » de chaque graphe. Environ 8 Ko de plus.
+# ⚠️ ET LES RUBANS DE VPN ET D UPTIME KUMA (18/10/2026) : `vpnup` et `kumaup`,
+# meme convention 1/2 que `siteup` ; leur moyenne horaire fait la case de
+# l heure (ambre si une partie manquait, rouge si rien n a repondu).
 # ⚠️ `J` et `S` sont les NUMEROS DE COLONNE du CSV (1 = l heure), dans l ordre
 # d ecriture de collect.sh ; `NJ` et `NS` leurs noms, dans le meme ordre. La page
 # lit chaque serie PAR NOM (`champs`, `champs_s`) : ajouter une colonne ici ne
@@ -50,8 +53,8 @@ BEGIN {
   P=600; Q=3600
   nj = split("2 3 5 7 12 13 14 15 16 17 18 19 20 21 22 23 24 25", J, " ")
   split("cpu ram reseau temp swap nvme nvme0 nvme1 eth0 nvme2 nvme3 site siteup qbdl qbul vpnup kumaup nvme4", NJ, " ")
-  ns = split("14 15 17 18 20 25 2 3 5 7 12 16 21 22", S, " ")
-  split("nvme0 nvme1 nvme2 nvme3 siteup nvme4 cpu ram reseau temp swap eth0 qbdl qbul", NS, " ")
+  ns = split("14 15 17 18 20 25 2 3 5 7 12 16 21 22 23 24", S, " ")
+  split("nvme0 nvme1 nvme2 nvme3 siteup nvme4 cpu ram reseau temp swap eth0 qbdl qbul vpnup kumaup", NS, " ")
 }
 {
   t=$1+0

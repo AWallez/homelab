@@ -611,6 +611,18 @@ dialog.dlg>form{display:flex;flex-direction:column;min-height:0;flex:1}
    côté JS, donc rien à oublier au prochain appel. */
 dialog.dlg:has(.majl),dialog.dlg:has(.hist){width:min(560px,94vw)}
 .dlg.large{width:min(640px,94vw)}
+/* La courbe d une carte en grand (18/10/2026, voir `popGraphe`) : la fenetre
+   se reconnait a `.courbe`, comme celle des mises a jour a sa liste. Le trace
+   prend la hauteur que lui donne la fenetre au lieu des proportions de son
+   dessin ; la gouttiere des graduations (34 px) et l axe du temps restent ceux
+   de la carte. */
+dialog.dlg:has(.courbe){width:min(1100px,94vw)}
+.dlg > .periode{align-self:flex-start;margin:2px 0 4px}
+.dlg .courbe .grb{aspect-ratio:auto;height:min(56vh,460px);margin-top:12px}
+.dlg .courbe .gax{font-size:.74rem}
+/* Le ruban en grand : plus haut, sans devenir un mur (120 px faisaient des
+   barres demesurees). */
+.dlg .courbe svg.batt.fin{height:34px;max-height:none;margin-top:10px}
 
 /* ---- Croix de fermeture ---- */
 .dlg-x{position:absolute;top:13px;right:13px;z-index:3;width:30px;height:30px;

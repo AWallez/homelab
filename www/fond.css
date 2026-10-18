@@ -1061,6 +1061,10 @@ dialog.dlg::after {
 .batt rect.dn{fill:var(--scr)}
 .batt rect.nd{fill:rgba(255,255,255,.07)}
 
+/* Sur 7 jours, un repere toutes les 3 h (18/10/2026, demande) : des traits
+   sans texte (`.tic`), les jours seuls ecrits a minuit (voir `echelle`). */
+.ech span.tic::before{height:3px;opacity:.55}
+
 /* ---- 23. Le repere de moyenne 24 h dans la fenetre ----------------------
    Il existait sur la CARTE (`.br i s`) et pas dans la fenetre, qui est pourtant
    l endroit ou l on compare service par service.

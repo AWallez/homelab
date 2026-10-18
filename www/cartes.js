@@ -719,7 +719,7 @@ GROUPS.push(
     /* Contenu fixe (216 px) des 5 modules, seul le ruban s etire. l 6 : les
        pastilles occupent 73 % de la ligne (35 % a 12) et les 145 cases du ruban
        4 px ; h [4,4,4] : a 5 demi-rangees, 43 % de vide. */
-    { n: "VPN", taille: "large", niveau: "normale", ajuste: { min: 340, l: 6, h: [4, 4, 4], formes: { 4: [340, 1488], 5: [340, 1488] } }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
+    { n: "VPN", taille: "large", niveau: "normale", per: 1, ajuste: { min: 340, l: 6, h: [4, 4, 4], formes: { 4: [340, 1488], 5: [340, 1488] } }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
       x: LIENS["VPN"],
       r: d => {
         const up = Hn(d, "vpnup");
@@ -745,7 +745,7 @@ GROUPS.push(
                   : "Tunnel : état inconnu",
                 v.health === "healthy" && !!v.ip)
                   : `<div class="note">Relevé du tunnel en attente</div>`)
-          + rubanH(d, "vpnup", "Joignabilité du port entrant", 1)
+          + rubanH(d, "vpnup", "Joignabilité du port entrant", 1, "VPN")
           + past([v ? [v.port
                      ? "port " + v.port + (v.open ? " ouvert" : " injoignable")
                      : "aucun port",
@@ -1148,7 +1148,7 @@ GROUPS.push(
     /* Tailles mesurees le 16/10/2026 : 184 px de contenu, 207 quand trois
        groupes en panne passent sur deux lignes, ce qui exige 840 px. Hauteur
        fixe : a 5 demi-rangees, 56 px de vide de plus. */
-    { n: "Uptime Kuma", taille: "large", niveau: "essentielle", ajuste: { min: 840, h: [4, 4, 4], formes: { 4: [620, 1488], 5: [400, 1488], 6: [340, 600], 7: [340, 380] } }, ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
+    { n: "Uptime Kuma", taille: "large", niveau: "essentielle", per: 1, ajuste: { min: 840, h: [4, 4, 4], formes: { 4: [620, 1488], 5: [400, 1488], 6: [340, 600], 7: [340, 380] } }, ko: "kuma", d: "Sondes et alertes", u: go("Uptime Kuma"), ic: "uptime-kuma", w: 4,
       /* ⚠️ NI `calme` NI `hero` ICI, et c'est un retrait délibéré. Le bandeau
          vert répétait l'addition des trois lignes — « 28 sondes en ligne »
          quand elles disent 7, 10 et 11 — et n'apportait en propre que la
@@ -1165,7 +1165,7 @@ GROUPS.push(
         const ko = som("ko") || (gs.length ? 0 : +d.kuma.down || 0), att = som("att");
         const tot = som("tot") || (+d.kuma.up || 0) + (+d.kuma.down || 0);
         const pl = (n, s) => nb(n) + " sonde" + (n > 1 ? "s " : " ") + s;
-        return rubanH(d, "kumaup", "Stabilité des sondes", 1)
+        return rubanH(d, "kumaup", "Stabilité des sondes", 1, "Uptime Kuma")
           + grpk(gs)
           + past([ko > 0 ? [pl(ko, "hors ligne"), "wn"] : null,
                   att > 0 ? [pl(att, "en attente"), "wn"] : null,

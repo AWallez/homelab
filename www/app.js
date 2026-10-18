@@ -160,11 +160,14 @@ const echelle = (ts, pas, n) => {
      commence (« mar. ») : sept jours d heures feraient 28 etiquettes. Le pas
      se fait au calendrier, pas en secondes, pour rester sur minuit les jours
      de changement d heure. */
+  /* ⚠️ ET UN TRAIT TOUTES LES 3 H, SANS TEXTE (`tic`, 18/10/2026, demande) :
+     l echelle se lit au meme pas qu en 24 h ; 56 etiquettes ne tiendraient pas. */
   if (d > 2 * 86400) {
-    const z = new Date(t0 * 1000); z.setHours(24, 0, 0, 0);
-    for (; z / 1000 <= t1; z.setDate(z.getDate() + 1)) {
+    const z = new Date(t0 * 1000); z.setHours(Math.ceil(z.getHours() / 3) * 3, 0, 0, 0);
+    for (; z / 1000 <= t1; z.setHours(z.getHours() + 3)) {
       const x = (z / 1000 - t0) / d * 100;
-      if (x < 0.2 || x > 99.8) continue;
+      if (x < 0.2 || x > 99.8 || z.getHours() % 3) continue;
+      if (z.getHours()) { m.push(`<span class="rep tic" style="left:${x.toFixed(1)}%"></span>`); continue; }
       const cl = x < 4 ? "rep deb" : x > 94 ? "rep bout" : "rep";
       m.push(`<span class="${cl}" style="left:${x.toFixed(1)}%">${z.toLocaleDateString("fr-FR", { weekday: "short" })}</span>`);
     }
@@ -209,10 +212,18 @@ const echelle = (ts, pas, n) => {
    ⚠️ Deux releves et pas trois : a 30 min les trous de cinq a dix minutes se
    fondraient tous en ambre. A 20 min, un trou de 10 min reste ambre et un creneau
    entierement mort devient rouge. */
-const rubanH = (d, col, alt, par) => {
-  const v = Hn(d, col), PAR = par || 2;
+/* `carte` : son selecteur « 24 h · 7 j » (18/10/2026, demande). Sur 7 jours,
+   la serie horaire (`Hs`), toujours en barres sur une ligne : une barre par
+   heure, qui vaut la MOYENNE des releves 1/2 de l heure (history-build.sh),
+   donc ambre des qu une partie de l heure manquait, rouge si rien n a
+   repondu. ⚠️ MEME TAILLE DE CARTE dans les deux periodes : seule la serie
+   change, la disposition de la page ne bouge pas (une grille d une ligne par
+   jour, essayee, la faisait grandir). */
+const rubanH = (d, col, alt, par, carte) => {
+  const s7 = carte && sept(carte);
+  const v = s7 ? Hs(d, col) : Hn(d, col), PAR = s7 ? 1 : par || 2;
   const dec = v.length % PAR;
-  const vc = v.slice(dec), tsc = Hn(d, "t").slice(dec);
+  const vc = v.slice(dec), tsc = (s7 ? Hs(d, "t") : Hn(d, "t")).slice(dec);
   const n = Math.max(1, Math.floor(vc.length / PAR));
   const pc = tsc.length > PAR ? (tsc[PAR] - tsc[0]) / 60 : 0;
   return `<div class="rleg"><span>${pc ? "1 barre = " + esc(duree(pc)) : ""}</span>`
@@ -1069,13 +1080,17 @@ addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-per]");
   if (!b) return;
   e.preventDefault(); e.stopPropagation();
-  const nom = b.closest(".card") && b.closest(".card").querySelector(".nom");
+  // le selecteur d une carte, ou celui de sa courbe en grand (`popGraphe`)
+  const grand = b.closest("dialog") && b.closest("dialog").querySelector(".courbe");
+  const carte = b.closest(".card") || (grand && document.querySelector(`#groups .card[data-carte="${grand.dataset.pour}"]`));
+  const nom = carte && carte.querySelector(".nom");
   if (!nom) return;
   if (b.dataset.per === "7j") PERIODES[nom.textContent] = "7j";
   else delete PERIODES[nom.textContent];
   try { localStorage.setItem("homelab.periodes", JSON.stringify(PERIODES)); } catch (x) { /* stockage refuse */ }
   cacheTip();
   dessineGroupes();
+  if (grand) popGraphe(document.querySelector(`#groups .card[data-carte="${grand.dataset.pour}"]`));
 }, true);
 addEventListener("keydown", (e) => {
   if ((e.key !== "Enter" && e.key !== " ") || !e.target.matches || !e.target.matches("[data-per]")) return;
@@ -2430,6 +2445,61 @@ function popJournal() {
   d.querySelectorAll("[data-jf]").forEach(b => b.onclick = () => { J_FILTRE = b.dataset.jf; popJournal(); });
   if (!d.open) d.showModal();
 }
+
+/* ---- LES COURBES EN GRAND (18/10/2026, demande) ----
+   Dans une carte, une courbe tient dans 270 px : une semaine de debit s y
+   tasse. Un clic SUR LA COURBE l ouvre dans une fenetre, sur toute sa largeur,
+   avec sa legende, son axe du temps et le choix 24 h · 7 j ; le survol y lit
+   les memes valeurs (l infobulle suit dans la fenetre, voir `montreTip`).
+   - Le reste de la carte garde son lien ou sa fenetre.
+   - Au doigt, un premier toucher lit la courbe (infobulle) sans quitter la
+     page ; un second toucher sur la meme courbe l ouvre en grand.
+   - La fenetre reprend le dessin de la carte (memes donnees, meme periode) :
+     `data-pour` la relie a sa carte, pour la redessiner au changement de
+     periode.
+   - Les rubans aussi (VPN, Uptime Kuma), avec leur legende et leurs heures. */
+const GRAPHE = ".grb, svg.batt.fin";
+function popGraphe(carte) {
+  const g = carte && carte.querySelector(GRAPHE);
+  if (!g) return;
+  const d = dlg();
+  d.classList.remove("large");
+  const boite = g.parentElement;
+  const blocs = [...boite.children].filter((e) => e.matches(".leg, .grb, .gech, .rleg, svg.batt.fin, .ech"))
+    .map((e) => e.outerHTML).join("");
+  const desc = carte.querySelector(".head p"), per = carte.querySelector(".periode");
+  d.innerHTML = `<h3>${esc(carte.querySelector(".nom").textContent)}</h3>`
+    + (desc ? `<div class="sub">${esc(desc.textContent)}</div>` : "")
+    + (per ? per.outerHTML : "")
+    + `<div class="courbe" data-pour="${esc(carte.dataset.carte)}">${blocs}</div>`;
+  if (!d.open) d.showModal();
+}
+/* ⚠️ LA ZONE DU CLIC EST LE BLOC DU GRAPHE ENTIER (18/10/2026, demande : « sur
+   mobile on pourrait vite cliquer a cote ») : sa legende, son trace, son axe
+   du temps, les ecarts entre eux, et 10 px autour. Les commandes qui s y
+   trouvent gardent leur clic (selecteur, boutons, liens). Au doigt, seul le
+   TRACE garde ses deux temps (sa valeur, puis la fenetre) ; la legende ou
+   l axe ouvrent directement. */
+const ZONE_GRAPHE = ".leg, .grb, .gech, .rleg, svg.batt.fin, .ech";
+function dansGraphe(carte, x, y) {
+  const g = carte.querySelector(GRAPHE);
+  if (!g) return false;
+  const rs = [...g.parentElement.children].filter((e) => e.matches(ZONE_GRAPHE)).map((e) => e.getBoundingClientRect());
+  const M = 10;
+  return x >= Math.min(...rs.map((r) => r.left)) - M && x <= Math.max(...rs.map((r) => r.right)) + M
+    && y >= Math.min(...rs.map((r) => r.top)) - M && y <= Math.max(...rs.map((r) => r.bottom)) + M;
+}
+addEventListener("click", (e) => {
+  if (e.defaultPrevented || !e.target.closest) return;
+  const carte = e.target.closest("#groups .card");
+  if (!carte || e.target.closest(".periode, button, [data-lien], [data-pc], [data-disque], [data-espace]")) return;
+  if (!dansGraphe(carte, e.clientX, e.clientY)) return;
+  e.preventDefault(); e.stopPropagation();
+  const trace = e.target.closest("svg[data-lec]");
+  if (AU_DOIGT && trace && !(TOUCHE === trace && TOUCHE_PREC === trace)) return;
+  cacheTip();
+  popGraphe(carte);
+}, true);
 
 /* ---- Fenetre d un disque (05/10/2026) ----
    Pourquoi : la ligne d un disque dans la carte Stockage
