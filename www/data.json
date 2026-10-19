@@ -98,9 +98,7 @@
     "port": 51820,
     "health": "healthy",
     "open": true,
-    "loc": "Amsterdam, Pays-Bas",
-    "rx": 3812000,
-    "tx": 1694000
+    "loc": "Amsterdam, Pays-Bas"
   },
 
   "updates": {"total":2,"verifies":21,"maj":"14/03 07:44","age":8,"items":[{"n":"arr-soustitres","upd":false},{"n":"arr-indexeurs","upd":true},{"n":"arr-films","upd":false},{"n":"arr-series","upd":false},{"n":"supervision","upd":false},{"n":"arr-client","upd":false},{"n":"tableaux","upd":false},{"n":"arr-resolveur","upd":false},{"n":"dns-filtrant","upd":false},{"n":"arr-croisement","upd":false},{"n":"arr-demandes","upd":false},{"n":"sauvegarde","upd":false},{"n":"serveur-media","upd":true},{"n":"arr-tunnel","upd":false},{"n":"portfolio-notifs","upd":false},{"n":"umami","upd":false},{"n":"coffre-fort","upd":false},{"n":"umami-base","upd":false},{"n":"portfolio-base","upd":false},{"n":"vpn-acces","upd":false},{"n":"jeux-serveur","upd":false}]},

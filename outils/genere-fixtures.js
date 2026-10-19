@@ -137,20 +137,12 @@ function mesure(t) {
     wantx:    debitBox(r, 4_000_000)
   };
 }
-/* Le debit du tunnel VPN (18/10/2026) : celui de qBittorrent, plus un peu de
-   navigation par le proxy (la PS5) le soir et le surcout de WireGuard.
-   ⚠️ DERIVE, SANS TIRAGE : un appel de plus au generateur decalerait toutes
-   les autres courbes de la demonstration. */
-const avecTunnel = (t, m) => Object.assign(m, {
-  vpnrx: Math.round(m.qbdl * 1.04 + 25_000 + 260_000 * Math.max(0, rythme(t) - 0.6)),
-  vpntx: Math.round(m.qbul * 1.06 + 12_000 + 30_000 * Math.max(0, rythme(t) - 0.6))
-});
 
 const CHAMPS = ["t", "cpu", "ram", "disque", "reseau", "charge", "temp", "lecture",
   "ecriture", "charge5", "charge15", "swap", "nvme", "nvme0", "nvme1", "eth0",
-  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup", "vpnrx", "vpntx"];
+  "nvme2", "nvme3", "site", "siteup", "qbdl", "qbul", "vpnup", "kumaup"];
 const CHAMPS_MIN = ["t", "cpu", "ram", "temp", "swap", "nvme0", "nvme1", "eth0",
-  "nvme2", "nvme3", "qbdl", "qbul", "vpnrx", "vpntx"];
+  "nvme2", "nvme3", "qbdl", "qbul"];
 
 console.log("Fixtures d historique");
 console.log("  graine 20260901, " + N_MIN + " points a la minute\n");
@@ -159,7 +151,7 @@ console.log("  graine 20260901, " + N_MIN + " points a la minute\n");
 const minutes = [];
 for (let i = 0; i < N_MIN; i++) {
   const t = DEBUT + i * MIN;
-  minutes.push(Object.assign({ t }, avecTunnel(t, mesure(t))));
+  minutes.push(Object.assign({ t }, mesure(t)));
 }
 
 const ligne = (m, champs) => champs.map(c =>
@@ -193,7 +185,7 @@ for (let k = 0; k < N_S; k++) {
   /* Le remplissage du disque monte lentement sur la semaine : c est la seule
      serie dont la tendance se lit a cette echelle. */
   const av = (N_S - 1 - k) / N_S;
-  const m = avecTunnel(t, mesure(t));
+  const m = mesure(t);
   /* ⚠️ LES HEURES COUVERTES PAR LA MINUTE EN SONT LA MOYENNE (09/10/2026),
      comme en production. Avec le bouton « 7 j », le dernier jour se lit dans
      les deux vues : tire a part, il aurait dessine une autre journee. Le

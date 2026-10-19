@@ -98,9 +98,7 @@
     "port": 51820,
     "health": "healthy",
     "open": true,
-    "loc": "Amsterdam, Pays-Bas",
-    "rx": 3812000,
-    "tx": 1694000
+    "loc": "Amsterdam, Pays-Bas"
   },
 
   "updates": {

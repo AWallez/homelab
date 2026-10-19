@@ -1,14 +1,13 @@
 #!/bin/bash
-# Serie FINE de l historique : 24 h au pas d UNE MINUTE, pour les cartes qui
-# se lisent au survol (Systeme, Temperatures, qBittorrent, et VPN depuis le
-# 18/10/2026 : son debit se compare a celui de qBittorrent, au meme pas).
+# Serie FINE de l historique : 24 h au pas d UNE MINUTE, pour les trois cartes
+# qui se lisent au survol (Systeme, Temperatures, qBittorrent).
 #
 # POURQUOI UN FICHIER A PART. `history.json` est retelecharge toutes les 2 s
 # avec le reste de la page. Y verser 1440 points le ferait passer de 50 a
 # ~150 Ko trente fois par minute, pour un contenu qui ne change qu une fois par
 # minute. Celui-ci est mis en cache par la page et renouvele toutes les 30 s.
 #
-# POURQUOI TREIZE COLONNES ET PAS VINGT-SIX. Seulement celles que ces quatre
+# POURQUOI ONZE COLONNES ET PAS VINGT-QUATRE. Seulement celles que ces trois
 # cartes tracent. Les autres n ont aucun besoin d etre fines et tripleraient le
 # fichier pour rien.
 #
@@ -23,7 +22,7 @@ NOW=$(date +%s)
 
 # 24 h a 30 s = 2880 lignes ; on prend large pour absorber les trous de collecte.
 tail -n 4000 "$SRC" | awk -F, -v now="$NOW" '
-BEGIN { M=60; NB=split("2 3 7 12 14 15 16 17 18 21 22 25 26 27", C, " "); mn=-1; mx=0 }
+BEGIN { M=60; NB=split("2 3 7 12 14 15 16 17 18 21 22 25", C, " "); mn=-1; mx=0 }
 {
   t=$1+0
   if (t < now-86400) next
@@ -48,7 +47,7 @@ END {
     printf "]"
     first=0
   }
-  printf "],\"champs\":[\"t\",\"cpu\",\"ram\",\"temp\",\"swap\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"qbdl\",\"qbul\",\"nvme4\",\"vpnrx\",\"vpntx\"]}\n"
+  printf "],\"champs\":[\"t\",\"cpu\",\"ram\",\"temp\",\"swap\",\"nvme0\",\"nvme1\",\"eth0\",\"nvme2\",\"nvme3\",\"qbdl\",\"qbul\",\"nvme4\"]}\n"
 }' > "$OUT.tmp"
 
 # Ecriture atomique et validee : la page ne doit jamais recevoir un JSON tronque.

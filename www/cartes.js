@@ -718,13 +718,8 @@ GROUPS.push(
        que Proton ne routait plus rien. */
     /* Contenu fixe (216 px) des 5 modules, seul le ruban s etire. l 6 : les
        pastilles occupent 73 % de la ligne (35 % a 12) et les 145 cases du ruban
-       4 px ; h [4,4,4] : a 5 demi-rangees, 43 % de vide.
-       ⚠️ DEPUIS LE 18/10/2026, UNE COURBE DU DEBIT DU TUNNEL (demande) : tout ce
-       qui passe par le VPN, qBittorrent compris, et le proxy HTTP de gluetun (la
-       PS5). Memes couleurs, meme echelle de temps que celle de qBittorrent :
-       l ecart entre les deux est ce qui ne vient pas de qBittorrent. La carte
-       grandit d autant (courbe de 72 px au moins, legende, heures). */
-    { n: "VPN", taille: "large", niveau: "normale", per: 1, ajuste: { min: 340, l: 6, h: [7, 7, 9], formes: { 6: [340, 1488], 7: [340, 1488], 8: [340, 1488], 9: [340, 1488] } }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
+       4 px ; h [4,4,4] : a 5 demi-rangees, 43 % de vide. */
+    { n: "VPN", taille: "large", niveau: "normale", per: 1, ajuste: { min: 340, l: 6, h: [4, 4, 4], formes: { 4: [340, 1488], 5: [340, 1488] } }, d: "Tunnel " + VPN.nom + " du client torrent", ic: "proton-vpn", w: 4,
       x: LIENS["VPN"],
       r: d => {
         const up = Hn(d, "vpnup");
@@ -738,22 +733,6 @@ GROUPS.push(
                            : " depuis " + Math.max(1, Math.round(vus / 6)) + " h"),
              ko > 0 ? "wn" : "ok"];
 
-        /* Le debit du tunnel (`tun0` de gluetun, collect.sh), reçu et envoyé.
-           `d0` : la serie commence la ou ses mesures commencent (avant le
-           18/10/2026, rien n etait releve ; un zero y passerait pour un tunnel
-           muet). Sans releve actuel, la legende tait le debit plutot que
-           d afficher un faux « 0 ». */
-        const rx = Hp(d, "VPN", "vpnrx"), tx = Hp(d, "VPN", "vpntx");
-        const v0 = d.vpn || {};
-        const debit = leg([["envoi", "#34c759", v0.tx != null ? Mo(v0.tx) : null],
-                           ["réception", "#4d97ee", v0.rx != null ? Mo(v0.rx) : null]])
-          + (rx.some(x => x > 0) || tx.some(x => x > 0)
-            ? graphe([{ v: rx, c: "#4d97ee", n: "reçu", d0: true },
-                      { v: tx, c: "#34c759", n: "envoyé", d0: true }],
-                     { f: MoAxe, u: "dbt", ts: Hp(d, "VPN", "t"),
-                       alt: "Débit du tunnel " + surP("VPN") })
-            : `<div class="note">Débit du tunnel en cours d'enregistrement</div>`);
-
         /* Sans releve du tunnel, une note a la place de son etat ; le ruban et
            son bilan, tires de l historique, restent. */
         const v = d.vpn;
@@ -766,7 +745,6 @@ GROUPS.push(
                   : "Tunnel : état inconnu",
                 v.health === "healthy" && !!v.ip)
                   : `<div class="note">Relevé du tunnel en attente</div>`)
-          + debit
           + rubanH(d, "vpnup", "Joignabilité du port entrant", 1, "VPN")
           + past([v ? [v.port
                      ? "port " + v.port + (v.open ? " ouvert" : " injoignable")
