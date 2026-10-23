@@ -1899,9 +1899,15 @@ function paintUpd(maj, note, vers) {
     // Une empreinte (h) ne dit rien : la version connue de l'outil passe devant,
     // par exemple « nginx 1.30.5 » pour une image construite sur place.
     const brut = !!(v && v.h) && !s.version;
+    const vu = (v && v.h && s.version) || (v && v.v) || s.version || "";
+    /* ⚠️ MEME VERSION, IMAGE RECONSTRUITE (23/10/2026, demande) : `postgres:17`
+       republiee en 17.11 avec une nouvelle empreinte (correctifs du systeme
+       qu elle contient) s affichait « 17.11 → 17.11 », qu on prenait pour un
+       bogue. `meme` la nomme pour ce qu elle est. */
+    const meme = !!(dispo && dispo.version && dispo.version === vu);
     return { n, d: (v && v.d) || "", ts: v ? v.ts || 0 : -1,
-             v: (v && v.h && s.version) || (v && v.v) || s.version || "", h: brut, url: (v && v.u) || "",
-             upd: !!(dispo || s.blocage), nv: (dispo && dispo.version) || "",
+             v: vu, h: brut, url: (v && v.u) || "",
+             upd: !!(dispo || s.blocage), nv: (dispo && dispo.version) || "", meme,
              mode: s.mode || "", bloc: s.blocage || null, neuf: !!s.decouvert,
              hors: ignores[n] || null,
              avert: (s.avertissements || []).map(a => a.message) };
@@ -1933,10 +1939,11 @@ function paintUpd(maj, note, vers) {
       <span class="hd">${esc(x.d)}</span>
       <label class="hn" ${x.upd ? `for="c${k}"` : ""}>${esc(x.n)}${
         x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}${
+        x.upd && x.meme ? '<span class="rq ri" title="Même version de l’application, nouvelle image : en général des correctifs du système qu’elle contient.">image reconstruite</span>' : ""}${
         x.neuf ? '<span class="rq">nouveau</span>' : ""}</label>
       <span class="hv${x.h && !x.upd ? " brut" : ""}"${
         x.h && !x.upd ? ' title="Aucune étiquette de version sur cette image : empreinte affichée à la place."' : ""}>${
-        x.upd && x.nv ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
+        x.upd && x.nv && !x.meme ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
       ${lienSur(x.url)
         ? `<a class="hl" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">notes</a>`
         : `<span class="hl vide">—</span>`}

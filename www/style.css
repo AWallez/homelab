@@ -666,6 +666,9 @@ dialog.dlg:has(.courbe){width:min(1100px,94vw)}
 .majl .nm{overflow-wrap:anywhere}
 .majl .rq,.hist .rq{font-size:.58rem;padding:1px 6px;border-radius:99px;white-space:nowrap;
   background:rgba(214,138,38,.16);border:1px solid rgba(214,138,38,.3);color:#e0a458}
+/* Meme version, image reconstruite (23/10/2026) : une information, pas un
+   avertissement, donc en bleu et non en ambre. */
+.hist .rq.ri{background:rgba(77,151,238,.14);border-color:rgba(77,151,238,.32);color:#8ab8f2}
 .majl .vs{display:flex;align-items:center;gap:6px;flex:none;font-size:.7rem;
   font-family:ui-monospace,Consolas,monospace;color:var(--mut)}
 .majl .vs s{text-decoration:none}
