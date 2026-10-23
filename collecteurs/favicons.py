@@ -67,12 +67,15 @@ import subprocess
 import sys
 from urllib.parse import urljoin, urlparse
 
-SRC = "/volume1/docker/homelab/www/data/shortcuts.json"
+# Les deux chemins se changent par l'environnement pour la DÉMO PUBLIQUE : sa
+# publication (.github/workflows/pages.yml) fabrique ainsi les icônes de ses
+# raccourcis, sans qu'aucune ne soit versionnée (23/10/2026).
+SRC = os.environ.get("FAVICONS_SRC", "/volume1/docker/homelab/www/data/shortcuts.json")
 # ⚠️ Sous-dossier DÉDIÉ. La première version écrivait dans www/icons/, qui
 # contient aussi les logos des cartes : le nettoyage de fin les a tous
 # supprimés le 22/08 (restaurés depuis restic). Le script ne doit posséder que
 # ce qu'il a écrit lui-même.
-DEST = "/volume1/docker/homelab/www/icons/sites"
+DEST = os.environ.get("FAVICONS_DEST", "/volume1/docker/homelab/www/icons/sites")
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/126.0.0.0 Safari/537.36")
 BAVARD = "-v" in sys.argv
@@ -192,6 +195,15 @@ def taille_declaree(texte, url):
     return max(tailles) if tailles else 0
 
 
+def attribut(balise, nom):
+    """La valeur d'un attribut HTML, entre guillemets doubles, simples, ou SANS
+    guillemets : kubernetes.io écrit `href=/icons/favicon-64.png`, et seuls
+    les guillemets étaient lus, si bien que ses icônes (jusqu'à 256 px)
+    passaient inaperçues (23/10/2026). None s'il manque."""
+    m = re.search(r'(?<![\w-])%s\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'>]+))' % nom, balise, re.I)
+    return next((g for g in m.groups() if g is not None), None) if m else None
+
+
 def candidates(hote):
     """Les adresses de toutes les icônes que le site propose, dans l'ordre où
     les essayer : celles de la page et du manifeste, de la plus grande annoncée
@@ -205,11 +217,10 @@ def candidates(hote):
     liens, masques, manifestes = [], [], []
     for m in re.finditer(r"<link[^>]+>", html, re.I):
         balise = m.group(0)
-        rel = re.search(r'rel\s*=\s*["\']?([^"\'>]+)', balise, re.I)
-        href = re.search(r'href\s*=\s*["\']([^"\']+)', balise, re.I)
+        rel, href = attribut(balise, "rel"), attribut(balise, "href")
         if not rel or not href:
             continue
-        rel, url = rel.group(1).lower(), urljoin(base, href.group(1).replace("&amp;", "&"))
+        rel, url = rel.lower(), urljoin(base, href.replace("&amp;", "&"))
         if "manifest" in rel:
             manifestes.append(url)
         # `mask-icon` : la silhouette d'onglet épinglé de Safari, d'une seule couleur

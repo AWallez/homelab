@@ -518,12 +518,30 @@ ecrit("systeme.json", {
                            { n: "pool1-volume1", t: "lvm", fs: "btrfs", m: "/volume1" }] }] }
 } });
 
-ecrit("data/shortcuts.json", [
-  { name: "Documentation", url: "https://developer.mozilla.org/fr/" },
-  { name: "Forge",         url: "https://github.com/" },
-  { name: "Conteneurs",    url: "https://hub.docker.com/" },
-  { name: "Veille",        url: "https://news.ycombinator.com/" }
-]);
+/* De vrais sites (23/10/2026, demande), qui parlent a tout le monde, aux
+   recruteurs et aux developpeurs ou administrateurs DevOps. Leurs icones sont
+   fabriquees a la publication (`favicons.py`, voir pages.yml). Ansible : la
+   documentation, ansible.com montrant le chapeau de Red Hat. */
+const RACCOURCIS = [
+  { name: "YouTube",        url: "https://www.youtube.com/" },
+  { name: "Netflix",        url: "https://www.netflix.com/" },
+  { name: "Spotify",        url: "https://open.spotify.com/" },
+  { name: "Wikipédia",      url: "https://fr.wikipedia.org/" },
+  { name: "LinkedIn",       url: "https://www.linkedin.com/" },
+  { name: "GitHub",         url: "https://github.com/" },
+  { name: "Docker Hub",     url: "https://hub.docker.com/" },
+  { name: "Kubernetes",     url: "https://kubernetes.io/" },
+  { name: "Ansible",        url: "https://docs.ansible.com/" },
+  { name: "Proxmox",        url: "https://www.proxmox.com/" },
+  { name: "Grafana",        url: "https://grafana.com/" },
+  { name: "Cloudflare",     url: "https://www.cloudflare.com/" },
+  { name: "Stack Overflow", url: "https://stackoverflow.com/" },
+  { name: "React",          url: "https://react.dev/" },
+  { name: "Node.js",        url: "https://nodejs.org/" },
+  { name: "Deno",           url: "https://deno.com/" },
+  { name: "Portfolio",      url: "https://alexiswallez.fr/" }
+];
+ecrit("data/shortcuts.json", RACCOURCIS);
 
 console.log("\n  fenetre : " + new Date(DEBUT * 1000).toLocaleString("fr-FR")
   + "  ->  " + new Date(FIN * 1000).toLocaleString("fr-FR"));

@@ -91,6 +91,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Icones des raccourcis de la demonstration (23/10/2026), fabriquees ici
+      # par le script du NAS, sur ses raccourcis : le dossier n est JAMAIS
+      # versionne, celui du NAS contenant des sites personnels (.gitignore).
+      # Un site injoignable depuis GitHub garde ses initiales, sans bloquer
+      # la publication.
+      - name: Icones des raccourcis
+        continue-on-error: true
+        env:
+          FAVICONS_SRC: www/data/shortcuts.json
+          FAVICONS_DEST: www/icons/sites
+        run: |
+          pip install --quiet pillow
+          python collecteurs/favicons.py -v
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: www

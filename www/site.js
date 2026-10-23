@@ -55,11 +55,25 @@ const LIEN = { vit: 10000, mtu: 9000 };
    l applique : sert a annoncer l heure de la prochaine copie. */
 const SAUVEGARDE_ECART_H = 20;
 
-/* Raccourcis proposes tant que l utilisateur n a pas enregistre les siens. */
-const DEF = [{ name: "Documentation", url: "https://developer.mozilla.org/fr/" },
-  { name: "Forge",      url: "https://github.com/" },
-  { name: "Conteneurs", url: "https://hub.docker.com/" },
-  { name: "Veille",     url: "https://news.ycombinator.com/" }];
+/* Raccourcis proposes tant que l utilisateur n a pas enregistre les siens :
+   ceux de la demonstration (outils/genere-fixtures.js). */
+const DEF = [{ name: "YouTube", url: "https://www.youtube.com/" },
+  { name: "Netflix",        url: "https://www.netflix.com/" },
+  { name: "Spotify",        url: "https://open.spotify.com/" },
+  { name: "Wikipédia",      url: "https://fr.wikipedia.org/" },
+  { name: "LinkedIn",       url: "https://www.linkedin.com/" },
+  { name: "GitHub",         url: "https://github.com/" },
+  { name: "Docker Hub",     url: "https://hub.docker.com/" },
+  { name: "Kubernetes",     url: "https://kubernetes.io/" },
+  { name: "Ansible",        url: "https://docs.ansible.com/" },
+  { name: "Proxmox",        url: "https://www.proxmox.com/" },
+  { name: "Grafana",        url: "https://grafana.com/" },
+  { name: "Cloudflare",     url: "https://www.cloudflare.com/" },
+  { name: "Stack Overflow", url: "https://stackoverflow.com/" },
+  { name: "React",          url: "https://react.dev/" },
+  { name: "Node.js",        url: "https://nodejs.org/" },
+  { name: "Deno",           url: "https://deno.com/" },
+  { name: "Portfolio",      url: "https://alexiswallez.fr/" }];
 
 /* Piles de conteneurs, reconnues au prefixe du nom, et leur couleur. */
 const PILES = [
