@@ -258,12 +258,14 @@ dialog.dlg{border-radius:var(--r);padding:20px;
 .dlg .err{min-height:1.1em;margin:-6px 0 8px;font-size:.72rem;color:#ffd08a}
 .dlg.mdp{width:min(360px,calc(100vw - 32px))}
 /* Icone d un raccourci (23/10/2026) : CENTREE (demande), l apercu dans une
-   vraie tuile, inerte, au-dessus des boutons « Importer une image » et
-   « Revenir a l icone du site ». */
+   vraie tuile, inerte, sur la MEME LIGNE que les boutons « Importer une
+   image » et « Revenir a l icone du site » ; le tout au milieu. Les deux
+   boutons l un sous l autre : cote a cote, ils depassaient la fenetre et le
+   second, renvoye a la ligne, decentrait le groupe. */
 .dlg .ico-l{text-align:center}
-.dlg .ico{display:flex;flex-direction:column;gap:10px;align-items:center;margin-bottom:13px}
-.dlg .ico .apercu{width:auto;pointer-events:none;cursor:default}
-.dlg .ico .row{flex-wrap:wrap;justify-content:center;margin:0}
+.dlg .ico{display:flex;gap:14px;align-items:center;justify-content:center;margin-bottom:13px}
+.dlg .ico .apercu{width:auto;flex:none;pointer-events:none;cursor:default}
+.dlg .ico .row{flex-direction:column;align-items:stretch;gap:6px;margin:0}
 
 /* ---- Adaptation ---- */
 @media(max-width:820px){
