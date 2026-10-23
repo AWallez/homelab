@@ -89,6 +89,9 @@ TRAVAIL = 384
 # Une image transparente de ce côté au moins reste nette dans la tuile ; en
 # dessous, on lui préfère une plus grande, même à fond plein (détourée).
 NET = 64
+# Mais un logo sans fond de ce côté au moins passe avant une icône à fond
+# coloré (`choisit`) : net sur un PC, où la tuile l'affiche en 28 px.
+PETIT = 32
 # Inutile de chercher plus grand : la plus grande version écrite (3x, 40 px
 # de large) en fait 120.
 ASSEZ = 3 * LARGE
@@ -262,15 +265,40 @@ def examine(data):
     return {"ext": ext, "cote": min(w, h), "plein": min(coins) >= 250, "im": im}
 
 
+def fond_colore(t):
+    """Vrai si l'image a un fond plein, uni et COLORÉ : `normalise` le
+    gardera (le carré violet de Twitch), au lieu de le retirer."""
+    if not t["plein"]:
+        return False
+    im = t["im"]
+    w, h = im.size
+    coins = [im.getpixel(p)[:3] for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    fond = coins[0]
+    return (all(max(abs(a - b) for a, b in zip(c, fond)) <= PROCHE for c in coins)
+            and max(fond) - min(fond) > TEINTE)
+
+
 def choisit(trouvees):
     """Un SVG d'abord ; sinon la plus grande image transparente si elle est
     assez nette (`NET`) ; sinon la plus grande de toutes. À égalité, la
-    première trouvée, donc la mieux placée par `candidates`."""
+    première trouvée, donc la mieux placée par `candidates`.
+    ⚠️ SAUF UN FOND COLORÉ (23/10/2026, demande) : si la plus grande est une
+    icône d'application à fond coloré, que la tuile montrerait en carré, et
+    que le site fournit aussi son logo SANS FOND d'au moins `PETIT` px, c'est
+    ce logo : le vrai visage du site (Twitch, son glitch lavande, au lieu du
+    carré violet). Un fond blanc ou noir, lui, est retiré (`detoure`) : la
+    grande donne alors le même logo sans fond, en plus net."""
     svg = [t for t in trouvees if t["ext"] == "svg"]
     if svg:
         return svg[0]
     nettes = [t for t in trouvees if not t["plein"] and t["cote"] >= NET]
-    return max(nettes or trouvees, key=lambda t: t["cote"])
+    if nettes:
+        return max(nettes, key=lambda t: t["cote"])
+    grande = max(trouvees, key=lambda t: t["cote"])
+    sans_fond = [t for t in trouvees if not t["plein"] and t["cote"] >= PETIT]
+    if fond_colore(grande) and sans_fond:
+        return max(sans_fond, key=lambda t: t["cote"])
+    return grande
 
 
 def reduit(im, cote):
