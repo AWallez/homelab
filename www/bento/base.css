@@ -69,6 +69,9 @@ main.coins > .racc{margin-bottom:calc(16px + var(--tete-ecart,0px))}
    Des que les coins sont POSSIBLES, pas seulement poses : c est cette rangee
    qui decide de la hauteur de l en-tete, mesuree avant de ranger. */
 main.coins-possibles > .racc{max-width:var(--tete-l,1100px)}
+/* Leur fenetre, quand elles defilent, va jusqu aux cartes des coins : les
+   40 px qui les separent de l en-tete (`RANGEMENT.ENTRE`, coins egaux). */
+main.coins-possibles > .racc .shortcuts{--deb:40px}
 main.coins > .search{margin-bottom:calc(18px + var(--tete-ecart,0px))}
 /* Le bandeau des donnees figees, quand il s affiche entre la barre et les
    raccourcis : 8 px sous la barre, puis l ecart allonge comme les autres. Ses

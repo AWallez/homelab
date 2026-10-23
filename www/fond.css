@@ -1541,9 +1541,9 @@ body.sans-fondu { transition: none !important }
 /* Quand ca deborde, la grille part du bord gauche : centree, son debut
    sortirait de la zone defilante et ne pourrait plus etre atteint. */
 .racc.defile .shortcuts { justify-content: start }
-/* PAR PAGES (23/10/2026, voir `rangeeRacc`) : la fenetre fait juste une page
-   de colonnes entieres, et le defilement s aimante a la premiere tuile de
-   chaque page (`.page`), jamais entre deux : aucune tuile coupee. */
+/* PAR PAGES (23/10/2026, voir `rangeeRacc`) : chaque page occupe toute la
+   fenetre, ses tuiles centrees, et le defilement s aimante a la premiere tuile
+   de chaque page (`.page`), jamais entre deux : au repos, aucune tuile coupee. */
 .racc.defile .shortcuts { scroll-snap-type: x mandatory }
 .racc.defile .shortcuts .t { scroll-snap-align: none }
 .racc.defile .shortcuts .t.page { scroll-snap-align: start }
@@ -1579,6 +1579,14 @@ main { --pg: 1.25rem }
 @media (max-width: 807px) {
   .racc { max-width: none; margin-inline: calc(-1 * var(--pg)) }
   .shortcuts { padding-inline: var(--pg); scroll-padding-inline: var(--pg) }
+}
+/* PLUS LARGE, LA FENETRE SEULE deborde de la rangee (`--deb`, 23/10/2026) :
+   jusqu au bord de l ecran, ou des cartes des coins (bento/base.css). Les
+   pages qui defilent entrent et sortent par la, et non au milieu de la page ;
+   les fleches restent ou elles sont. Meme compte de la largeur utile. */
+@media (min-width: 808px) {
+  .shortcuts { --deb: var(--pg); margin-inline: calc(-1 * var(--deb));
+    padding-inline: var(--deb); scroll-padding-inline: var(--deb) }
 }
 
 /* LES FLECHES : carres arrondis, dans le meme verre que les cartes (dalle,

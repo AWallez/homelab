@@ -1615,18 +1615,22 @@ function shortcuts() {
    range le deuxieme raccourci SOUS le premier.
    ⚠️ La largeur d une colonne et l ecart viennent du CSS (`--l`, `--g`), qui
    les change sur telephone : le calcul ne peut pas les supposer.
-   ⚠️ QUAND ELLE DEFILE, LA RANGEE DEFILE PAR PAGES (23/10/2026, demande) : la
-   fenetre fait exactement `cap` colonnes, centree, et ne montre que des tuiles
-   ENTIERES ; une page = `cap` colonnes sur toutes les lignes, remplie ligne
-   par ligne, et chaque defilement (fleches, molette, doigt) avance d une page
-   entiere (`data-page`, aimantation sur la premiere tuile de chaque page).
-   Sur la derniere page, incomplete, chaque ligne se centre comme hors
-   defilement. Chaque tuile recoit sa place (ligne, demi-colonne) selon son
-   RANG : un raccourci deplace (`glisseRacc`) prend celle de son nouveau rang. */
+   ⚠️ QUAND ELLE DEFILE, LA RANGEE DEFILE PAR PAGES (23/10/2026, demande) :
+   une page = `cap` colonnes sur toutes les lignes, remplie ligne par ligne,
+   et chaque defilement (fleches, molette, doigt) avance d une page entiere
+   (`data-page`, aimantation sur la premiere tuile de chaque page). Sur la
+   derniere page, incomplete, chaque ligne se centre comme hors defilement.
+   Chaque tuile recoit sa place (ligne, demi-colonne) selon son RANG : un
+   raccourci deplace (`glisseRacc`) prend celle de son nouveau rang.
+   ⚠️ CHAQUE PAGE OCCUPE TOUTE LA FENETRE, ses tuiles centrees, et la suivante
+   commence une tuile plus loin (`ENTRE_PAGES`) : au repos, rien que des tuiles
+   entieres ; au passage, elles entrent et sortent par les bords de la fenetre,
+   qui va jusqu au bord de l ecran ou des cartes des coins (`--deb`, fond.css).
+   Une fenetre reduite a la page coupait les tuiles au milieu de l en-tete. */
 function rangeeRacc() {
   const w = document.getElementById("shortcuts"), r = w.parentElement;
-  // la largeur se mesure sans la fenetre posee au passage precedent, ni ses copies
-  w.style.width = w.style.paddingInline = w.style.scrollPaddingInline = w.style.marginInline = "";
+  // la largeur se mesure sans les pages posees au passage precedent, ni leurs copies
+  w.style.paddingInline = w.style.scrollPaddingInline = w.style.gridTemplateColumns = "";
   w.querySelectorAll(":scope > .copie").forEach((c) => c.remove());
   const st = getComputedStyle(w);
   const l = parseFloat(st.getPropertyValue("--l")) || 76, g = parseFloat(st.getPropertyValue("--g")) || 14;
@@ -1660,12 +1664,16 @@ function rangeeRacc() {
   const raccs = enfants.filter((t) => t.matches("a.t")), boutons = enfants.filter((t) => !t.matches("a.t"));
   const parPage = cap * L, place = Math.max(1, parPage - boutons.length);
   const pages = Math.max(1, Math.ceil(raccs.length / place));
-  w.style.setProperty("--k", pages * cap);
-  w.style.setProperty("--k2", 2 * pages * cap);
-  w.style.width = (cap * l + (cap - 1) * g) + "px";
-  w.style.paddingInline = w.style.scrollPaddingInline = "0";
-  w.style.marginInline = "auto";
-  w.dataset.page = cap * (l + g);
+  /* Une page : `cap` colonnes (`B` px), centrees dans la fenetre (`marge` de
+     chaque cote) ; d une page a l autre, `pas` px, soit la fenetre et
+     `ENTRE_PAGES`. Entre deux pages, une colonne vide comble l ecart. */
+  const ENTRE_PAGES = l + g;
+  const B = cap * l + (cap - 1) * g, marge = Math.max(0, (w.clientWidth - B) / 2);
+  const pas = Math.max(w.clientWidth + ENTRE_PAGES, B + 2 * g);
+  const demi = `repeat(${2 * cap}, calc((var(--l) - var(--g)) / 2))`;
+  w.style.gridTemplateColumns = Array(pages).fill(demi).join(` ${pas - B - 2 * g}px `);
+  w.style.paddingInline = w.style.scrollPaddingInline = marge + "px";
+  w.dataset.page = pas;
   for (let p = 0; p < pages; p++) {
     const page = raccs.slice(p * place, (p + 1) * place).concat(p === pages - 1 ? boutons : boutons.map((b) => {
       const c = b.cloneNode(true);
@@ -1679,7 +1687,7 @@ function rangeeRacc() {
       // derniere page : une demi-colonne de decalage par tuile absente de la ligne
       const decal = p === pages - 1 ? cap - Math.min(cap, page.length - ligne * cap) : 0;
       t.style.gridRow = String(ligne + 1);
-      t.style.gridColumnStart = String(2 * (p * cap + c) + decal + 1);
+      t.style.gridColumnStart = String(p * (2 * cap + 1) + 2 * c + decal + 1);
       t.classList.toggle("page", j === 0);
     });
   }
