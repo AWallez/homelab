@@ -124,7 +124,10 @@ main{position:relative;z-index:1;max-width:75rem;margin-inline:auto;padding:1.75
   transition:transform .25s cubic-bezier(.2,.8,.2,1),border-color .25s,box-shadow .25s}
 .t:hover .i{transform:translateY(-3px);border-color:rgba(255,255,255,.34);
   box-shadow:0 16px 36px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.46)}
-.t .i img{width:28px;height:28px;display:block}
+/* Ombre NETTE sous le logo (23/10/2026, demande) : 1 px, sans flou, qui le
+   detache du verre en relief ; floue, elle le faisait paraitre flou. Taille :
+   28 px par defaut, celle de l index sinon (voir `shortcuts`). */
+.t .i img{width:28px;height:28px;display:block;filter:drop-shadow(0 1px 0 rgba(0,0,0,.6))}
 .t .i svg{width:22px;height:22px;display:block;color:var(--mut)}
 .t .l{font-size:.68rem;color:var(--mut);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .t .e{position:absolute;top:-4px;right:2px;width:20px;height:20px;border-radius:50%;padding:0;

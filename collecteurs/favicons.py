@@ -406,6 +406,14 @@ def gabarit(w, h):
     return max(1, round(l)), max(1, round(H))
 
 
+def pair(n):
+    """`n` arrondi au pair supérieur. La tuile fait 52 px : un logo de taille
+    impaire, centré, y tombait ENTRE deux pixels (RSI à 17,5 px du haut,
+    YouTube à 9,5 du bord), et le navigateur l'étalait sur deux rangées de
+    pixels, ce qui le floutait."""
+    return n + n % 2
+
+
 def proportions_svg(data):
     """Largeur et hauteur d'un SVG : son `viewBox`, sinon ses attributs
     `width` et `height`, carré à défaut. Un SVG ne se rogne pas (il faudrait
@@ -432,10 +440,12 @@ def normalise(t, cle):
       plein, ROGNÉE à son contenu (des marges vides faisaient paraître un logo
       plus petit que son voisin), puis écrite à la taille EXACTE de chaque
       densité d'écran : réduite si la source est plus grande, agrandie
-      (bicubique, sans les franges de Lanczos) si elle est plus petite."""
+      (bicubique, sans les franges de Lanczos) si elle est plus petite.
+    La place réservée a toujours des côtés PAIRS (`pair`) : un logo impair y
+    est posé avec un pixel de marge."""
     if t["ext"] == "svg":
         l, h = gabarit(*proportions_svg(t["data"]))
-        return [(cle + ".svg", t["data"])], {"f": cle + ".svg", "l": l, "h": h}
+        return [(cle + ".svg", t["data"])], {"f": cle + ".svg", "l": pair(l), "h": pair(h)}
     from PIL import Image
     im = reduit(t["im"], TRAVAIL)
     if t["plein"]:
@@ -446,14 +456,18 @@ def normalise(t, cle):
     if boite:
         im = im.crop(boite)
     l, h = gabarit(*im.size)
+    L, H = pair(l), pair(h)
     fichiers = []
     for k in DENSITES:
         nom = cle + (".png" if k == 1 else "@%dx.png" % k)
         filtre = Image.Resampling.LANCZOS if im.size[0] >= l * k else Image.Resampling.BICUBIC
+        logo = im.convert("RGBa").resize((l * k, h * k), filtre).convert("RGBA")
+        toile = Image.new("RGBA", (L * k, H * k), (0, 0, 0, 0))
+        toile.paste(logo, ((L - l) * k // 2, (H - h) * k // 2))
         buf = io.BytesIO()
-        im.convert("RGBa").resize((l * k, h * k), filtre).convert("RGBA").save(buf, "PNG", optimize=True)
+        toile.save(buf, "PNG", optimize=True)
         fichiers.append((nom, buf.getvalue()))
-    return fichiers, {"f": fichiers[0][0], "l": l, "h": h, "x": [n for n, _ in fichiers[1:]]}
+    return fichiers, {"f": fichiers[0][0], "l": L, "h": H, "x": [n for n, _ in fichiers[1:]]}
 
 
 def icone_de(cle, hotes):
