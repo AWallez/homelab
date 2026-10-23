@@ -1622,7 +1622,8 @@ function rangeeRacc() {
   /* Largeur UTILE, sans le rembourrage pose quand la rangee va jusqu aux bords. */
   const utile = w.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
   const n = w.children.length, cap = Math.max(1, Math.floor((utile + g) / (l + g)));
-  const lignes = Math.min(3, Math.ceil(n / cap));
+  // 2 lignes au plus quand les coins sont possibles (voir `bento`)
+  const lignes = Math.min(r.parentElement.classList.contains("coins-possibles") ? 2 : 3, Math.ceil(n / cap));
   const k = Math.ceil(n / lignes);
   w.style.setProperty("--k", k);
   w.style.setProperty("--k2", 2 * k);
@@ -3115,7 +3116,17 @@ function bento(racine, visibles, asynchrone) {
      rendre les coins impossibles des le premier rangement ; sans coins a
      l ecran, `mesureTete` ne passait jamais, et ils ne revenaient plus
      (« Relevés absents », 17/10/2026). */
-  if (permis && W >= COINS.min) TETE_H = hauteurTete() || TETE_H;
+  /* ⚠️ LES RACCOURCIS EN 2 LIGNES LARGES DES QUE LES COINS SONT POSSIBLES
+     (23/10/2026, demande) : une 3e ligne grandissait l en-tete de 86 px et les
+     coins tombaient (16 raccourcis et plus). La rangee prend la largeur de
+     l en-tete, 2 lignes au plus, puis defile (`rangeeRacc`, fond.css). Posee
+     AVANT la mesure ci-dessous, qui doit voir l en-tete tel qu il sera. */
+  const large = permis && W >= COINS.min;
+  if (racine.id === "groups" && racine.parentElement.classList.contains("coins-possibles") !== large) {
+    racine.parentElement.classList.toggle("coins-possibles", large);
+    rangeeRacc();
+  }
+  if (large) TETE_H = hauteurTete() || TETE_H;
   const coins = coinsPour(W, permis);
   const cle = W + "|" + etat + "|" + excl + marqueCoins(coins), tranche = trancheDe(W, etat) + marqueCoins(coins), pr = PRETS.get(tranche);
   PROVISOIRE = false;

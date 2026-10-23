@@ -64,6 +64,11 @@ main.coins > :is(#bar,#fige,#nav){max-width:var(--tete-l,1100px)}
 main.coins{padding-top:6px}
 main.coins .bar{margin:32px auto calc(18px + var(--tete-ecart,0px))}
 main.coins > .racc{margin-bottom:calc(16px + var(--tete-ecart,0px))}
+/* Les raccourcis sur toute la largeur de l en-tete, 2 lignes au plus (voir
+   `bento` et `rangeeRacc`, 23/10/2026) : une 3e ligne faisait tomber les coins.
+   Des que les coins sont POSSIBLES, pas seulement poses : c est cette rangee
+   qui decide de la hauteur de l en-tete, mesuree avant de ranger. */
+main.coins-possibles > .racc{max-width:var(--tete-l,1100px)}
 main.coins > .search{margin-bottom:calc(18px + var(--tete-ecart,0px))}
 /* Le bandeau des donnees figees, quand il s affiche entre la barre et les
    raccourcis : 8 px sous la barre, puis l ecart allonge comme les autres. Ses
