@@ -56,8 +56,14 @@ soit 56 à 84 px réels sur un écran 2x ou 3x). RSI servait un carré gris de
 Vectoriser les images n'aurait rien rendu : un tracé devine des formes à
 partir des pixels, il perd les dégradés et les détails sans en ajouter.
 
+Une IMAGE IMPORTÉE à la main dans la fenêtre d'un raccourci (champ `image` de
+shortcuts.json) passe avant l'icône du site, avec le même traitement, dans
+des fichiers à part : l'index la range sous `m`, et l'icône du site reste
+prête pour quand on la retire (`icone_importee`).
+
 Usage : favicons.py [-v]     (cron quotidien, et à la main après un ajout)
 """
+import base64
 import fcntl
 import io
 import json
@@ -541,13 +547,51 @@ def icone_de(cle, hotes):
 
 def fichiers_de(v):
     """Les fichiers d'une entrée de l'index : un nom seul (index d'avant le
-    23/10/2026), ou l'image et ses versions 2x et 3x. Vide si l'entrée est
-    illisible : elle sera refaite."""
+    23/10/2026), ou l'image et ses versions 2x et 3x, et celles de l'image
+    importée à la main (`m`). Vide si l'entrée est illisible : elle sera
+    refaite."""
     if isinstance(v, str):
         return [v]
-    if isinstance(v, dict) and isinstance(v.get("f"), str):
-        return [v["f"]] + [x for x in v.get("x", []) if isinstance(x, str)]
-    return []
+    fichiers = []
+    for e in (v, v.get("m")) if isinstance(v, dict) else ():
+        if isinstance(e, dict) and isinstance(e.get("f"), str):
+            fichiers += [e["f"]] + [x for x in e.get("x", []) if isinstance(x, str)]
+    return fichiers
+
+
+# L'image importée dans la fenêtre d'un raccourci : une adresse `data:` que la
+# page a déjà ramenée à 256 px en PNG (`imageImportee`, app.js). Jamais de SVG,
+# qui peut porter du script.
+IMPORTEE = re.compile(r"data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$")
+
+
+def empreinte(texte):
+    """Empreinte courte (djb2, 32 bits) de l'image importée, calculée de la
+    même façon par la page (`empreinteImage`, app.js) : elle sait ainsi si l'icône
+    traitée correspond encore à l'image du raccourci, ou à une précédente."""
+    h = 5381
+    for c in texte:
+        h = (h * 33 + ord(c)) & 0xFFFFFFFF
+    return "%08x" % h
+
+
+def icone_importee(cle, texte):
+    """L'image importée à la main, traitée comme une icône trouvée sur le
+    site : mêmes tailles exactes, même rognage, même fond retiré ou arrondi.
+    Dans des fichiers À PART (`<site>.perso.png`) : l'icône du site reste, et
+    la page y revient aussitôt quand on retire l'image (23/10/2026)."""
+    m = IMPORTEE.match(texte.strip()) if isinstance(texte, str) else None
+    if not m:
+        return None, None
+    try:
+        t = examine(base64.b64decode(m.group(2)))
+    except Exception:
+        return None, None
+    if not t or t["ext"] == "svg":
+        return None, None
+    fichiers, entree = normalise(t, cle + ".perso")
+    entree["v"] = empreinte(texte.strip())
+    return fichiers, entree
 
 
 def main():
@@ -572,6 +616,7 @@ def main():
     # La clé est le domaine tel que la page le calcule (sans `www.`) ; le
     # téléchargement, lui, essaie aussi le domaine complet.
     hotes = []
+    images = {}
     for s in raccourcis:
         h = urlparse(s.get("url", "")).hostname
         if not h:
@@ -580,6 +625,9 @@ def main():
         variantes = [h] + ([cle] if cle != h else ["www." + h])
         if cle not in [c for c, _ in hotes]:
             hotes.append((cle, variantes))
+        # l'image importée : la première, si deux raccourcis du site en ont une
+        if isinstance(s.get("image"), str) and cle not in images:
+            images[cle] = s["image"]
     cles = set(c for c, _ in hotes)
 
     # On repart de l'index précédent, restreint aux raccourcis encore présents :
@@ -596,16 +644,34 @@ def main():
     echecs = []
     for cle, variantes in hotes:
         dit(cle)
-        fichiers, entree = icone_de(cle, variantes)
-        if not fichiers:
+        # l'icône du site : celle du passage, sinon celle d'un passage précédent
+        precedente = index.get(cle)
+        entree = ({k: v for k, v in precedente.items() if k != "m"} if isinstance(precedente, dict)
+                  else {"f": precedente} if isinstance(precedente, str) else {})
+        fichiers, auto = icone_de(cle, variantes)
+        if fichiers:
+            # les images d'abord, l'index ensuite : la page ne voit jamais une
+            # entrée dont un fichier manque
+            for nom, data in fichiers:
+                ecrit(os.path.join(DEST, nom), data)
+            entree = auto
+            repris.discard(cle)
+        else:
             echecs.append(cle)
-            continue
-        # les images d'abord, l'index ensuite : la page ne voit jamais une
-        # entrée dont un fichier manque
-        for nom, data in fichiers:
-            ecrit(os.path.join(DEST, nom), data)
-        index[cle] = entree
-        repris.discard(cle)
+        # l'image importée à la main, à côté (`m`) : la page la préfère
+        if cle in images:
+            fichiers, m = icone_importee(cle, images[cle])
+            if fichiers:
+                for nom, data in fichiers:
+                    ecrit(os.path.join(DEST, nom), data)
+                entree["m"] = m
+                dit("   image importée, %d x %d" % (m["l"], m["h"]))
+            else:
+                print("image importée illisible, ignorée : " + cle)
+        if fichiers_de(entree):
+            index[cle] = entree
+        else:
+            index.pop(cle, None)
 
     # Les icônes des raccourcis supprimés n'ont plus lieu d'encombrer le dossier.
     # On se fie au NOM D'HÔTE et non aux réussites du passage : un site en panne

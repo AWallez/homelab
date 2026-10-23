@@ -257,6 +257,13 @@ dialog.dlg{border-radius:var(--r);padding:20px;
    fenetre du mot de passe seul, au-dessus de celle qui l a appelee. */
 .dlg .err{min-height:1.1em;margin:-6px 0 8px;font-size:.72rem;color:#ffd08a}
 .dlg.mdp{width:min(360px,calc(100vw - 32px))}
+/* Icone d un raccourci (23/10/2026) : l apercu dans une vraie tuile, inerte,
+   a cote des boutons « Importer une image » et « Revenir a l icone du site ». */
+.dlg .ico{display:flex;gap:14px;align-items:center;margin-bottom:13px}
+.dlg .ico .apercu{width:auto;flex:none;pointer-events:none;cursor:default}
+.dlg .ico-b{flex:1;min-width:0}
+.dlg .ico-b .row{flex-wrap:wrap;margin:0 0 6px}
+.dlg .ico-b .sub{margin:0;font-size:.7rem}
 
 /* ---- Adaptation ---- */
 @media(max-width:820px){

@@ -1494,27 +1494,63 @@ const SANS_GESTIONNAIRE = 'autocomplete="off" data-bwignore="true" data-1p-ignor
 
 function editShortcut(i) {
   const it = i === null ? { url: "", name: "" } : rd()[i];
+  // l image importee (voir `imageImportee`) : gardee, remplacee ou retiree ici
+  let image = it.image || null;
   const d = dlg();
   d.innerHTML = `<form><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
     <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required ${SANS_GESTIONNAIRE}>
     <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple" ${SANS_GESTIONNAIRE}>
+    <label>Icône</label>
+    <div class="ico"><span class="t apercu" aria-hidden="true"><span class="i"></span></span>
+      <div class="ico-b"><div class="row"><button type="button" id="dimg">Importer une image</button>
+        <button type="button" id="dauto">Revenir à l'icône du site</button></div>
+        <div class="sub" id="dico"></div></div>
+      <input type="file" id="dfic" accept="image/*" hidden></div>
     ${champMdp()}
     <div class="row">${i === null ? "" : '<button type="button" id="dsup" class="danger">Supprimer</button>'}
     <span class="sp"></span><button type="button" id="dann">Annuler</button>
     <button type="submit" class="pri">${i === null ? "Ajouter" : "Enregistrer"}</button></div></form>`;
+  /* L apercu dans une vraie tuile : l image importee, sinon l icone du site
+     (celle que le NAS a trouvee pour l adresse saisie), sinon les initiales. */
+  const apercu = () => {
+    const s = d.querySelector(".apercu .i"), brut = d.querySelector("#du").value.trim();
+    const h = hst(/^https?:\/\//i.test(brut) ? brut : "https://" + brut);
+    s.textContent = (d.querySelector("#dn").value.trim() || h || "?").slice(0, 2).toUpperCase();
+    poseIcone(s, iconeDe(image && { image }, ICONES && ICONES[h]));
+    d.querySelector("#dauto").hidden = !image;
+    d.querySelector("#dico").textContent = image ? "Image importée : elle remplace l'icône du site."
+      : "L'icône du site, trouvée par le NAS. Une image importée la remplace.";
+  };
+  const fic = d.querySelector("#dfic");
+  d.querySelector("#dimg").addEventListener("click", () => fic.click());
+  fic.addEventListener("change", async () => {
+    const f = fic.files[0], err = d.querySelector(".err");
+    fic.value = "";
+    if (!f) return;
+    try { image = await imageImportee(f); err.textContent = ""; }
+    catch (e) { err.textContent = /lourde/.test(e.message) ? "Image trop lourde, même réduite." : "Image illisible par le navigateur."; return; }
+    apercu();
+  });
+  d.querySelector("#dauto").addEventListener("click", () => { image = null; apercu(); });
+  d.querySelector("#du").addEventListener("change", apercu);
+  d.querySelector("#dn").addEventListener("change", apercu);
+  apercu();
   const enregistre = async (l) => {
     if (!(await ecritDepuis(d, "data/shortcuts.json", l))) return;
     SC = l; shortcuts(); d.close("ok");
     // Le veilleur du NAS récupère l'icône d'un nouveau raccourci dès l'écriture
     // du fichier (inotify sur www/data) : on recharge la table quelques secondes
-    // après, pour l'afficher sans avoir à recharger la page.
+    // après, pour l'afficher sans avoir à recharger la page. Une image importée
+    // attend la fin du passage, qui refait aussi les icônes des autres sites :
+    // une seconde fois, plus tard ; elle s'affiche telle quelle d'ici là.
     setTimeout(() => { ICONES = null; shortcuts(); }, 6000);
+    if (image) setTimeout(() => { ICONES = null; shortcuts(); }, 30000);
   };
   d.querySelector("form").addEventListener("submit", (e) => {
     e.preventDefault();
     const raw = d.querySelector("#du").value.trim(); if (!raw) return;
     const url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
-    const nv = { url, name: d.querySelector("#dn").value.trim() || hst(url) };
+    const nv = Object.assign({ url, name: d.querySelector("#dn").value.trim() || hst(url) }, image ? { image } : {});
     const l = rd().slice();
     i === null ? l.push(nv) : (l[i] = nv);
     enregistre(l);
@@ -1554,6 +1590,82 @@ dlg().addEventListener("mouseup", (e) => {
    qui floutait. Un ancien index (un nom de fichier seul) reste lisible. */
 let ICONES = null;
 
+/* ---- IMAGE IMPORTEE A LA MAIN (23/10/2026, demande) ----
+   La fenetre d un raccourci accepte n importe quelle image : elle est gardee
+   dans le raccourci lui-meme (`image`, une adresse `data:`), et le NAS la
+   traite comme une icone de site (favicons.py : tailles exactes, rognage),
+   dans des fichiers a part (`m` dans l index). L icone du site reste donc
+   prete : « Revenir a l icone du site » retire l image, et la tuile la
+   retrouve aussitot. En attendant le traitement, l image s affiche telle
+   quelle. */
+
+/* Empreinte courte (djb2, 32 bits), calculee de meme par favicons.py : l icone
+   traitee (`m.v`) correspond-elle encore a l image du raccourci ? */
+function empreinteImage(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) >>> 0;
+  return h.toString(16).padStart(8, "0");
+}
+
+/* L icone a montrer pour un raccourci : son image importee (traitee par le
+   NAS si l empreinte correspond, sinon telle quelle), sinon celle du site.
+   null : les initiales restent. */
+function iconeDe(it, e) {
+  if (it && it.image) return e && e.m && e.m.v === empreinteImage(it.image) ? e.m : { src: it.image };
+  if (!e) return null;
+  return typeof e === "string" ? { f: e } : e.f ? e : null;
+}
+
+/* Pose l icone `e` dans la case `s` une fois chargee (les initiales restent si
+   elle manque) : a sa taille d affichage et avec ses versions 2x et 3x pour
+   une icone traitee, dans le carre de 28 px pour une image pas encore
+   traitee. */
+function poseIcone(s, e) {
+  const im = e ? new Image() : null;
+  // seule la derniere demandee s affiche (l apercu change vite)
+  s._icone = im;
+  if (!e) return;
+  if (e.src) {
+    im.style.objectFit = "contain";
+  } else {
+    if (e.l && e.h) { im.style.width = e.l + "px"; im.style.height = e.h + "px"; }
+    const x = e.x || [];
+    if (x.length) im.srcset = [`icons/sites/${e.f} 1x`].concat(x.map((n, j) => `icons/sites/${n} ${j + 2}x`)).join(", ");
+  }
+  im.onload = () => { if (s._icone !== im) return; s.textContent = ""; s.appendChild(im); };
+  im.src = e.src || "icons/sites/" + e.f;
+}
+
+/* Une image choisie sur l appareil, quel que soit son format (PNG, JPEG,
+   WebP, GIF, SVG...), redessinee en PNG de 256 px au plus. Un SVG est
+   DESSINE, jamais garde : il peut porter du script. Lue en `data:` et non par
+   `URL.createObjectURL` : la CSP du NAS n admet que `data:` pour les images.
+   Plus petite si elle reste lourde : tout le fichier des raccourcis part a
+   chaque enregistrement. */
+async function imageImportee(fichier) {
+  const url = await new Promise((ok, ko) => {
+    const r = new FileReader();
+    r.onload = () => ok(r.result); r.onerror = ko;
+    r.readAsDataURL(fichier);
+  });
+  const im = new Image();
+  im.src = url;
+  await im.decode();
+  const svg = /svg/i.test(fichier.type), w = im.naturalWidth || 256, h = im.naturalHeight || 256;
+  for (const cote of [256, 192, 128]) {
+    // un SVG se dessine a la taille voulue ; une image ne s agrandit pas
+    const k = svg ? cote / Math.max(w, h) : Math.min(1, cote / Math.max(w, h));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    g.drawImage(im, 0, 0, c.width, c.height);
+    const png = c.toDataURL("image/png");
+    if (png.length <= 200000) return png;
+  }
+  throw new Error("image trop lourde");
+}
+
 /* ---- MODE EDITION DES RACCOURCIS, AU DOIGT (09/10/2026) ----
    Le crayon de chaque raccourci n apparait qu au survol de la souris : sur
    iPhone, impossible de modifier ou supprimer un raccourci. Sur un ecran sans
@@ -1587,16 +1699,8 @@ function shortcuts() {
     ICONES = {};
     lireOu("icons/sites/index.json", null).then(m => { if (m) { ICONES = m; shortcuts(); } });
   }
-  w.querySelectorAll(".i[data-h]").forEach(s => {
-    const e = ICONES[s.dataset.h];
-    if (!e) return;                  // pas d'icône rapatriée : les initiales restent
-    const { f, l, h, x = [] } = typeof e === "string" ? { f: e } : e;
-    const im = new Image();
-    if (l && h) { im.style.width = l + "px"; im.style.height = h + "px"; }
-    if (x.length) im.srcset = [`icons/sites/${f} 1x`].concat(x.map((n, j) => `icons/sites/${n} ${j + 2}x`)).join(", ");
-    im.onload = () => { s.textContent = ""; s.appendChild(im); };
-    im.src = "icons/sites/" + f;
-  });
+  w.querySelectorAll(".i[data-h]").forEach(s =>
+    poseIcone(s, iconeDe(rd()[+s.closest("a.t").dataset.n], ICONES[s.dataset.h])));
   w.querySelectorAll(".e").forEach(b => b.onclick = ev => { ev.preventDefault(); editShortcut(+b.dataset.i); });
   /* En edition, toucher l icone l ouvre en modification au lieu du lien.
      Le rang est lu au clic (`data-n`) : un raccourci deplace en change. */
