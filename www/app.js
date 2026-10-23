@@ -1546,7 +1546,12 @@ dlg().addEventListener("mouseup", (e) => {
    refusaient (ERR_BLOCKED_BY_RESPONSE.NotSameSite) — d'où des raccourcis sans
    icône alors que l'onglet du site en affichait une. `favicons.py` les rapatrie
    dans www/icons/ et décrit le résultat dans index.json (le nom de fichier
-   dépend du format réel : un « .ico » est parfois un PNG). */
+   dépend du format réel : un « .ico » est parfois un PNG).
+   ⚠️ DEPUIS LE 23/10/2026, une entrée de l'index donne aussi la TAILLE
+   d'affichage (`l` x `h`, un logo large va jusqu'à 40 px) et les versions 2x
+   et 3x (`x`), chacune à la taille exacte où elle s'affiche : le navigateur
+   prend celle de l'écran (`srcset`) au lieu de réduire une grande image, ce
+   qui floutait. Un ancien index (un nom de fichier seul) reste lisible. */
 let ICONES = null;
 
 /* ---- MODE EDITION DES RACCOURCIS, AU DOIGT (09/10/2026) ----
@@ -1583,9 +1588,12 @@ function shortcuts() {
     lireOu("icons/sites/index.json", null).then(m => { if (m) { ICONES = m; shortcuts(); } });
   }
   w.querySelectorAll(".i[data-h]").forEach(s => {
-    const f = ICONES[s.dataset.h];
-    if (!f) return;                  // pas d'icône rapatriée : les initiales restent
+    const e = ICONES[s.dataset.h];
+    if (!e) return;                  // pas d'icône rapatriée : les initiales restent
+    const { f, l, h, x = [] } = typeof e === "string" ? { f: e } : e;
     const im = new Image();
+    if (l && h) { im.style.width = l + "px"; im.style.height = h + "px"; }
+    if (x.length) im.srcset = [`icons/sites/${f} 1x`].concat(x.map((n, j) => `icons/sites/${n} ${j + 2}x`)).join(", ");
     im.onload = () => { s.textContent = ""; s.appendChild(im); };
     im.src = "icons/sites/" + f;
   });

@@ -45,9 +45,16 @@ soit 56 à 84 px réels sur un écran 2x ou 3x). RSI servait un carré gris de
 - une icône à FOND PLEIN (les icônes d'application en ont un : carré violet
   de Twitch, blanc de la Bbox) est DÉTOURÉE, son fond retiré, sinon arrondie
   (`normalise`) ; dans la tuile de verre, un carré plein jurait ;
-- tout ce qui n'est pas SVG ressort en PNG carré de 128 px au plus.
-Vectoriser une petite icône n'aurait rien rendu : un tracé de 16 px ne
-contient pas les détails du logo, il les aurait arrondis en taches.
+- chaque logo prend la même SURFACE dans la tuile, un logo large jusqu'à 40 px
+  de large (`gabarit`) : RSI, 2,4 fois plus large que haut, n'y faisait que
+  28 x 12 px ;
+- une image ressort en trois PNG (`DENSITES`), chacun à la taille EXACTE où
+  il s'affiche (PC, écran 2x, iPhone 3x) : c'était le navigateur qui
+  floutait, en réduisant d'un coup une image de 128 px à 28. Un SVG reste
+  tel quel. L'index donne, par site, le fichier, sa taille d'affichage et
+  ses versions 2x et 3x.
+Vectoriser les images n'aurait rien rendu : un tracé devine des formes à
+partir des pixels, il perd les dégradés et les détails sans en ajouter.
 
 Usage : favicons.py [-v]     (cron quotidien, et à la main après un ajout)
 """
@@ -70,13 +77,21 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/126.0.0.0 Safari/537.36")
 BAVARD = "-v" in sys.argv
 
-# Côté maximal conservé. L'icône s'affiche en 28 px dans une tuile de 52 ;
-# 128 px couvrent les écrans à 3x avec de la marge, et tiennent en quelques
-# kilo-octets.
-CIBLE = 128
+# La tuile (52 px) montre l'icône dans un carré de `COTE` px CSS ; un logo
+# large y prend la même surface, jusqu'à `LARGE` px de large (`gabarit`).
+COTE = 28
+LARGE = 40
+# Une image par densité d'écran, à sa taille exacte : 1 pour le PC, 2 pour
+# un écran 2x, 3 pour l'iPhone. Le navigateur choisit (`srcset`, app.js).
+DENSITES = (1, 2, 3)
+# Taille de travail : le détourage parcourt les pixels un à un.
+TRAVAIL = 384
 # Une image transparente de ce côté au moins reste nette dans la tuile ; en
 # dessous, on lui préfère une plus grande, même à fond plein (détourée).
 NET = 64
+# Inutile de chercher plus grand : la plus grande version écrite (3x, 40 px
+# de large) en fait 120.
+ASSEZ = 3 * LARGE
 # Images téléchargées au plus par site : la page en déclare parfois quinze.
 ESSAIS = 8
 # Écart (par canal, sur 255) sous lequel un pixel est de la couleur du fond.
@@ -377,37 +392,80 @@ def arrondit(im):
     return im
 
 
-def normalise(t):
-    """L'icône retenue, prête pour la tuile : un SVG tel quel ; une image
-    réduite (le détourage parcourt les pixels un à un : pas plus de 3 x
-    `CIBLE`), détourée ou arrondie si elle a un fond plein, centrée sur un
-    carré (la tuile l'affiche en 28 x 28 et étirerait le reste), puis ramenée
-    à `CIBLE` px et écrite en PNG."""
+def gabarit(w, h):
+    """La taille d'affichage, en px CSS entiers, d'un logo de w x h : la
+    surface d'un carré de `COTE`, sans dépasser `COTE` de haut ni `LARGE` de
+    large. Un carré garde ses 28 x 28 ; RSI (2,4 fois plus large que haut)
+    passe de 28 x 12 à 40 x 17."""
+    a = w / h
+    l, H = COTE * a ** .5, COTE / a ** .5
+    if H > COTE:
+        l, H = COTE * a, COTE
+    if l > LARGE:
+        l, H = LARGE, LARGE / a
+    return max(1, round(l)), max(1, round(H))
+
+
+def proportions_svg(data):
+    """Largeur et hauteur d'un SVG : son `viewBox`, sinon ses attributs
+    `width` et `height`, carré à défaut. Un SVG ne se rogne pas (il faudrait
+    le dessiner) : ses marges restent les siennes."""
+    m = re.search(r"<svg[^>]*>", data[:3000].decode("utf-8", "replace"), re.I)
+    balise = m.group(0) if m else ""
+    vb = re.search(r'viewBox\s*=\s*["\']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)', balise, re.I)
+    if vb:
+        w, h = float(vb.group(1)), float(vb.group(2))
+    else:
+        # `\s` devant : `stroke-width` n'est pas une largeur
+        w = re.search(r'\swidth\s*=\s*["\']\s*([\d.]+)\s*(?:px)?\s*["\']', balise)
+        h = re.search(r'\sheight\s*=\s*["\']\s*([\d.]+)\s*(?:px)?\s*["\']', balise)
+        w, h = (float(w.group(1)), float(h.group(1))) if w and h else (1, 1)
+    return (w, h) if w > 0 and h > 0 else (1, 1)
+
+
+def normalise(t, cle):
+    """L'icône retenue, prête pour la tuile : les fichiers à écrire, et son
+    entrée dans l'index (`f` le fichier, `l` x `h` sa taille d'affichage en px
+    CSS, `x` ses versions 2x et 3x).
+    - Un SVG tel quel, à la taille que donnent ses proportions.
+    - Une image ramenée à `TRAVAIL` px, détourée ou arrondie si elle a un fond
+      plein, ROGNÉE à son contenu (des marges vides faisaient paraître un logo
+      plus petit que son voisin), puis écrite à la taille EXACTE de chaque
+      densité d'écran : réduite si la source est plus grande, agrandie
+      (bicubique, sans les franges de Lanczos) si elle est plus petite."""
     if t["ext"] == "svg":
-        return t["data"], "svg"
+        l, h = gabarit(*proportions_svg(t["data"]))
+        return [(cle + ".svg", t["data"])], {"f": cle + ".svg", "l": l, "h": h}
     from PIL import Image
-    im = reduit(t["im"], 3 * CIBLE)
+    im = reduit(t["im"], TRAVAIL)
     if t["plein"]:
         im = detoure(im) or arrondit(im)
-    w, h = im.size
-    if w != h:
-        carre = Image.new("RGBA", (max(w, h),) * 2, (0, 0, 0, 0))
-        carre.paste(im, ((max(w, h) - w) // 2, (max(w, h) - h) // 2))
-        im = carre
-    buf = io.BytesIO()
-    reduit(im, CIBLE).save(buf, "PNG", optimize=True)
-    return buf.getvalue(), "png"
+    # le contenu : ce qui n'est pas presque transparent (une lueur à 3 %
+    # n'élargit pas le logo)
+    boite = im.getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox()
+    if boite:
+        im = im.crop(boite)
+    l, h = gabarit(*im.size)
+    fichiers = []
+    for k in DENSITES:
+        nom = cle + (".png" if k == 1 else "@%dx.png" % k)
+        filtre = Image.Resampling.LANCZOS if im.size[0] >= l * k else Image.Resampling.BICUBIC
+        buf = io.BytesIO()
+        im.convert("RGBa").resize((l * k, h * k), filtre).convert("RGBA").save(buf, "PNG", optimize=True)
+        fichiers.append((nom, buf.getvalue()))
+    return fichiers, {"f": fichiers[0][0], "l": l, "h": h, "x": [n for n, _ in fichiers[1:]]}
 
 
-def icone_de(hotes):
+def icone_de(cle, hotes):
     """`hotes` : le domaine du raccourci, puis sa variante avec ou sans www.
+    Rend les fichiers de l'icône et son entrée d'index (`normalise`).
 
     La page identifie un raccourci par son domaine SANS `www.` : elle demandait
     donc linkedin.com/favicon.ico, qui ne répond pas, là où www.linkedin.com
     répond très bien. On essaie les deux.
 
     On s'arrête avant `ESSAIS` dès qu'on tient le meilleur possible : un SVG,
-    ou une image transparente d'au moins `CIBLE` px."""
+    ou une image transparente d'au moins `ASSEZ` px."""
     for hote in hotes:
         trouvees = []
         for url in candidates(hote)[:ESSAIS]:
@@ -417,15 +475,26 @@ def icone_de(hotes):
             dit("   %-5s %-4s %s%s" % (t["ext"], "svg" if t["ext"] == "svg" else t["cote"], url[:100],
                                        "  (fond plein)" if t["plein"] else ""))
             trouvees.append(t)
-            if t["ext"] == "svg" or (not t["plein"] and t["cote"] >= CIBLE):
+            if t["ext"] == "svg" or (not t["plein"] and t["cote"] >= ASSEZ):
                 break
         if trouvees:
             t = choisit(trouvees)
             try:
-                return normalise(t)
+                return normalise(t, cle)
             except Exception as e:
                 dit("   mise en forme impossible (%s)" % e)
     return None, None
+
+
+def fichiers_de(v):
+    """Les fichiers d'une entrée de l'index : un nom seul (index d'avant le
+    23/10/2026), ou l'image et ses versions 2x et 3x. Vide si l'entrée est
+    illisible : elle sera refaite."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict) and isinstance(v.get("f"), str):
+        return [v["f"]] + [x for x in v.get("x", []) if isinstance(x, str)]
+    return []
 
 
 def main():
@@ -467,20 +536,22 @@ def main():
         ancien = json.load(open(idx, encoding="utf-8"))
     except Exception:
         ancien = {}
-    index = {k: v for k, v in ancien.items() if k in cles
-             and os.path.exists(os.path.join(DEST, v))}
+    index = {k: v for k, v in ancien.items() if k in cles and fichiers_de(v)
+             and all(os.path.exists(os.path.join(DEST, f)) for f in fichiers_de(v))}
     repris = set(index)
 
     echecs = []
     for cle, variantes in hotes:
         dit(cle)
-        data, ext = icone_de(variantes)
-        if not data:
+        fichiers, entree = icone_de(cle, variantes)
+        if not fichiers:
             echecs.append(cle)
             continue
-        nom = "%s.%s" % (cle, ext)
-        ecrit(os.path.join(DEST, nom), data)
-        index[cle] = nom
+        # les images d'abord, l'index ensuite : la page ne voit jamais une
+        # entrée dont un fichier manque
+        for nom, data in fichiers:
+            ecrit(os.path.join(DEST, nom), data)
+        index[cle] = entree
         repris.discard(cle)
 
     # Les icônes des raccourcis supprimés n'ont plus lieu d'encombrer le dossier.
@@ -490,12 +561,13 @@ def main():
     if os.path.basename(DEST.rstrip("/")) != "sites":
         print("DEST inattendu (%s) : nettoyage annulé" % DEST)
         return 1
-    gardes = set(index.values()) | {"index.json"}
+    gardes = {f for v in index.values() for f in fichiers_de(v)} | {"index.json"}
     retires = []
     for f in os.listdir(DEST):
         if f in gardes:
             continue
-        base = f.rsplit(".", 1)[0]
+        # `site.com@2x.png` est encore une icône de `site.com`
+        base = re.sub(r"@\dx$", "", f.rsplit(".", 1)[0])
         # Un fichier au nom d'un hôte connu mais absent de l'index trahit un
         # index perdu : on le garde. En revanche si l'hôte EST dans l'index
         # sous un autre nom, c'est un doublon d'extension, il part.
