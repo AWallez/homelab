@@ -521,7 +521,8 @@ ecrit("systeme.json", {
 /* De vrais sites (23/10/2026, demande), qui parlent a tout le monde, aux
    recruteurs et aux developpeurs ou administrateurs DevOps. Leurs icones sont
    fabriquees a la publication (`favicons.py`, voir pages.yml). Ansible : la
-   documentation, ansible.com montrant le chapeau de Red Hat. */
+   documentation, ansible.com montrant le chapeau de Red Hat ; Terraform : le
+   registre, terraform.io montrant le « H » de HashiCorp. */
 const RACCOURCIS = [
   { name: "YouTube",        url: "https://www.youtube.com/" },
   { name: "Netflix",        url: "https://www.netflix.com/" },
@@ -532,6 +533,7 @@ const RACCOURCIS = [
   { name: "Docker Hub",     url: "https://hub.docker.com/" },
   { name: "Kubernetes",     url: "https://kubernetes.io/" },
   { name: "Ansible",        url: "https://docs.ansible.com/" },
+  { name: "Terraform",      url: "https://registry.terraform.io/" },
   { name: "Proxmox",        url: "https://www.proxmox.com/" },
   { name: "Grafana",        url: "https://grafana.com/" },
   { name: "Cloudflare",     url: "https://www.cloudflare.com/" },
