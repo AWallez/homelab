@@ -1625,8 +1625,9 @@ function shortcuts() {
    RANG : un raccourci deplace (`glisseRacc`) prend celle de son nouveau rang. */
 function rangeeRacc() {
   const w = document.getElementById("shortcuts"), r = w.parentElement;
-  // la largeur se mesure sans la fenetre posee au passage precedent
+  // la largeur se mesure sans la fenetre posee au passage precedent, ni ses copies
   w.style.width = w.style.paddingInline = w.style.scrollPaddingInline = w.style.marginInline = "";
+  w.querySelectorAll(":scope > .copie").forEach((c) => c.remove());
   const st = getComputedStyle(w);
   const l = parseFloat(st.getPropertyValue("--l")) || 76, g = parseFloat(st.getPropertyValue("--g")) || 14;
   /* Largeur UTILE, sans le rembourrage pose quand la rangee va jusqu aux bords. */
@@ -1651,21 +1652,37 @@ function rangeeRacc() {
     });
     return fleches();
   }
-  const parPage = cap * L, pages = Math.ceil(n / parPage), dern = n - (pages - 1) * parPage;
+  /* ⚠️ « AJOUTER » SUR CHAQUE PAGE (23/10/2026, demande) : il fallait aller a
+     la derniere page pour ajouter un raccourci. Chaque page garde sa derniere
+     place aux boutons de la rangee (« Ajouter », et « Modifier » au doigt) ;
+     ceux des pages precedentes sont des COPIES (`.copie`) qui cliquent
+     l original, hors de l ordre de tabulation. */
+  const raccs = enfants.filter((t) => t.matches("a.t")), boutons = enfants.filter((t) => !t.matches("a.t"));
+  const parPage = cap * L, place = Math.max(1, parPage - boutons.length);
+  const pages = Math.max(1, Math.ceil(raccs.length / place));
   w.style.setProperty("--k", pages * cap);
   w.style.setProperty("--k2", 2 * pages * cap);
   w.style.width = (cap * l + (cap - 1) * g) + "px";
   w.style.paddingInline = w.style.scrollPaddingInline = "0";
   w.style.marginInline = "auto";
   w.dataset.page = cap * (l + g);
-  enfants.forEach((t, i) => {
-    const p = Math.floor(i / parPage), j = i % parPage, ligne = Math.floor(j / cap), c = j % cap;
-    // derniere page : une demi-colonne de decalage par tuile absente de la ligne
-    const decal = p === pages - 1 ? cap - Math.min(cap, dern - ligne * cap) : 0;
-    t.style.gridRow = String(ligne + 1);
-    t.style.gridColumnStart = String(2 * (p * cap + c) + decal + 1);
-    t.classList.toggle("page", j === 0);
-  });
+  for (let p = 0; p < pages; p++) {
+    const page = raccs.slice(p * place, (p + 1) * place).concat(p === pages - 1 ? boutons : boutons.map((b) => {
+      const c = b.cloneNode(true);
+      c.classList.add("copie"); c.tabIndex = -1; c.setAttribute("aria-hidden", "true");
+      c.onclick = () => b.click();
+      w.append(c);
+      return c;
+    }));
+    page.forEach((t, j) => {
+      const ligne = Math.floor(j / cap), c = j % cap;
+      // derniere page : une demi-colonne de decalage par tuile absente de la ligne
+      const decal = p === pages - 1 ? cap - Math.min(cap, page.length - ligne * cap) : 0;
+      t.style.gridRow = String(ligne + 1);
+      t.style.gridColumnStart = String(2 * (p * cap + c) + decal + 1);
+      t.classList.toggle("page", j === 0);
+    });
+  }
   fleches();
 }
 function fleches() {
