@@ -8,9 +8,8 @@ requêtes tierces : le bouclier de Brave en bloque une partie
 aucune raison d'être bloquées, et la liste des sites visités ne part plus chez
 un tiers.
 
-Deux tentatives par hôte : /favicon.ico, puis les <link rel="icon"> de la page
-d'accueil (le plus grand format d'abord). Le résultat est décrit dans
-icons/index.json, que la page consulte pour connaître le nom de fichier exact.
+Le résultat est décrit dans icons/sites/index.json, que la page consulte pour
+connaître le nom de fichier exact.
 
 Révision du 24/08/2026, trois corrections :
 
@@ -33,6 +32,23 @@ Révision du 24/08/2026, trois corrections :
    que ce qui ne correspond plus à aucun raccourci, et l'index précédent sert
    de base, si bien qu'un échec passager ne retire jamais un acquis.
 
+Révision du 23/10/2026 : LA MEILLEURE ICÔNE, ET NON LA PREMIÈRE. Le script
+prenait /favicon.ico dès qu'il répondait, et ne lisait la page qu'à défaut :
+neuf icônes sur quatorze faisaient 16 à 48 px, floues dans la tuile (28 px,
+soit 56 à 84 px réels sur un écran 2x ou 3x). RSI servait un carré gris de
+16 px alors que son site déclare un logo transparent de 180 px. Désormais :
+- on recense TOUT ce que le site propose (`candidates`) : les <link> de la
+  page, son manifeste, et les adresses d'usage (/apple-touch-icon.png,
+  /favicon.ico), et on mesure chaque image ;
+- un SVG l'emporte, puis une image transparente d'au moins `NET` px, puis la
+  plus grande (`choisit`) ;
+- une icône à FOND PLEIN (les icônes d'application en ont un : carré violet
+  de Twitch, blanc de la Bbox) est DÉTOURÉE, son fond retiré, sinon arrondie
+  (`normalise`) ; dans la tuile de verre, un carré plein jurait ;
+- tout ce qui n'est pas SVG ressort en PNG carré de 128 px au plus.
+Vectoriser une petite icône n'aurait rien rendu : un tracé de 16 px ne
+contient pas les détails du logo, il les aurait arrondis en taches.
+
 Usage : favicons.py [-v]     (cron quotidien, et à la main après un ajout)
 """
 import fcntl
@@ -54,12 +70,17 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/126.0.0.0 Safari/537.36")
 BAVARD = "-v" in sys.argv
 
-# Côté maximal conservé. La tuile fait 52 px ; 128 px couvre les écrans à
-# 2x avec de la marge, et tient en quelques kilo-octets.
+# Côté maximal conservé. L'icône s'affiche en 28 px dans une tuile de 52 ;
+# 128 px couvrent les écrans à 3x avec de la marge, et tiennent en quelques
+# kilo-octets.
 CIBLE = 128
-# En dessous de cette taille on ne retouche rien, même si l'image dépasse un
-# peu CIBLE : recompresser un .ico de 6 Ko n'apporterait rien.
-SEUIL_OCTETS = 16 * 1024
+# Une image transparente de ce côté au moins reste nette dans la tuile ; en
+# dessous, on lui préfère une plus grande, même à fond plein (détourée).
+NET = 64
+# Images téléchargées au plus par site : la page en déclare parfois quinze.
+ESSAIS = 8
+# Écart (par canal, sur 255) sous lequel un pixel est de la couleur du fond.
+PROCHE = 20
 
 # On identifie le format par ses octets de tête : l'extension annoncée par le
 # site est souvent fausse (un .ico qui est un PNG, par exemple).
@@ -98,18 +119,27 @@ def ecrit(chemin, data, mode=0o644):
 
 
 def recupere(url):
-    """⚠️ L ADRESSE VIENT D UN FICHIER QUE LA PAGE ECRIT (08/10/2026) : http(s)
+    """Le contenu, et l'adresse où il a été trouvé après les redirections :
+    c'est elle qui sert de base aux liens relatifs (ovh.com renvoie sur
+    ovhcloud.com, dont la page déclare `icon.svg`).
+
+    ⚠️ L ADRESSE VIENT D UN FICHIER QUE LA PAGE ECRIT (08/10/2026) : http(s)
     seulement, y compris apres une redirection, sans quoi `file://` ou
     `gopher://` faisaient lire au script ce qu il ne doit pas ; et taille
-    bornee, la reponse passant entiere en memoire sur un NAS qui n en a pas."""
+    bornee, la reponse passant entiere en memoire sur un NAS qui n en a pas.
+    `--compressed` : la Bbox sert son manifeste compressé même sans qu'on le
+    demande."""
     try:
-        r = subprocess.run(["curl", "-sL", "--max-time", "10", "--proto", "=http,https",
-                            "--proto-redir", "=http,https", "--max-filesize", "2000000",
-                            "-A", UA, url],
+        r = subprocess.run(["curl", "-sL", "--compressed", "--max-time", "10",
+                            "--proto", "=http,https", "--proto-redir", "=http,https",
+                            "--max-filesize", "2000000", "-A", UA,
+                            "-w", "%{stderr}%{url_effective}", url],
                            capture_output=True, timeout=25)
-        return r.stdout if r.returncode == 0 else b""
+        if r.returncode != 0:
+            return b"", url
+        return r.stdout, r.stderr.decode("utf-8", "replace").strip() or url
     except Exception:
-        return b""
+        return b"", url
 
 
 def format_de(data):
@@ -126,58 +156,209 @@ def format_de(data):
     return None
 
 
-def redimensionne(data, ext):
-    """Ramène l'icône à CIBLE px si l'image RÉELLE est plus grande.
+def taille_declaree(texte, url):
+    """Le plus grand côté annoncé (`sizes="180x180"`, ou plusieurs) ; un SVG
+    passe devant tout. Ce n'est qu'un ORDRE d'essai : la taille retenue est
+    toujours mesurée sur l'image (cf. anime-sama, plus haut)."""
+    if "svg" in texte.lower() or urlparse(url).path.lower().endswith(".svg"):
+        return 10 ** 6
+    tailles = [int(x) for x in re.findall(r"(\d+)\s*x\s*\d+", texte or "")]
+    return max(tailles) if tailles else 0
 
-    On mesure au lieu de croire la page : anime-sama.to annonce 180x180 et
-    sert du 1718x1536. Un vectoriel est laissé tel quel, il est déjà léger et
-    se redimensionne à l'affichage. En cas de souci, on garde l'original
-    plutôt que de perdre l'icône."""
-    if ext == "svg" or len(data) <= SEUIL_OCTETS:
-        return data, ext
+
+def candidates(hote):
+    """Les adresses de toutes les icônes que le site propose, dans l'ordre où
+    les essayer : celles de la page et du manifeste, de la plus grande annoncée
+    à la plus petite, puis les adresses d'usage que beaucoup de sites servent
+    sans les déclarer (Twitch : /apple-touch-icon.png, 180 px), et enfin les
+    icônes `maskable` du manifeste (fond plein et larges marges, faites pour
+    être rognées par le téléphone)."""
+    racine = "https://" + hote + "/"
+    html, base = recupere(racine)
+    html = html.decode("utf-8", "replace")
+    liens, masques, manifestes = [], [], []
+    for m in re.finditer(r"<link[^>]+>", html, re.I):
+        balise = m.group(0)
+        rel = re.search(r'rel\s*=\s*["\']?([^"\'>]+)', balise, re.I)
+        href = re.search(r'href\s*=\s*["\']([^"\']+)', balise, re.I)
+        if not rel or not href:
+            continue
+        rel, url = rel.group(1).lower(), urljoin(base, href.group(1).replace("&amp;", "&"))
+        if "manifest" in rel:
+            manifestes.append(url)
+        # `mask-icon` : la silhouette d'onglet épinglé de Safari, d'une seule couleur
+        elif "icon" in rel and "mask" not in rel:
+            liens.append((taille_declaree(balise, url), url))
+    for adresse in manifestes[:1] + [racine + "manifest.json", racine + "site.webmanifest"]:
+        data, base_m = recupere(adresse)
+        try:
+            icones = json.loads(data.decode("utf-8", "replace")).get("icons", [])
+        except Exception:
+            continue
+        for ic in icones if isinstance(icones, list) else []:
+            src = isinstance(ic, dict) and ic.get("src")
+            if not isinstance(src, str):
+                continue
+            url, buts = urljoin(base_m, src), str(ic.get("purpose", "any")).split()
+            if "any" in buts:
+                liens.append((taille_declaree(str(ic.get("sizes", "")) + str(ic.get("type", "")), url), url))
+            # `monochrome` : une silhouette d'une seule couleur, comme `mask-icon`
+            elif "maskable" in buts:
+                masques.append(url)
+        break
+    liens.sort(key=lambda x: -x[0])
+    ordre, vus = [], set()
+    for url in [u for _, u in liens] + [racine + "apple-touch-icon.png", racine + "favicon.ico"] + masques:
+        if url not in vus:
+            vus.add(url)
+            ordre.append(url)
+    return ordre
+
+
+def examine(data):
+    """Ce qu'il faut savoir d'une image pour choisir : son format, son côté
+    réel (infini pour un SVG), et si elle a un fond plein (quatre coins
+    opaques). None si ce n'est pas une image lisible."""
+    ext = format_de(data)
+    if not ext:
+        return None
+    if ext == "svg":
+        return {"ext": "svg", "cote": float("inf"), "plein": False, "data": data}
     try:
         from PIL import Image
         im = Image.open(io.BytesIO(data))
-        avant = im.size
-        if max(avant) <= CIBLE:
-            return data, ext
-        try:
-            filtre = Image.Resampling.LANCZOS      # Pillow >= 9.1
-        except AttributeError:
-            filtre = Image.LANCZOS                 # versions antérieures
+        # un .ico en contient plusieurs : le plus grand
+        if im.format == "ICO":
+            im = im.ico.getimage(max(im.ico.sizes()))
         im = im.convert("RGBA")
-        im.thumbnail((CIBLE, CIBLE), filtre)
-        buf = io.BytesIO()
-        im.save(buf, "PNG", optimize=True)
-        sortie = buf.getvalue()
-        if len(sortie) >= len(data):               # recompresser n'a rien gagné
-            return data, ext
-        dit("   redimensionnée %dx%d (%d Ko) -> %dx%d (%d Ko)"
-            % (avant[0], avant[1], len(data) // 1024,
-               im.size[0], im.size[1], len(sortie) // 1024))
-        return sortie, "png"
     except Exception as e:
-        dit("   redimensionnement impossible (%s), original conservé" % e)
-        return data, ext
+        dit("      illisible (%s)" % e)
+        return None
+    w, h = im.size
+    coins = [im.getpixel(p)[3] for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    return {"ext": ext, "cote": min(w, h), "plein": min(coins) >= 250, "im": im}
 
 
-def declarees(html, base):
-    """URLs des <link rel=...icon...>, du plus grand format au plus petit.
+def choisit(trouvees):
+    """Un SVG d'abord ; sinon la plus grande image transparente si elle est
+    assez nette (`NET`) ; sinon la plus grande de toutes. À égalité, la
+    première trouvée, donc la mieux placée par `candidates`."""
+    svg = [t for t in trouvees if t["ext"] == "svg"]
+    if svg:
+        return svg[0]
+    nettes = [t for t in trouvees if not t["plein"] and t["cote"] >= NET]
+    return max(nettes or trouvees, key=lambda t: t["cote"])
 
-    L'ordre reste « le plus grand d'abord » : c'est celui qui donne la
-    meilleure qualité, et le redimensionnement se charge du poids."""
-    trouves = []
-    for m in re.finditer(r"<link[^>]+>", html, re.I):
-        balise = m.group(0)
-        if not re.search(r'rel\s*=\s*["\']?[^"\'>]*icon', balise, re.I):
+
+def reduit(im, cote):
+    """Ramène l'image à `cote` px au plus, en alpha prémultiplié : sans lui,
+    la couleur des pixels transparents (souvent du noir) bave sur les bords."""
+    from PIL import Image
+    if max(im.size) <= cote:
+        return im
+    k = cote / max(im.size)
+    taille = (max(1, round(im.size[0] * k)), max(1, round(im.size[1] * k)))
+    return im.convert("RGBa").resize(taille, Image.Resampling.LANCZOS).convert("RGBA")
+
+
+def sans_fond(p, fond):
+    """Le pixel `p` vu comme un mélange de `fond` et d'une couleur inconnue :
+    la plus petite opacité qui l'explique, et cette couleur (la « couleur vers
+    transparence » de GIMP). Un bord adouci du logo garde sa nuance au lieu
+    d'un liseré de l'ancien fond ; un pixel franc du logo reste opaque."""
+    r, g, b, a = p
+    al = 0.0
+    for c, f in zip((r, g, b), fond):
+        if c > f:
+            al = max(al, (c - f) / (255 - f))
+        elif c < f:
+            al = max(al, (f - c) / f)
+    if al <= 0.004:
+        return (0, 0, 0, 0)
+    al = min(1.0, al)
+    rgb = tuple(max(0, min(255, round((c - (1 - al) * f) / al))) for c, f in zip((r, g, b), fond))
+    return rgb + (round(a * al),)
+
+
+def detoure(im):
+    """Retire un fond UNI : les pixels de la couleur des quatre coins reliés au
+    bord deviennent transparents, et leurs deux rangs de voisins sont démêlés
+    (`sans_fond`). Ce qui est enclos dans le logo garde sa couleur (les yeux
+    violets du logo de Twitch). Puis l'image est rognée au logo : les icônes
+    d'application l'entourent de marges. None si le fond n'est pas uni, ou
+    s'il ne reste rien : `arrondit` reprend alors l'image intacte, d'où la
+    copie (un carré uni sans logo ressortait vide)."""
+    im = im.copy()
+    w, h = im.size
+    px = im.load()
+    coins = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+    fond = coins[0][:3]
+
+    def ecart(p):
+        return max(abs(p[0] - fond[0]), abs(p[1] - fond[1]), abs(p[2] - fond[2]))
+
+    if any(ecart(c) > PROCHE for c in coins):
+        return None
+    vide = bytearray(w * h)
+    bord = set()
+    pile = [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
+    while pile:
+        x, y = pile.pop()
+        if vide[y * w + x]:
             continue
-        href = re.search(r'href\s*=\s*["\']([^"\']+)', balise, re.I)
-        if not href:
+        if ecart(px[x, y]) > PROCHE:
+            bord.add((x, y))
             continue
-        taille = re.search(r'sizes\s*=\s*["\']?(\d+)', balise, re.I)
-        trouves.append((int(taille.group(1)) if taille else 0, urljoin(base, href.group(1))))
-    trouves.sort(key=lambda x: -x[0])
-    return [u for _, u in trouves]
+        vide[y * w + x] = 1
+        px[x, y] = (0, 0, 0, 0)
+        for v in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= v[0] < w and 0 <= v[1] < h:
+                pile.append(v)
+    # le second rang : l'adoucissement d'un logo agrandi s'étale sur deux pixels
+    second = set()
+    for x, y in bord:
+        for v in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= v[0] < w and 0 <= v[1] < h and not vide[v[1] * w + v[0]] and v not in bord:
+                second.add(v)
+    for x, y in bord | second:
+        px[x, y] = sans_fond(px[x, y], fond)
+    boite = im.getchannel("A").getbbox()
+    return im.crop(boite) if boite else None
+
+
+def arrondit(im):
+    """Un fond plein mais pas uni (dégradé, photo) : coins arrondis, comme une
+    icône d'application, plutôt qu'un carré dur dans la tuile."""
+    from PIL import Image, ImageChops, ImageDraw
+    w, h = im.size
+    masque = Image.new("L", (w * 4, h * 4), 0)
+    ImageDraw.Draw(masque).rounded_rectangle((0, 0, w * 4 - 1, h * 4 - 1),
+                                             radius=round(min(w, h) * 4 * .22), fill=255)
+    masque = masque.resize((w, h), Image.Resampling.LANCZOS)
+    im.putalpha(ImageChops.multiply(im.getchannel("A"), masque))
+    return im
+
+
+def normalise(t):
+    """L'icône retenue, prête pour la tuile : un SVG tel quel ; une image
+    réduite (le détourage parcourt les pixels un à un : pas plus de 3 x
+    `CIBLE`), détourée ou arrondie si elle a un fond plein, centrée sur un
+    carré (la tuile l'affiche en 28 x 28 et étirerait le reste), puis ramenée
+    à `CIBLE` px et écrite en PNG."""
+    if t["ext"] == "svg":
+        return t["data"], "svg"
+    from PIL import Image
+    im = reduit(t["im"], 3 * CIBLE)
+    if t["plein"]:
+        im = detoure(im) or arrondit(im)
+    w, h = im.size
+    if w != h:
+        carre = Image.new("RGBA", (max(w, h),) * 2, (0, 0, 0, 0))
+        carre.paste(im, ((max(w, h) - w) // 2, (max(w, h) - h) // 2))
+        im = carre
+    buf = io.BytesIO()
+    reduit(im, CIBLE).save(buf, "PNG", optimize=True)
+    return buf.getvalue(), "png"
 
 
 def icone_de(hotes):
@@ -185,21 +366,27 @@ def icone_de(hotes):
 
     La page identifie un raccourci par son domaine SANS `www.` : elle demandait
     donc linkedin.com/favicon.ico, qui ne répond pas, là où www.linkedin.com
-    répond très bien. On essaie les deux."""
+    répond très bien. On essaie les deux.
+
+    On s'arrête avant `ESSAIS` dès qu'on tient le meilleur possible : un SVG,
+    ou une image transparente d'au moins `CIBLE` px."""
     for hote in hotes:
-        racine = "https://" + hote + "/"
-        data = recupere(racine + "favicon.ico")
-        ext = format_de(data)
-        if ext:
-            dit("   %s/favicon.ico -> %s, %d octets" % (hote, ext, len(data)))
-            return redimensionne(data, ext)
-        html = recupere(racine).decode("utf-8", "replace")
-        for url in declarees(html, racine)[:4]:
-            data = recupere(url)
-            ext = format_de(data)
-            if ext:
-                dit("   %s -> %s, %d octets" % (url, ext, len(data)))
-                return redimensionne(data, ext)
+        trouvees = []
+        for url in candidates(hote)[:ESSAIS]:
+            t = examine(recupere(url)[0])
+            if not t:
+                continue
+            dit("   %-5s %-4s %s%s" % (t["ext"], "svg" if t["ext"] == "svg" else t["cote"], url[:100],
+                                       "  (fond plein)" if t["plein"] else ""))
+            trouvees.append(t)
+            if t["ext"] == "svg" or (not t["plein"] and t["cote"] >= CIBLE):
+                break
+        if trouvees:
+            t = choisit(trouvees)
+            try:
+                return normalise(t)
+            except Exception as e:
+                dit("   mise en forme impossible (%s)" % e)
     return None, None
 
 
