@@ -253,6 +253,17 @@ dialog.dlg{border-radius:var(--r);padding:20px;
   background:rgba(255,255,255,.08);border:1px solid var(--edge);color:var(--ink)}
 .dlg button.pri{background:rgba(255,255,255,.20);border-color:rgba(255,255,255,.34);font-weight:600}
 .dlg button.danger{border-color:rgba(255,69,58,.45);color:#ff8f88}
+/* SURVOL des boutons des fenetres (23/10/2026, demande) : ils n en avaient
+   aucun. Le fond s eclaircit, plus franc pour le bouton principal, rouge pour
+   « Supprimer » ; un bouton desactive ne reagit pas. Hors du lot, ceux qui
+   ont deja le leur : « Mettre a jour » (`.go`), la croix (`.dlg-x`), les
+   periodes des graphes (`[data-per]`). `:where` : sans poids, pour que les
+   regles de `.pri` et `.danger` l emportent. */
+.dlg button{transition:background .15s,border-color .15s,color .15s}
+.dlg button:where(:not(:disabled):not(.go):not(.dlg-x):not([data-per])):hover{
+  background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3)}
+.dlg button.pri:not(:disabled):hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.48)}
+.dlg button.danger:not(:disabled):hover{background:rgba(255,69,58,.16);border-color:rgba(255,69,58,.75);color:#ffb0aa}
 /* Ligne d erreur des fenetres d action (mot de passe, refus), et petite
    fenetre du mot de passe seul, au-dessus de celle qui l a appelee. */
 .dlg .err{min-height:1.1em;margin:-6px 0 8px;font-size:.72rem;color:#ffd08a}
