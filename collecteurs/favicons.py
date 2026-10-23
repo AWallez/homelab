@@ -81,6 +81,14 @@ NET = 64
 ESSAIS = 8
 # Écart (par canal, sur 255) sous lequel un pixel est de la couleur du fond.
 PROCHE = 20
+# Un fond plus coloré que ça (écart entre canaux) fait partie de la marque :
+# le carré bleu de Facebook, violet de Twitch. On le garde, arrondi.
+TEINTE = 40
+# La tuile de verre, sombre, et le contraste (WCAG) qu'un logo détouré doit
+# garder avec elle : un logo foncé sur fond blanc (Wikipédia, ameli) y
+# disparaissait ; il garde alors son fond blanc.
+TUILE = (44, 50, 64)
+CONTRASTE = 2.0
 
 # On identifie le format par ses octets de tête : l'extension annoncée par le
 # site est souvent fausse (un .ico qui est un PNG, par exemple).
@@ -280,14 +288,24 @@ def sans_fond(p, fond):
     return rgb + (round(a * al),)
 
 
+def lumiere(rgb):
+    """Luminance relative (WCAG) d'une couleur."""
+    def lin(c):
+        c /= 255
+        return c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4
+    r, g, b = (lin(c) for c in rgb[:3])
+    return .2126 * r + .7152 * g + .0722 * b
+
+
 def detoure(im):
-    """Retire un fond UNI : les pixels de la couleur des quatre coins reliés au
-    bord deviennent transparents, et leurs deux rangs de voisins sont démêlés
-    (`sans_fond`). Ce qui est enclos dans le logo garde sa couleur (les yeux
-    violets du logo de Twitch). Puis l'image est rognée au logo : les icônes
-    d'application l'entourent de marges. None si le fond n'est pas uni, ou
-    s'il ne reste rien : `arrondit` reprend alors l'image intacte, d'où la
-    copie (un carré uni sans logo ressortait vide)."""
+    """Retire un fond UNI et NEUTRE (blanc, noir, gris) : les pixels de la
+    couleur des quatre coins reliés au bord deviennent transparents, et leurs
+    deux rangs de voisins sont démêlés (`sans_fond`). Ce qui est enclos dans le
+    logo garde sa couleur. Puis l'image est rognée au logo : les icônes
+    d'application l'entourent de marges.
+    None (et `arrondit` reprend l'image intacte, d'où la copie) si le fond
+    n'est pas uni, s'il est coloré (`TEINTE`), s'il ne reste rien, ou si le
+    logo restant serait illisible sur la tuile (`CONTRASTE`)."""
     im = im.copy()
     w, h = im.size
     px = im.load()
@@ -297,7 +315,7 @@ def detoure(im):
     def ecart(p):
         return max(abs(p[0] - fond[0]), abs(p[1] - fond[1]), abs(p[2] - fond[2]))
 
-    if any(ecart(c) > PROCHE for c in coins):
+    if any(ecart(c) > PROCHE for c in coins) or max(fond) - min(fond) > TEINTE:
         return None
     vide = bytearray(w * h)
     bord = set()
@@ -323,7 +341,27 @@ def detoure(im):
     for x, y in bord | second:
         px[x, y] = sans_fond(px[x, y], fond)
     boite = im.getchannel("A").getbbox()
-    return im.crop(boite) if boite else None
+    if not boite:
+        return None
+    # La part du logo (pondérée par l'opacité) trop peu contrastée avec la
+    # tuile : au-delà de la moitié, il y serait illisible. Pas une moyenne :
+    # les blancs enclos du logo d'ameli la tiraient vers le clair. Un logo a
+    # peu de couleurs : chacune n'est jugée qu'une fois.
+    T = lumiere(TUILE)
+    poids = terne = 0.0
+    vues = {}
+    for y in range(boite[1], boite[3]):
+        for x in range(boite[0], boite[2]):
+            p = px[x, y]
+            if p[3]:
+                if p[:3] not in vues:
+                    L = lumiere(p)
+                    vues[p[:3]] = (max(L, T) + .05) / (min(L, T) + .05) < CONTRASTE
+                poids += p[3]
+                terne += p[3] * vues[p[:3]]
+    if terne > poids / 2:
+        return None
+    return im.crop(boite)
 
 
 def arrondit(im):
