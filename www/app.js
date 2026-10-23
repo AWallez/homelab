@@ -1614,27 +1614,57 @@ function shortcuts() {
    son nombre de colonnes (`--k`) au lieu de couler en colonnes, ce qui aurait
    range le deuxieme raccourci SOUS le premier.
    ⚠️ La largeur d une colonne et l ecart viennent du CSS (`--l`, `--g`), qui
-   les change sur telephone : le calcul ne peut pas les supposer. */
+   les change sur telephone : le calcul ne peut pas les supposer.
+   ⚠️ QUAND ELLE DEFILE, LA RANGEE DEFILE PAR PAGES (23/10/2026, demande) : la
+   fenetre fait exactement `cap` colonnes, centree, et ne montre que des tuiles
+   ENTIERES ; une page = `cap` colonnes sur toutes les lignes, remplie ligne
+   par ligne, et chaque defilement (fleches, molette, doigt) avance d une page
+   entiere (`data-page`, aimantation sur la premiere tuile de chaque page).
+   Sur la derniere page, incomplete, chaque ligne se centre comme hors
+   defilement. Chaque tuile recoit sa place (ligne, demi-colonne) selon son
+   RANG : un raccourci deplace (`glisseRacc`) prend celle de son nouveau rang. */
 function rangeeRacc() {
   const w = document.getElementById("shortcuts"), r = w.parentElement;
+  // la largeur se mesure sans la fenetre posee au passage precedent
+  w.style.width = w.style.paddingInline = w.style.scrollPaddingInline = w.style.marginInline = "";
   const st = getComputedStyle(w);
   const l = parseFloat(st.getPropertyValue("--l")) || 76, g = parseFloat(st.getPropertyValue("--g")) || 14;
   /* Largeur UTILE, sans le rembourrage pose quand la rangee va jusqu aux bords. */
   const utile = w.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
-  const n = w.children.length, cap = Math.max(1, Math.floor((utile + g) / (l + g)));
+  const enfants = [...w.children], n = enfants.length, cap = Math.max(1, Math.floor((utile + g) / (l + g)));
   // 2 lignes au plus quand les coins sont possibles (voir `bento`)
-  const lignes = Math.min(r.parentElement.classList.contains("coins-possibles") ? 2 : 3, Math.ceil(n / cap));
+  const L = r.parentElement.classList.contains("coins-possibles") ? 2 : 3;
+  const lignes = Math.min(L, Math.ceil(n / cap));
   const k = Math.ceil(n / lignes);
-  w.style.setProperty("--k", k);
-  w.style.setProperty("--k2", 2 * k);
-  r.classList.toggle("defile", k > cap);
-  /* La derniere ligne, incomplete, se centre (voir fond.css) ; pas quand la
-     rangee defile : elle part du bord gauche. Repose a chaque appel selon le
-     RANG : un raccourci deplace (`glisseRacc`) emporterait sinon son decalage
-     avec lui. */
-  const debut = (lignes - 1) * k, manque = k * lignes - n;
-  [...w.children].forEach((t, j) => {
-    t.style.gridColumnStart = j === debut && manque > 0 && k <= cap ? String(manque + 1) : "";
+  const defile = k > cap;
+  r.classList.toggle("defile", defile);
+  if (!defile) {
+    w.style.setProperty("--k", k);
+    w.style.setProperty("--k2", 2 * k);
+    delete w.dataset.page;
+    /* La derniere ligne, incomplete, se centre (voir fond.css). */
+    const debut = (lignes - 1) * k, manque = k * lignes - n;
+    enfants.forEach((t, j) => {
+      t.style.gridRow = "";
+      t.style.gridColumnStart = j === debut && manque > 0 ? String(manque + 1) : "";
+      t.classList.remove("page");
+    });
+    return fleches();
+  }
+  const parPage = cap * L, pages = Math.ceil(n / parPage), dern = n - (pages - 1) * parPage;
+  w.style.setProperty("--k", pages * cap);
+  w.style.setProperty("--k2", 2 * pages * cap);
+  w.style.width = (cap * l + (cap - 1) * g) + "px";
+  w.style.paddingInline = w.style.scrollPaddingInline = "0";
+  w.style.marginInline = "auto";
+  w.dataset.page = cap * (l + g);
+  enfants.forEach((t, i) => {
+    const p = Math.floor(i / parPage), j = i % parPage, ligne = Math.floor(j / cap), c = j % cap;
+    // derniere page : une demi-colonne de decalage par tuile absente de la ligne
+    const decal = p === pages - 1 ? cap - Math.min(cap, dern - ligne * cap) : 0;
+    t.style.gridRow = String(ligne + 1);
+    t.style.gridColumnStart = String(2 * (p * cap + c) + decal + 1);
+    t.classList.toggle("page", j === 0);
   });
   fleches();
 }
@@ -1648,8 +1678,9 @@ function fleches() {
   const w = document.getElementById("shortcuts"), r = w.parentElement;
   w.addEventListener("scroll", fleches, { passive: true });
   new ResizeObserver(rangeeRacc).observe(r);
+  // une page entiere a la fois (`rangeeRacc`)
   r.querySelectorAll(".fl").forEach(b => b.addEventListener("click", () =>
-    w.scrollBy({ left: (b.classList.contains("g") ? -1 : 1) * w.clientWidth * .8, behavior: defilementDoux() })));
+    w.scrollBy({ left: (b.classList.contains("g") ? -1 : 1) * (+w.dataset.page || w.clientWidth * .8), behavior: defilementDoux() })));
   molette(w);
   glisseRacc(w);
 }
@@ -1817,12 +1848,23 @@ function glisseRacc(w) {
    la page. Sans ca, une souris sans molette horizontale ne voyait jamais la fin
    d une rangee qui deborde (raccourcis, pastilles). */
 function molette(el) {
+  let tient = 0;
   el.addEventListener("wheel", (e) => {
     const max = el.scrollWidth - el.clientWidth;
     if (max <= 1 || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
     const avant = el.scrollLeft;
     if ((e.deltaY < 0 && avant <= 0) || (e.deltaY > 0 && avant >= max - 1)) return;
     e.preventDefault();
+    /* ⚠️ UNE RANGEE PAR PAGES (`data-page`, raccourcis, 23/10/2026) avance
+       d une page par cran : quelques pixels seraient aussitot ramenes a la page
+       en cours par l aimantation. Un cran par 450 ms, sinon une molette
+       rapide sauterait trois pages. */
+    const page = +el.dataset.page;
+    if (page) {
+      if (Date.now() < tient) return;
+      tient = Date.now() + 450;
+      return el.scrollBy({ left: Math.sign(e.deltaY) * page, behavior: defilementDoux() });
+    }
     el.scrollLeft = Math.max(0, Math.min(max, avant + e.deltaY));
   }, { passive: false });
 }

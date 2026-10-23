@@ -1521,7 +1521,10 @@ body.sans-fondu { transition: none !important }
    besoin.
    ⚠️ Pas de `mask-image` pour estomper les bords : il ferait de la rangee une
    racine de fond, et le verre des icones (`backdrop-filter`) virerait au noir. */
-.racc { position: relative; max-width: 760px; margin: 0 auto 26px }
+/* ⚠️ TOUTE LA LARGEUR DE LA PAGE (23/10/2026, demande ; 760 px avant) : plus
+   de raccourcis par ligne, moins de lignes. Avec les coins, la largeur de
+   l en-tete entre les deux (bento/base.css). */
+.racc { position: relative; max-width: none; margin: 0 auto 26px }
 /* LA DERNIERE LIGNE CENTREE (17/10/2026) : treize raccourcis en sept colonnes
    laissaient six tuiles calees a gauche sous sept, la rangee paraissait
    decalee. Chaque colonne est coupee en deux demi-colonnes (`--k2` = 2 x `--k`,
@@ -1538,6 +1541,12 @@ body.sans-fondu { transition: none !important }
 /* Quand ca deborde, la grille part du bord gauche : centree, son debut
    sortirait de la zone defilante et ne pourrait plus etre atteint. */
 .racc.defile .shortcuts { justify-content: start }
+/* PAR PAGES (23/10/2026, voir `rangeeRacc`) : la fenetre fait juste une page
+   de colonnes entieres, et le defilement s aimante a la premiere tuile de
+   chaque page (`.page`), jamais entre deux : aucune tuile coupee. */
+.racc.defile .shortcuts { scroll-snap-type: x mandatory }
+.racc.defile .shortcuts .t { scroll-snap-align: none }
+.racc.defile .shortcuts .t.page { scroll-snap-align: start }
 
 /* DEPLACER UN RACCOURCI (17/10/2026, voir `glisseRacc` dans app.js) : la
    copie qui suit le pointeur (`.prise`, posee dans `body`) se souleve ; la
