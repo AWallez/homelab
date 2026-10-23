@@ -1499,7 +1499,7 @@ function editShortcut(i) {
   const d = dlg();
   // l icone en haut, puis le nom, puis l adresse (23/10/2026, demande)
   d.innerHTML = `<form><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
-    <label>Icône</label>
+    <label class="ico-l">Icône</label>
     <div class="ico"><span class="t apercu" aria-hidden="true"><span class="i"></span></span>
       <div class="row"><button type="button" id="dimg">Importer une image</button>
         <button type="button" id="dauto">Revenir à l'icône du site</button></div>
