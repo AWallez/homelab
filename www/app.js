@@ -1497,15 +1497,15 @@ function editShortcut(i) {
   // l image importee (voir `imageImportee`) : gardee, remplacee ou retiree ici
   let image = it.image || null;
   const d = dlg();
+  // l icone en haut, puis le nom, puis l adresse (23/10/2026, demande)
   d.innerHTML = `<form><h3>${i === null ? "Nouveau raccourci" : "Modifier le raccourci"}</h3>
-    <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required ${SANS_GESTIONNAIRE}>
-    <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple" ${SANS_GESTIONNAIRE}>
     <label>Icône</label>
     <div class="ico"><span class="t apercu" aria-hidden="true"><span class="i"></span></span>
-      <div class="ico-b"><div class="row"><button type="button" id="dimg">Importer une image</button>
+      <div class="row"><button type="button" id="dimg">Importer une image</button>
         <button type="button" id="dauto">Revenir à l'icône du site</button></div>
-        <div class="sub" id="dico"></div></div>
       <input type="file" id="dfic" accept="image/*" hidden></div>
+    <label for="dn">Nom</label><input id="dn" value="${esc(it.name)}" placeholder="Exemple" ${SANS_GESTIONNAIRE}>
+    <label for="du">Adresse</label><input id="du" value="${esc(it.url)}" placeholder="exemple.fr" required ${SANS_GESTIONNAIRE}>
     ${champMdp()}
     <div class="row">${i === null ? "" : '<button type="button" id="dsup" class="danger">Supprimer</button>'}
     <span class="sp"></span><button type="button" id="dann">Annuler</button>
@@ -1518,8 +1518,6 @@ function editShortcut(i) {
     s.textContent = (d.querySelector("#dn").value.trim() || h || "?").slice(0, 2).toUpperCase();
     poseIcone(s, iconeDe(image && { image }, ICONES && ICONES[h]));
     d.querySelector("#dauto").hidden = !image;
-    d.querySelector("#dico").textContent = image ? "Image importée : elle remplace l'icône du site."
-      : "L'icône du site, trouvée par le NAS. Une image importée la remplace.";
   };
   const fic = d.querySelector("#dfic");
   d.querySelector("#dimg").addEventListener("click", () => fic.click());
@@ -1557,7 +1555,7 @@ function editShortcut(i) {
   });
   d.querySelector("#dsup")?.addEventListener("click", () => enregistre(rd().filter((_, k) => k !== i)));
   d.querySelector("#dann").addEventListener("click", () => d.close("no"));
-  d.showModal(); d.querySelector("#du").focus();
+  d.showModal(); d.querySelector("#dn").focus();
 }
 
 let DATA = {};
