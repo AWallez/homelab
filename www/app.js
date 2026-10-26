@@ -2083,9 +2083,16 @@ function paintUpd(maj, note, vers) {
        qu elle contient) s affichait « 17.11 → 17.11 », qu on prenait pour un
        bogue. `meme` la nomme pour ce qu elle est. */
     const meme = !!(dispo && dispo.version && dispo.version === vu);
+    /* ⚠️ A FAIRE A LA MAIN (`upd`) OU A 7 H (`nuit`), 26/10/2026 : le releve de
+       la journee montre une version des sa sortie ; celle d un conteneur
+       automatique sera installee par la passe du matin. Les deux gardent leur
+       case (on peut toujours appliquer tout de suite), seul `upd` est compte
+       comme une action. */
+    const auto = s.mode === "auto" && !s.blocage;
     return { n, d: (v && v.d) || "", ts: v ? v.ts || 0 : -1,
              v: vu, h: brut, url: (v && v.u) || "",
-             upd: !!(dispo || s.blocage), nv: (dispo && dispo.version) || "", meme,
+             upd: !!(s.blocage || (dispo && !auto)), nuit: !!(dispo && auto),
+             nv: (dispo && dispo.version) || "", meme,
              mode: s.mode || "", bloc: s.blocage || null, neuf: !!s.decouvert,
              hors: ignores[n] || null,
              avert: (s.avertissements || []).map(a => a.message) };
@@ -2096,9 +2103,10 @@ function paintUpd(maj, note, vers) {
   // sans ce rattrapage il disparaîtrait au moment où l'on en a le plus besoin.
   for (const [n, s] of Object.entries(suivis)) if (!vus.has(n)) fusion.push(rangee(n, null, s));
 
-  // Les bloqués d'abord, puis les autres actionnables, puis l'inventaire.
-  fusion.sort((a, b) => (!!b.bloc - !!a.bloc) || (b.upd - a.upd) || (b.ts - a.ts));
+  // Les bloqués d'abord, puis les autres actionnables, puis ceux de 7 h, puis l'inventaire.
+  fusion.sort((a, b) => (!!b.bloc - !!a.bloc) || (b.upd - a.upd) || (b.nuit - a.nuit) || (b.ts - a.ts));
   const nAtt = fusion.filter(x => x.upd).length;
+  const nNuit = fusion.filter(x => x.nuit).length;
   const nBloc = fusion.filter(x => x.bloc).length;
   const nAuto = fusion.filter(x => x.mode === "auto").length;
 
@@ -2111,17 +2119,19 @@ function paintUpd(maj, note, vers) {
       : ""}${x.avert.map(a => `<div>⚠️ ${esc(a)}</div>`).join("")}</div>`;
   };
 
-  const ligne = (x, k) => `<li class="${x.upd ? "att" : ""}">
-      ${x.upd ? `<input type="checkbox" id="c${k}" value="${esc(x.n)}">`
-              : `<span class="pastille"></span>`}
+  // `act` : une case à cocher, pour appliquer tout de suite (à la main ou avant 7 h)
+  const ligne = (x, k, _, act = x.upd || x.nuit) => `<li class="${act ? "att" : ""}">
+      ${act ? `<input type="checkbox" id="c${k}" value="${esc(x.n)}">`
+            : `<span class="pastille"></span>`}
       <span class="hd">${esc(x.d)}</span>
-      <label class="hn" ${x.upd ? `for="c${k}"` : ""}>${esc(x.n)}${
-        x.upd && risque(x.n) ? '<span class="rq">base de données</span>' : ""}${
-        x.upd && x.meme ? '<span class="rq ri" title="Même version de l’application, nouvelle image : en général des correctifs du système qu’elle contient.">image reconstruite</span>' : ""}${
+      <label class="hn" ${act ? `for="c${k}"` : ""}>${esc(x.n)}${
+        act && risque(x.n) ? '<span class="rq">base de données</span>' : ""}${
+        act && x.meme ? '<span class="rq ri" title="Même version de l’application, nouvelle image : en général des correctifs du système qu’elle contient.">image reconstruite</span>' : ""}${
+        x.nuit ? '<span class="rq ri" title="Conteneur automatique : la passe de 7 h l’installera seule, avec copie des données et retour arrière.">seul à 7 h</span>' : ""}${
         x.neuf ? '<span class="rq">nouveau</span>' : ""}</label>
-      <span class="hv${x.h && !x.upd ? " brut" : ""}"${
-        x.h && !x.upd ? ' title="Aucune étiquette de version sur cette image : empreinte affichée à la place."' : ""}>${
-        x.upd && x.nv && !x.meme ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
+      <span class="hv${x.h && !act ? " brut" : ""}"${
+        x.h && !act ? ' title="Aucune étiquette de version sur cette image : empreinte affichée à la place."' : ""}>${
+        act && x.nv && !x.meme ? `<s>${esc(x.v)}</s><i>→</i><b>${esc(x.nv)}</b>` : `<b>${esc(x.v)}</b>`}</span>
       ${lienSur(x.url)
         ? `<a class="hl" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">notes</a>`
         : `<span class="hl vide">—</span>`}
@@ -2138,16 +2148,17 @@ function paintUpd(maj, note, vers) {
   dlg().innerHTML = `<form method="dialog"><h3>Conteneurs et mises à jour</h3>
     <p class="sub">${fusion.length} conteneurs · ${nAuto} en automatique · ${nAtt
       ? `${nAtt} à faire à la main${nBloc ? `, dont ${nBloc} bloqué${nBloc > 1 ? "s" : ""}` : ""}`
-      : "rien à faire à la main"}</p>
+      : "rien à faire à la main"}${nNuit ? ` · ${nNuit} installée${nNuit > 1 ? "s" : ""} seule${nNuit > 1 ? "s" : ""} à 7 h` : ""}</p>
     <p class="sub2">Les actions en tête, puis du plus récemment mis à jour au plus ancien${
-      maj && maj.derniere_passe ? ` · dernière passe le ${esc(quand(maj.derniere_passe.fin))}` : ""}</p>
+      maj && maj.derniere_passe ? ` · dernière passe le ${esc(quand(maj.derniere_passe.fin))}` : ""}${
+      maj && maj.dernier_releve ? ` · relevé le ${esc(quand(maj.dernier_releve.fin))}` : ""}</p>
     <div class="scroll">
       ${fusion.length
         ? `<ul class="hist">${fusion.map(ligne).join("")}</ul>`
         : `<div class="majv">Aucun conteneur relevé</div>`}
     </div>
     <p class="etat" id="mst">${esc(note || "")}</p>
-    <div class="row centre">${nAtt ? '<button type="button" id="mgo" class="go" disabled>Aucune mise à jour sélectionnée</button>' : ""}</div></form>`;
+    <div class="row centre">${nAtt || nNuit ? '<button type="button" id="mgo" class="go" disabled>Aucune mise à jour sélectionnée</button>' : ""}</div></form>`;
 
   const d = dlg(), st = d.querySelector("#mst"), go = d.querySelector("#mgo");
   const boxes = [...d.querySelectorAll('input[type="checkbox"]')];

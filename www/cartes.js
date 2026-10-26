@@ -795,24 +795,35 @@ GROUPS.push(
       r: d => {
         const u = d.updates || {};
         const att = (u.items || []).filter(x => x.upd);
+        /* ⚠️ RELEVE DE LA JOURNEE (26/10/2026) : une version d un conteneur
+           AUTOMATIQUE se voit des sa sortie, mais la passe du matin
+           l installera seule. Elle n est pas « a faire » : comptee a part
+           (`nuit`), jamais dans le nombre de la carte. */
+        const nuit = u.nuit || 0;
         const perdu = u.age < 0;
         const vieux = perdu || u.age > 36;
         const base = (n) => /postgres|db$|broker/.test(n);
         /* Rien de verifie (outil introuvable, etat illisible, premier passage) :
            le dire, au lieu de « Tout est a jour — 0 conteneurs verifies ». */
         const sans = !(u.total > 0) && !u.verifies;
+        /* L heure du controle le plus recent (`vu`, passe ou releve) ; l age,
+           lui, reste celui de la PASSE : c est elle qu il faut voir s arreter. */
+        const quand = u.vu || (u.maj && u.maj !== "?" ? u.maj : "");
         const ctl = perdu ? ["contrôle introuvable", "wn"]
           : vieux ? ["contrôle vieux de " + duree(u.age * 60), "wn"]
-          : u.maj && u.maj !== "?" ? ["contrôle du " + u.maj]
+          : quand ? ["contrôle du " + quand]
           : sans ? null : ["contrôle en attente"];
         const pl = att.slice(0, 4).map(x => [x.n + (base(x.n) ? " · base" : ""),
                                              base(x.n) ? "wn" : ""])
           .concat(att.length > 4 ? [["+ " + (att.length - 4)]] : [])
+          .concat(nuit && u.total > 0 ? [[nuit + " seul" + (nuit > 1 ? "s" : "") + " à 7 h"]] : [])
           .concat(ctl ? [ctl] : []);
         return (u.total > 0
               ? hero(u.total, "conteneur" + (u.total > 1 ? "s" : "")
                      + "<br>à mettre à jour", "ta")
               : sans ? `<div class="note">Relevé des mises à jour ${perdu ? "indisponible" : "en attente"}</div>`
+              : nuit ? calme("<b>Rien à faire</b> — " + nuit + " mise" + (nuit > 1 ? "s" : "")
+                      + " à jour automatique" + (nuit > 1 ? "s" : "") + " à 7 h")
               : calme("<b>Tout est à jour</b> — "
                       + (u.verifies || 0) + " conteneurs vérifiés"))
           + (pl.length ? past(pl) : "");

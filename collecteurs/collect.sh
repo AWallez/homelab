@@ -227,19 +227,40 @@ if [ "${LENT_VU:-0}" != "$LENT_V" ] || [ $((NOWS - LENT_T)) -ge 290 ]; then
 
   # --- Mises a jour : l etat de compose-auto-update (`maj.json`) ---
   # On en reconstruit le format qu attend la tuile. « total » compte ce qui
-  # attend une action manuelle : une version disponible, ou un blocage.
-  # ⚠️ L age du controle se mesure sur le `mtime` du fichier, reecrit a chaque
-  # passe meme quand rien ne change : un outil mort fige le compteur.
+  # attend une action MANUELLE : une version disponible pour un conteneur
+  # manuel, ou un blocage. « nuit » compte celles d un conteneur automatique,
+  # que la passe du matin installera seule : depuis le releve de la journee
+  # (26/10/2026), elles se voient avant, et ne sont pas a faire a la main.
+  # « vu » : l heure du controle le plus recent, passe ou releve.
+  # ⚠️ L AGE SE MESURE SUR LA DERNIERE PASSE (`derniere_passe.fin`), plus sur le
+  # `mtime` du fichier : le releve le reecrit toutes les trois heures et
+  # masquerait une passe en panne. `mtime` reste le repli d un etat sans passe.
   UPDF=$ICI/www/maj.json
-  UPD=$(jq -c '{
-    total: ([.conteneurs[] | select(.disponible != null or .blocage != null)] | length),
+  UPD=$(jq -c '
+    def manuel: .blocage != null or (.disponible != null and .mode != "auto");
+    def nuit: .disponible != null and .mode == "auto" and .blocage == null;
+    {
+    total: ([.conteneurs[] | select(manuel)] | length),
+    nuit: ([.conteneurs[] | select(nuit)] | length),
     verifies: (.conteneurs | length),
     maj: ((.derniere_passe.fin // "") | if . == "" then "?" else "\(.[8:10])/\(.[5:7]) \(.[11:16])" end),
-    items: [.conteneurs | to_entries[] | {n: .key, upd: (.value.disponible != null or .value.blocage != null)}]
+    items: [.conteneurs | to_entries[] | {n: .key, upd: (.value | manuel), nuit: (.value | nuit)}]
   }' "$UPDF" 2>/dev/null) || UPD='{}'
   [ -n "$UPD" ] || UPD='{}'
-  UPDT=$(stat -c %Y "$UPDF" 2>/dev/null || echo 0)
+  UPDP=$(jq -r '.derniere_passe.fin // empty' "$UPDF" 2>/dev/null)
+  UPDR=$(jq -r '.dernier_releve.fin // empty' "$UPDF" 2>/dev/null)
+  UPDT=$(date -d "${UPDP:-}" +%s 2>/dev/null) || UPDT=0
+  [ -n "$UPDP" ] || UPDT=$(stat -c %Y "$UPDF" 2>/dev/null || echo 0)
   if [ "${UPDT:-0}" -gt 0 ]; then UPDH=$(( (NOWS - UPDT) / 3600 )); else UPDH=-1; fi
+  UPDV=$UPDT
+  if [ -n "$UPDR" ]; then
+    UPDRT=$(date -d "$UPDR" +%s 2>/dev/null || echo 0)
+    [ "$UPDRT" -gt "$UPDV" ] && UPDV=$UPDRT
+  fi
+  if [ "$UPDV" -gt 0 ]; then
+    printf -v UPDVU '%(%d/%m %H:%M)T' "$UPDV"
+    UPD=$(jq -c --arg vu "$UPDVU" '. + {vu: $vu}' <<< "$UPD" 2>/dev/null || echo "$UPD")
+  fi
 
   # --- Sauvegarde : horodatage et anciennete ---
   BST=$(stat -c %Y /var/lib/nas-backup.last 2>/dev/null || echo 0)
