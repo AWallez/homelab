@@ -23,6 +23,11 @@ body.verre-scene:not(.sans-scene) .aurora{background-color:#120e23;background-im
 
 .espace{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}
 .espace.pret{opacity:1}
+/* Sur ecran tactile, le haut de la scene se fond dans cette couleur : c est sa limite
+   nette, etoiles et nuances coupees d un trait, qui se lisait comme une barre. Les
+   degrades de l ancien fond, lisses, n en avaient aucune. */
+@media(pointer:coarse){.espace::after{content:"";position:absolute;inset:0 0 auto;height:84px;pointer-events:none;
+  background:linear-gradient(180deg,#120e23 0,rgba(18,14,35,.82) 22%,rgba(18,14,35,.5) 48%,rgba(18,14,35,.18) 76%,rgba(18,14,35,0) 100%)}}
 .espace-image{position:absolute;left:0;top:0;display:block}
 /* Quelques etoiles scintillent, a peine (une sur deux des points tires), sur
    des points fins : le scintillement leger retenu pour les etoiles. */
