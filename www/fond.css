@@ -274,9 +274,10 @@ a.card:hover, .card.clic:hover {
 
   /* Les entrees s alignent a gauche, comme dans un champ de selection.
      SPECIFICITE : `style.css` les cadre via
-     `#filters.ouvert button:not(#menu):not(#compact)`, soit (1,4,1). Il
-     faut donc au moins autant, d ou la reprise du meme motif. */
-  #filters.ouvert .panneau button:not(#menu):not(#compact) {
+     `#filters .panneau button:not(#menu):not(#compact)`. Il faut donc au moins
+     autant, d ou la reprise du meme motif. Sans `.ouvert` : le gabarit ne doit
+     pas changer pendant le fondu de fermeture (style.css). */
+  #filters .panneau button:not(#menu):not(#compact) {
     justify-content: flex-start;
     text-align: left;
     padding-left: 10px;

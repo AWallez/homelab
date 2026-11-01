@@ -613,6 +613,10 @@ details.grp.sous .ln .nm{padding-left:16px}
 @keyframes surligne { from { opacity: .35 } to { opacity: 1 } }
 .neuf { animation: apparait .28s ease-out both }
 .chg  { animation: surligne .3s ease-out }
+/* Le titre d un groupe contient du verre (son icone, voir `marque`) : pas d opacite
+   sur lui, seul son texte se fond. */
+@keyframes apparait-titre { from { color: transparent; text-shadow: 0 0 0 transparent } }
+h2:has(> svg > .neuf) { animation: apparait-titre .28s ease-out both }
 
 @media (prefers-reduced-motion: reduce) {
   #bar i, #groups i, #dlg i, #groups path, #dlg path { transition: none }
@@ -1058,8 +1062,16 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
    ⚠️ Ces regles doivent reprendre le gabarit `:not(#menu):not(#compact)` : dans
    le calcul de specificite, `:not()` compte comme son argument, donc la regle
    d origine pese TROIS identifiants et bat tout selecteur plus simple. */
+/* ⚠️ LE MEME GABARIT OUVERT OU FERME (01/11/2026) : dans le panneau, ces regles ne
+   dependent pas de `.ouvert`. Elles en dependaient : a la fermeture, les entrees
+   passaient aussitot en `display:none` alors que le panneau met encore 0,2 s a
+   s effacer. Le texte disparaissait d un coup, et le fond, reduit a sa marge,
+   finissait de s estomper sous la forme d un point. Fermees, les entrees restent
+   donc en place : c est `visibility:hidden` qui les retire, a la fin du fondu.
+   Meme regle pour leur rembourrage, plus bas et dans fond.css. */
 @media(max-width:980px){
-  #filters.ouvert .panneau button.on:not(#menu):not(#compact){display:none}
+  #filters .panneau button:not(#menu):not(#compact){display:flex;align-items:center;justify-content:flex-start;flex:1 0 100%;text-align:left}
+  #filters .panneau button.on:not(#menu):not(#compact){display:none}
   }
 
 /* ---- Barre et panneau : habillage de la barre du haut (22/08/2026) ----
@@ -1090,7 +1102,7 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
   #filters .panneau{
     transform-origin:top left;transform:translateY(-10px) scale(.96)}
   #filters.ouvert .panneau{transform:none}
-  #filters.ouvert .panneau button:not(#menu):not(#compact){
+  #filters .panneau button:not(#menu):not(#compact){
     padding:.62rem .9rem;border-radius:11px;
     transition:background .16s ease,color .16s ease}
   #filters.ouvert .panneau button:not(#menu):not(#compact):hover{

@@ -3112,7 +3112,7 @@ function filters() {
       const dy = avant[i] - b.getBoundingClientRect().top;
       if (Math.abs(dy) > .5) b.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], trajet);
     });
-    if (!cache) document.getElementById("soucis")?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+    if (!cache) document.querySelectorAll("#soucis .pil").forEach(marque);
   };
   w.appendChild(al);
   majAlertes();
@@ -3806,8 +3806,16 @@ function majAttributs(a, b) {
 }
 
 // Un élément qui vient d'apparaître se fond au lieu de surgir.
+/* ⚠️ LE VERRE APPARAIT D UN COUP, SEUL SON CONTENU SE FOND (01/11/2026). Une
+   opacite sous 1 sur un parent en fait la racine de fond de ses enfants, dont le
+   `backdrop-filter` ne voit plus la page : un groupe revenu par un changement de
+   filtre montrait ses cartes sans flou pendant tout le fondu, et le flou surgissait
+   a la fin. Sur le verre lui-meme, on verrait encore la scene nette au depart.
+   Le fondu descend donc sous le verre : le flou est la des la premiere image. */
+const VERRE = ".card,.soucis .pil,h2 svg";
 function marque(n) {
   if (n.nodeType !== 1 || doux()) return;
+  if (n.matches(VERRE) || n.querySelector(VERRE)) { [...n.children].forEach(marque); return; }
   n.classList.add("neuf");
   n.addEventListener("animationend", () => n.classList.remove("neuf"), { once: true });
 }
