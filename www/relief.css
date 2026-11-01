@@ -1,62 +1,14 @@
-/* espace.css — l habillage qui va avec le fond spatial (espace.js) : la scene,
-   le verre, le relief et les menus. Sorti du script le 01/11/2026 : dans le
-   head, il s applique des le premier affichage, avec les classes du body posees
-   dans index.html. Pose par le script, le dernier a se charger, il laissait voir
-   l ancien habillage a chaque ouverture de page.
-   ⚠️ En dernier des feuilles : ses regles passent apres fond.css et style.css. */
+/* relief.css — l habillage du contenu : le verre, le relief fait d ombres seules, les
+   menus deroulants et le gris lisible. Mis au point du 27/10 au 01/11/2026 avec Alexis,
+   sur un fond spatial finalement abandonne : le fond reste celui de fond.css, en
+   degrades. Ce qui a ete essaye et refuse est note la ou ca s applique.
+   Classes `verre-scene relief final` posees sur le body dans index.html.
+   ⚠️ Dans le head, en dernier des feuilles : ses regles passent apres fond.css et
+   style.css, et s appliquent des le premier affichage. */
 
-/* L ANCIEN FOND NE SE MONTRE PLUS (01/11/2026). La scene se peint en quelques
-   dixiemes de seconde : en attendant, les degrades d origine se voyaient, puis
-   transparaissaient pendant son fondu. La page reste donc sur le noir de l espace
-   (--fond) jusqu a la scene. Seul espace.js rend le fond d origine, si WebGL manque
-   (classe sans-scene). Le voile des bords (::after) reste : il passe devant la
-   scene, et fait partie du rendu retenu. */
-body.verre-scene:not(.sans-scene) .aurora::before{content:none}
-/* LA ZONE AUTOUR DE LA DYNAMIC ISLAND (01/11/2026, Safari et Brave sur iPhone) : la
-   page n y dessine pas sa scene (un fond remonte de 80 px n y changeait rien), iOS la
-   peint d une couleur qu il reprend de la page. Sans les degrades d origine, il ne
-   restait sous la scene qu un noir uni : une bande noire, absente avec l ancien fond.
-   Partout la couleur du haut de la scene (#120e23), comme `theme-color` (index.html). */
-html{background:#120e23}
-body.verre-scene{background:transparent}
-body.verre-scene:not(.sans-scene) .aurora{background-color:#120e23;background-image:linear-gradient(180deg,#120e23,#07080c)}
-
-.espace{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}
-.espace.pret{opacity:1}
-/* Sur ecran tactile, le haut de la scene se fond dans cette couleur : c est sa limite
-   nette, etoiles et nuances coupees d un trait, qui se lisait comme une barre. Les
-   degrades de l ancien fond, lisses, n en avaient aucune. */
-@media(pointer:coarse){.espace::after{content:"";position:absolute;inset:0 0 auto;height:84px;pointer-events:none;
-  background:linear-gradient(180deg,#120e23 0,rgba(18,14,35,.82) 22%,rgba(18,14,35,.5) 48%,rgba(18,14,35,.18) 76%,rgba(18,14,35,0) 100%)}}
-.espace-image{position:absolute;left:0;top:0;display:block}
-/* Quelques etoiles scintillent, a peine (une sur deux des points tires), sur
-   des points fins : le scintillement leger retenu pour les etoiles. */
-.espace .scint{position:absolute;width:1.5px;height:1.5px;margin:-1px 0 0 -1px;border-radius:50%;background:#fff;
-  box-shadow:0 0 2px 1px rgba(170,200,255,.45);opacity:.4;will-change:opacity;
-  animation:esp-scint var(--t) ease-in-out var(--d) infinite alternate}
-.espace .scint:nth-child(even){display:none}
-@keyframes esp-scint{from{opacity:.4}to{opacity:.8}}
-/* Vaisseaux : un vol horizontal, dans un couloir LIBRE mesure sur la page
-   (entre la barre et les raccourcis, entre la recherche et les filtres).
-   Valable page en haut : le fond est fixe, la page defile par-dessus. */
-.espace .vaisseau{position:absolute;left:0;width:48px;height:10px;margin-top:-5px;opacity:0;
-  animation:esp-passe var(--duree) linear var(--d) infinite}
-.espace .vaisseau .coque{position:absolute;inset:0}
-.espace .vaisseau.retour .coque{transform:scaleX(-1)}
-.espace .vaisseau i{position:absolute;left:4px;top:4px;width:20px;height:2px;border-radius:2px;
-  background:linear-gradient(90deg,transparent,rgba(140,190,255,.55))}
-.espace .vaisseau i::after{content:"";position:absolute;right:-1px;top:-1px;width:4px;height:4px;border-radius:50%;
-  background:#fff;box-shadow:0 0 4px 2px rgba(130,190,255,.85),0 0 10px 3px rgba(90,150,255,.35)}
-.espace .vaisseau svg{position:absolute;left:21px;top:0;width:27px;height:10px}
-@keyframes esp-passe{
-  0%{opacity:0;transform:translateX(var(--x0))}
-  3%,37%{opacity:1}
-  40%,100%{opacity:0;transform:translateX(var(--x1))}}
-/* LE VERRE SUR LA SCENE. Celui de fond.css (flou 6 px, 2 a 7 % de blanc) est
-   regle pour un fond de grands degrades ; sur une scene nette (etoiles, villes,
-   bord de planete), le detail passe au travers et gene la lecture. Verre
-   ADAPTE : le flou double pour effacer le detail, la couleur passe toujours,
-   a peine d ombre dessous. (Ses aretes brillantes sont retirees, point 6.)
+/* LE VERRE ADAPTE, retenu avec le relief : le flou double par rapport a fond.css, la
+   couleur passe toujours, a peine d ombre dessous. (Ses aretes brillantes sont
+   retirees, point 6.)
    ⚠️ PAS DE VERRE FUME : un essai a flou 18 px, luminosite 78 % et 34 a 42 %
    de teinte sombre etait « beaucoup trop sombre », l aspect verre perdu. */
 body.verre-scene :is(.card,.bar,.search,.t .i){
@@ -218,9 +170,9 @@ body.relief :is(.jauge-b i,.tr i){box-shadow:inset 0 -1px 0 rgba(0,0,0,.22),inse
    un liseré d ombre qui ne depasse que dessous.
    ⚠️ Pas d ombre portee pleine : sous une barre posee sur l axe elle ne se
    voit pas, et sous une barre translucide (les visites) elle apparaissait A
-   TRAVERS, comme une tache decalee. Graphiques SVG : filtre #esp-biseau
+   TRAVERS, comme une tache decalee. Graphiques SVG : filtre #biseau
    (pose par le script) ; barres HTML : l ombre en bas, dedans. */
-body.relief :is(svg.gr,svg.batt){filter:url(#esp-biseau)}
+body.relief :is(svg.gr,svg.batt){filter:url(#biseau)}
 body.relief .b > i{box-shadow:inset 0 -1px 0 rgba(0,0,0,.22),inset 0 -3px 3px -1px rgba(0,0,0,.15)}
 /* 6. LE VERRE SANS REFLET BLANC, a la demande d Alexis : plus d arete
    speculaire (::after des cartes, de la barre, de la recherche, des icones,
@@ -438,9 +390,3 @@ body.relief #dlg:has(.jx) .jf{margin:14px 0 0}
 body.relief #dlg:has(.jx) > .scroll{margin-top:16px}
 body.relief #dlg:has(.jx) .psec{margin:18px 10px 8px}
 body.relief #dlg:has(.jx) .psec:first-child{margin-top:0}
-/* Changement d etat : la scene repeinte se pose par-dessus en fondu de 2,4 s,
-   la duree de l ancien fond. */
-.espace .espace-image.fondu{opacity:0;transition:opacity 2.4s ease}
-.espace .espace-image.fondu.visible{opacity:1}
-@media (max-width:700px){.espace .vaisseau{display:none}}
-@media (prefers-reduced-motion:reduce){.espace *,.espace *::after{animation:none!important}.espace .vaisseau{display:none}}

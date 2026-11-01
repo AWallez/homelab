@@ -1222,7 +1222,7 @@ dialog.dlg::after {
    ⚠️ `:empty` : rendue a chaque tour, la zone disparait quand tout va bien.
    ⚠️ PAS DE FOND quand la barre colle : essaye (voile sombre et flou), il
    assombrissait trop la page ; chaque bouton et chaque pastille ont le leur. */
-.nav { position: sticky; top: calc(10px + env(safe-area-inset-top, 0px)); z-index: 30; margin-bottom: 18px }
+.nav { position: sticky; top: 10px; z-index: 30; margin-bottom: 18px }
 /* ⚠️ MEME REMBOURRAGE OUVERT OU FERME : `style.css` passe `#filters.ouvert` a
    18 px sur les cotes, et les deux boutons glissaient de 12 px vers le centre
    a chaque ouverture du menu. */
