@@ -13,10 +13,12 @@
 
 /* ---- Sauvegarde ----
    Etroite, les pastilles passent sur deux lignes et la note aussi : on reprend
-   les marges autour d elles pour garder la carte sur quatre demi-rangees. */
+   les marges autour d elles pour garder la carte sur quatre demi-rangees.
+   La note garde un rembourrage egal : c est un bloc visible, sans lui le texte
+   tombe au bas du bloc. */
 @container carte (max-width: 560px) {
   .card[data-carte="sauvegarde"] .vizb>.past{padding-top:8px}
-  .card[data-carte="sauvegarde"]>.note{margin-top:6px;padding:4px 6px 0}
+  .card[data-carte="sauvegarde"]>.note{margin-top:4px;padding:3px 6px}
 }
 
 /* ---- Systeme et Temperatures ----
