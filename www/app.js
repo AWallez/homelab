@@ -1477,6 +1477,7 @@ async function load() {
     if (r.ok) { const j = await r.json(); if (Array.isArray(j) && j.length) SC = j; }
   } catch (e) { console.warn("raccourcis illisibles, liste par défaut", e); }
   shortcuts();
+  document.querySelector(".racc").style.minHeight = "";   // la place gardee par `rendPage`
 }
 const hst = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 /* ⚠️ SEUL UN LIEN http(s) DEVIENT CLIQUABLE. Le fichier des raccourcis s ecrit
@@ -4835,3 +4836,58 @@ async function demoInit() {
   refresh();
 }
 demoInit();
+
+/* ============ La page de la derniere visite (01/11/2026) ============
+   Demande : plus de blocs vides a l ouverture. Mesure : ce script est pret a
+   60 ms, mais la barre et les cartes attendent les releves puis leur rangement,
+   et ne se posent qu a 240 ms (600 ms sur le NAS), d un seul tenant.
+   Ce qui est a l ecran est donc garde dans le navigateur quand on quitte la page,
+   et repose tel quel au chargement, avant la premiere image (2 ms pour ecrire,
+   5 pour relire 250 Ko). Les releves arrivent ensuite par `fondre`, qui ne touche
+   que ce qui a change, et les clics des cartes se posent a ce moment-la (`peindre`).
+   Comme pour la sante : un confort d affichage, sans stockage la page se comporte
+   comme avant.
+   ⚠️ La vue « Tout » seulement, la seule qui s ouvre : partir sur un groupe filtre
+   laisse la derniere vue complete en place.
+   ⚠️ Les cartes sont rangees pour une largeur : a une autre, seules la barre et
+   les pastilles reviennent, le rangement ne se devine pas.
+   Ce HTML ne peut rien executer : la CSP bloque tout script en ligne. */
+const INSTANTANE = "homelab.instantane" + location.search;
+function retientPage() {
+  const tout = document.querySelector("#filters .panneau button");
+  if (!DATA.nas || window.ATELIER?.actif || !tout?.classList.contains("on")) return;
+  const main = document.querySelector("main"), g = document.getElementById("groups");
+  const html = (id) => document.getElementById(id).innerHTML;
+  try {
+    localStorage.setItem(INSTANTANE, JSON.stringify({ l: innerWidth, fige: html("fige"), bar: html("bar"), soucis: html("soucis"),
+      alertes: html("alertes"), groupes: g.innerHTML, gc: g.className, gs: g.getAttribute("style"),
+      mc: main.className, ms: main.getAttribute("style"), racc: document.querySelector(".racc").offsetHeight }));
+  } catch (e) { /* stockage refuse ou plein : la page se dessinera comme avant */ }
+}
+addEventListener("pagehide", retientPage);
+document.addEventListener("visibilitychange", () => { if (document.hidden) retientPage(); });
+function rendPage() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(INSTANTANE)); } catch (e) { /* stockage refuse */ }
+  if (!p) return;
+  document.getElementById("fige").innerHTML = p.fige;
+  document.getElementById("bar").innerHTML = p.bar;
+  document.getElementById("soucis").innerHTML = p.soucis;
+  if (p.l === innerWidth) {
+    const main = document.querySelector("main"), g = document.getElementById("groups");
+    g.innerHTML = p.groupes;
+    g.className = p.gc;
+    if (p.gs) g.setAttribute("style", p.gs);
+    main.className = p.mc;
+    if (p.ms) main.setAttribute("style", p.ms);
+    // les raccourcis arrivent juste apres : leur place est gardee, rien ne saute
+    document.querySelector(".racc").style.minHeight = p.racc + "px";
+  }
+  // parti en plein fondu : tout est la d un coup
+  document.querySelectorAll(".neuf,.chg").forEach((n) => n.classList.remove("neuf", "chg"));
+  filters();
+  document.getElementById("alertes").innerHTML = p.alertes;
+  const heure = document.querySelector(".clock b");
+  if (heure) heure.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+rendPage();

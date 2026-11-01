@@ -496,7 +496,17 @@ void main(){
     decore(w, h);
     espace.classList.add("pret");
   }
-  dessine();
+  /* ⚠️ APRES LA PREMIERE IMAGE : la scene prend 80 a 100 ms de calcul (mesure en
+     2560 x 1440), qui retardaient d autant tout l affichage de la page. La
+     minuterie en plus : un onglet en arriere-plan n a pas d images. */
+  let lancee = false;
+  const premiere = () => {
+    if (lancee) return;
+    lancee = true;
+    setTimeout(() => { if (etatPeint === null) dessine(); });
+  };
+  requestAnimationFrame(premiere);
+  setTimeout(premiere, 300);
   new MutationObserver(() => { if (etatCourant() !== etatPeint) dessine(true); })
     .observe(document.body, { attributes: true, attributeFilter: ["data-sante"] });
   addEventListener("load", placeVaisseaux);
