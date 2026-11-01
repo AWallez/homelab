@@ -26,9 +26,13 @@
 <link rel="stylesheet" href="bento/supervision-b.css">
 <link rel="stylesheet" href="bento/reseau.css">
 <link rel="stylesheet" href="bento/bureau.css">
+<!-- L habillage du fond spatial, en dernier : ses regles passent apres les
+     autres, et leurs classes (`verre-scene relief final`) sont sur le body. Ici
+     et pas dans espace.js : il s applique des le premier affichage. -->
+<link rel="stylesheet" href="espace.css">
   <meta name="referrer" content="no-referrer">
 </head>
-<body>
+<body class="verre-scene relief final">
 <div class="aurora"></div>
 <main>
   <div id="bar" class="bar"></div>
@@ -69,8 +73,8 @@
 <script src="app.js"></script>
 <!-- L atelier des cartes : inactif sauf avec `?atelier` dans l adresse. -->
 <script src="atelier.js"></script>
-<!-- Le fond spatial et l habillage du contenu (verre, relief, etat du homelab).
-     En dernier : il lit l etat que pose app.js. Sans lui, le fond d origine. -->
+<!-- Le fond spatial et l etat du homelab dans le decor. En dernier : il lit
+     l etat que pose app.js. -->
 <script src="espace.js"></script>
 </body>
 </html>

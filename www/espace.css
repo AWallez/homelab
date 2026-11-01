@@ -1,0 +1,434 @@
+/* espace.css — l habillage qui va avec le fond spatial (espace.js) : la scene,
+   le verre, le relief et les menus. Sorti du script le 01/11/2026 : dans le
+   head, il s applique des le premier affichage, avec les classes du body posees
+   dans index.html. Pose par le script, le dernier a se charger, il laissait voir
+   l ancien habillage a chaque ouverture de page.
+   ⚠️ En dernier des feuilles : ses regles passent apres fond.css et style.css. */
+
+/* L ANCIEN FOND NE SE MONTRE PLUS (01/11/2026). La scene se peint en quelques
+   dixiemes de seconde : en attendant, les degrades d origine se voyaient, puis
+   transparaissaient pendant son fondu. La page reste donc sur le noir de l espace
+   (--fond) jusqu a la scene. Seul espace.js rend le fond d origine, si WebGL manque
+   (classe sans-scene). Le voile des bords (::after) reste : il passe devant la
+   scene, et fait partie du rendu retenu. */
+body.verre-scene:not(.sans-scene) .aurora{background-image:none}
+body.verre-scene:not(.sans-scene) .aurora::before{content:none}
+
+.espace{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}
+.espace.pret{opacity:1}
+.espace-image{position:absolute;left:0;top:0;display:block}
+/* Quelques etoiles scintillent, a peine (une sur deux des points tires), sur
+   des points fins : le scintillement leger retenu pour les etoiles. */
+.espace .scint{position:absolute;width:1.5px;height:1.5px;margin:-1px 0 0 -1px;border-radius:50%;background:#fff;
+  box-shadow:0 0 2px 1px rgba(170,200,255,.45);opacity:.4;will-change:opacity;
+  animation:esp-scint var(--t) ease-in-out var(--d) infinite alternate}
+.espace .scint:nth-child(even){display:none}
+@keyframes esp-scint{from{opacity:.4}to{opacity:.8}}
+/* Vaisseaux : un vol horizontal, dans un couloir LIBRE mesure sur la page
+   (entre la barre et les raccourcis, entre la recherche et les filtres).
+   Valable page en haut : le fond est fixe, la page defile par-dessus. */
+.espace .vaisseau{position:absolute;left:0;width:48px;height:10px;margin-top:-5px;opacity:0;
+  animation:esp-passe var(--duree) linear var(--d) infinite}
+.espace .vaisseau .coque{position:absolute;inset:0}
+.espace .vaisseau.retour .coque{transform:scaleX(-1)}
+.espace .vaisseau i{position:absolute;left:4px;top:4px;width:20px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(140,190,255,.55))}
+.espace .vaisseau i::after{content:"";position:absolute;right:-1px;top:-1px;width:4px;height:4px;border-radius:50%;
+  background:#fff;box-shadow:0 0 4px 2px rgba(130,190,255,.85),0 0 10px 3px rgba(90,150,255,.35)}
+.espace .vaisseau svg{position:absolute;left:21px;top:0;width:27px;height:10px}
+@keyframes esp-passe{
+  0%{opacity:0;transform:translateX(var(--x0))}
+  3%,37%{opacity:1}
+  40%,100%{opacity:0;transform:translateX(var(--x1))}}
+/* LE VERRE SUR LA SCENE. Celui de fond.css (flou 6 px, 2 a 7 % de blanc) est
+   regle pour un fond de grands degrades ; sur une scene nette (etoiles, villes,
+   bord de planete), le detail passe au travers et gene la lecture. Verre
+   ADAPTE : le flou double pour effacer le detail, la couleur passe toujours,
+   a peine d ombre dessous. (Ses aretes brillantes sont retirees, point 6.)
+   ⚠️ PAS DE VERRE FUME : un essai a flou 18 px, luminosite 78 % et 34 a 42 %
+   de teinte sombre etait « beaucoup trop sombre », l aspect verre perdu. */
+body.verre-scene :is(.card,.bar,.search,.t .i){
+  backdrop-filter:blur(12px) saturate(1.35) brightness(.96);
+  -webkit-backdrop-filter:blur(12px) saturate(1.35) brightness(.96);
+  background:var(--dalle),linear-gradient(rgba(10,12,26,.08),rgba(10,12,26,.13))}
+/* une ombre legere sous le texte des cartes */
+body.verre-scene .card{text-shadow:0 1px 1px rgba(0,0,0,.35)}
+/* LE GRIS SUR LA SCENE (01/11/2026). Choisi pour un fond sombre et uni, #8a94a6
+   passait sous un contraste de 4,5 sur un cinquieme des positions mesurees (chaque
+   texte, au fil du defilement, derriere le verre), et jusqu a 1,4 devant le bord
+   eclaire de la planete. #b8c2d2, le gris que fond.css donne deja aux boutons de la
+   barre : la hierarchie tient, le blanc reste bien au-dessus.
+   Les adresses et les sous-titres etaient en plus translucides, alors que ce sont
+   les plus petits textes de la page : ils passent au meme gris, opaque. */
+body.verre-scene{--mut:#b8c2d2}
+body.verre-scene .adr{color:var(--mut)!important}
+body.verre-scene .sub2,
+body.verre-scene #groups.compact .card:not(:has(.adr)) .head p{color:var(--mut)}
+body.verre-scene h2{color:#c4cdda}
+/* LE RELIEF, sur TOUT le contenu : la lumiere vient d en haut, comme sur les
+   icones des raccourcis et les jauges creusees de fond.css. Pose sur le
+   verre : ombre dessous. Creuse : ombre a l interieur, en haut.
+   ⚠️ JAMAIS de filter sur un element qui CONTIENT du verre (carte, barre,
+   section, page) : il deviendrait la racine du fond et le verre de ses
+   enfants passerait au noir (fond.css, paragraphe 2). Le filtre ne va que
+   sur des FEUILLES : icones, images, graphiques, reperes. */
+/* Intensites baissees d un tiers apres un premier essai juge trop marque. */
+/* 1. tout le texte, boutons et champs compris : le navigateur leur retire
+   l ombre heritee, d ou la seconde regle.
+   ⚠️ Le texte des CARTES garde l ombre douce du verre adapte (posee sur
+   .card, elle prime sur celle-ci par heritage) : c est le rendu retenu par
+   Alexis. Une TRANCHE (la lettre redoublee un pixel plus bas dans une
+   version sombre de sa couleur) a ete essayee et refusee : « c etait mieux
+   avant ». Ne pas la reproposer. */
+/* ⚠️ OMBRES DOUCES (flou d un pixel), jamais NETTES : sous un trait fin
+   (lettre, fleche, coche), une copie sombre decalee d un pixel se lit comme
+   un dedoublement. Vu sur la barre de filtres le 01/11/2026. Hors des cartes,
+   le texte prend donc l ombre que le verre adapte donne au texte des cartes. */
+body.relief :is(main,.dlg),
+body.relief :is(main,.dlg) :is(button,input,select,textarea),
+body.relief :is(main,.dlg) ::placeholder{text-shadow:0 1px 1px rgba(0,0,0,.35)}
+/* pose a meme le fond, sans verre : plus marquee, et un halo sombre en plus.
+   (Les pastilles des filtres sont en verre : elles suivent la regle d avant.) */
+body.relief :is(.t .l,h2,.fige){text-shadow:0 1px 1px rgba(0,0,0,.55),0 0 6px rgba(0,0,0,.35)}
+/* ⚠️ RELIEF SANS AUCUN BLANC, a la demande d Alexis : ni filet clair, ni
+   reflet, ni tranche grise sous les icones blanches. Le volume ne vient que
+   d ombres sombres : dessous a l exterieur, et au bas des formes a
+   l interieur. Ne pas remettre de lumiere. */
+/* 2. tout ce qui est dessine : icones, logos, points, reperes. Le filtre suit
+   la forme et garde les halos lumineux. Les graphiques et les barres sont a
+   part, au point 5. */
+body.relief :is(main,.dlg) :is(svg,i,.pt,.ep,img,canvas):not(.gr):not(.batt):not(.b > i){
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.5)) drop-shadow(0 2px 2px rgba(0,0,0,.25))}
+/* les points d etat deviennent des billes : leur bas s assombrit (une
+   couleur posee en ligne par le script reste mate) */
+/* ⚠️ « :is(main,.dlg) .pt » : le texte d une proposition de recherche porte aussi
+   la classe pt, et prenait ce degrade en fond, une bande sombre derriere le mot. */
+body.relief :is(.dot,.hp .line i,:is(main,.dlg) .pt,.ep,.pil i){background-image:linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(0,0,0,.3))}
+/* 3. les blocs poses sur le verre (pastilles, notes, notifications) : la
+   MEME recette que le verre du point 6 bis, a leur echelle. Avec une simple
+   ombre dessous, ils detonnaient a cote des cartes en volume. */
+body.relief :is(.st,.note,.past span,.wgt,.calme,.pil,.periode .on,.card button,.chk li,.rg .p,.ses span,.faits span,.verdict em,.search .moteur,.fige){box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.18),
+  inset 0 -1px 0 rgba(0,0,0,.15),
+  inset 0 -6px 8px -7px rgba(0,0,0,.26),
+  0 1px 0 rgba(0,0,0,.26),
+  0 2px 4px -1px rgba(0,0,0,.2)}
+/* 3 bis. RELIEF OU CREUX, la version retenue le 01/11/2026 (classe « final »
+   du body) : TOUT LE CONTENU EN RELIEF, sauf les PASTILLES et la carte
+   JELLYFIN, creusees. Les rails (jauges, barres, selecteur de periode)
+   restent creuses partout, les boutons en relief.
+   Essayes avant d y arriver, tous ecartes par Alexis : tout creuser (trop
+   sombre a 17 % de noir), un mixte (ce qu on lit creuse, les etiquettes en
+   relief), tout en 3D.
+   ⚠️ L encadre « tout va bien » (.calme, ex. « Aucune demande en attente »
+   de Seerr) et les notes sont du CONTENU, pas des pastilles : en relief.
+   « :not(#_) » ne filtre rien : il ajoute le poids d un identifiant, pour
+   passer devant des regles plus precises posees plus haut.
+   Les regles suivent : le rebord en relief (pastilles d abord, puis le
+   reste du contenu), puis les creux. */
+/* LE REBORD EN RELIEF : fait d ombres, le meme partout et quel que soit le
+   fond. Un degrade sombre, leger en haut et profond en bas, comme l arete
+   d un galet vu de dessus ; une arete nette dessous donne l epaisseur, le bas
+   s assombrit dedans. Avant : une bordure plate (sombre, verte ou ambre)
+   doublee d un anneau, qui changeait d aspect selon ce que le verre de la
+   carte laissait passer. La couleur des blocs d etat reste dans leur fond.
+   (Rebord en ::after masque en anneau, comme les aretes de fond.css : un
+   degrade pose en bordure passerait aussi sous le fond translucide.)
+   Ici l encadre « tout va bien » ; les pastilles perdent aussi leur bordure
+   mais sont creusees plus bas. */
+body.relief :is(.past span,.faits span,.ses span,.verdict em,.calme,.card .pil){
+  position:relative;border-color:transparent;
+  box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.3),0 1px 0 rgba(0,0,0,.32),0 2px 4px -1px rgba(0,0,0,.22)}
+body.relief .calme::after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,.14),rgba(0,0,0,.52));
+  -webkit-mask:var(--anneau);-webkit-mask-composite:xor;mask:var(--anneau);mask-composite:exclude}
+/* le RESTE DU CONTENU (chiffres, notes, tuiles d etat, lignes de Securite)
+   prend le meme rebord en relief. Neutre, son fond fonce (16 % de noir) le
+   detache de la carte : a 4 % de blanc, il s y confondait. */
+body.relief.final :is(.st,.note,.wgt,.chk li){position:relative;
+  box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.3),0 1px 0 rgba(0,0,0,.32),0 2px 4px -1px rgba(0,0,0,.22)}
+body.relief.final :is(.st,.note,.wgt,.chk li):not(#_){border-color:transparent}
+body.relief.final :is(.st,.note,.wgt,.chk li)::after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(0,0,0,.14),rgba(0,0,0,.52));
+  -webkit-mask:var(--anneau);-webkit-mask-composite:xor;mask:var(--anneau);mask-composite:exclude}
+/* (.chk li.ok n est pas une couleur : la ligne « ok » de Securite est neutre) */
+body.relief.final :is(.st,.note,.wgt):not(.ok):not(.wn):not(.on),
+body.relief.final .chk li:not(.wn){background-color:rgba(0,0,0,.16)}
+/* LES CREUX : les rails des barres ; les PASTILLES, sans leur rebord ; la
+   carte JELLYFIN (tuiles films / series / episodes, note). Recette de ses
+   creux, reprise telle quelle : fond a peine plus sombre que le verre (6 %),
+   c est l ombre interieure qui fait le creux, pas la couleur. Les pastilles
+   colorees gardent leur teinte. */
+body.relief.final .rg .p{background:rgba(0,0,0,.1);box-shadow:inset 0 1px 2px rgba(0,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.1)}
+body.relief.final :is(.past span,.faits span,.ses span,.verdict em,.card .pil){
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.1)}
+body.relief.final :is(.past span,.faits span,.ses span,.verdict em,.card .pil)::after{content:none}
+body.relief.final :is(.past span,.faits span,.verdict em,.card .pil):not(.ok):not(.wn):not(.cr):not(.crit):not(.inc),
+body.relief.final .ses span.vide{background-color:rgba(0,0,0,.06)}
+body.relief.final .card[data-carte="jellyfin"] :is(.st,.note){box-shadow:inset 0 1px 2px rgba(0,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.1)}
+body.relief.final .card[data-carte="jellyfin"] :is(.st,.note)::after{content:none}
+body.relief.final .card[data-carte="jellyfin"] :is(.st,.note):not(.ok):not(.wn):not(.on){background-color:rgba(0,0,0,.06)}
+body.relief.final .card[data-carte="jellyfin"] :is(.st,.note):is(.ok,.wn){
+  background-image:linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,.08) 70%);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.12)}
+/* LES BLOCS COLORES n ont pas de TRAIT DE COULEUR, mais le MEME contour
+   sombre que les blocs neutres (l anneau des creux, ou le rebord). Leur
+   couleur reste dans le fond. Concerne la tuile active de WireGuard (vert),
+   les lignes de Securite en alerte et l avertissement des mises a jour.
+   ⚠️ Essayes puis annules le 01/11/2026 : retirer toutes les bordures des
+   creux, et retirer l anneau ou le rebord des blocs colores. Ne pas les
+   reproposer sans demander a Alexis. */
+body.relief :is(.wgt.on,.chk li.wn,.st:is(.ok,.wn),.note:is(.ok,.wn),.motif):not(#_){border-color:transparent}
+/* LES CREUX COLORES : sur une teinte, l ombre du haut ne suffisait pas a lire
+   un creux. La teinte, plus claire que le verre de la carte, faisait
+   paraitre le bloc POSE dessus. Leur fond s assombrit donc du haut vers le
+   bas, comme un puits ; la teinte reste dessous. (Compare a la loupe avec le
+   creux simple et le relief : c est le seul qui se lit en creux.) */
+body.relief.final :is(.past span,.faits span,.verdict em,.card .pil):is(.ok,.wn,.cr,.crit,.inc),
+body.relief.final .ses span:not(.vide),
+body.relief .dlg .motif:not(#_){background-image:linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,.08) 70%);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.12)}
+/* 3 ter. PLUS DE BORDURE BLANCHE : separateurs et contours fins (pastilles
+   d incident, selecteur de periode, boutons du PC, lignes du journal, des
+   disques, de Securite, separateurs de la barre) deviennent sombres, graves
+   dans le verre. Les bordures colorees (ambre, rouge) gardent leur couleur.
+   Restent clairs les traits qui DESSINENT quelque chose : la fleche
+   « ouvrir » (.ouvre) et le repere du jour (.jours .b). */
+body.relief :is(.pcb button,.t button.e,.jr > div,.jx .cr,.jx .ok,.dqs .dq,.dqb,.blocs .libre,.bar .met,.chk li,.periode,.pil):not(.wn):not(.inc):not(.crit){
+  border-color:rgba(0,0,0,.28)}
+/* 4. creuse : les rails des jauges ; leur remplissage s assombrit en bas,
+   comme un tube */
+body.relief :is(.jauge-b,.tr):not(.vide){box-shadow:inset 0 1px 2px rgba(0,0,0,.45)}
+body.relief :is(.jauge-b i,.tr i){box-shadow:inset 0 -1px 0 rgba(0,0,0,.22),inset 0 -2px 2px rgba(0,0,0,.12)}
+/* 5. les graphiques et leurs barres : ombre au bas de la forme, dedans, et
+   un liseré d ombre qui ne depasse que dessous.
+   ⚠️ Pas d ombre portee pleine : sous une barre posee sur l axe elle ne se
+   voit pas, et sous une barre translucide (les visites) elle apparaissait A
+   TRAVERS, comme une tache decalee. Graphiques SVG : filtre #esp-biseau
+   (pose par le script) ; barres HTML : l ombre en bas, dedans. */
+body.relief :is(svg.gr,svg.batt){filter:url(#esp-biseau)}
+body.relief .b > i{box-shadow:inset 0 -1px 0 rgba(0,0,0,.22),inset 0 -3px 3px -1px rgba(0,0,0,.15)}
+/* 6. LE VERRE SANS REFLET BLANC, a la demande d Alexis : plus d arete
+   speculaire (::after des cartes, de la barre, de la recherche, des icones,
+   des pastilles, des fleches et des fenetres), plus de filet clair dans les
+   ombres du verre. Ses ombres sombres restent, et sa dalle aussi : c est
+   elle qui fait voir le verre.
+   ⚠️ Les pastilles des filtres sont ciblees par #filters dans fond.css
+   (specificite 1,1,1 et 1,2,1 pour .on) : d ou l identifiant repris ici. */
+/* (sauf le soulignement du bouton Compact, qui dit s il est actif : c est
+   lui aussi un ::after) */
+body.relief :is(.card,.bar,.search,.t .i,.fl,.filters button:not(#compact),.filters > span,.panneau button,dialog.dlg)::after{opacity:0}
+body.relief :is(#filters,.filters)::before{background-image:none;box-shadow:none}
+body.relief h2 svg{box-shadow:0 1px 2px rgba(0,0,0,.26),0 5px 12px -7px rgba(0,0,0,.42),inset 0 -1px 0 rgba(0,0,0,.28)}
+/* 6 bis. LE VOLUME DU VERRE, sans son arete brillante : tout en ombres.
+   - un contour sombre d un pixel, dedans : la forme du panneau ;
+   - un liseré sombre en bas : la tranche de la dalle ;
+   - le bas qui s assombrit en douceur : la dalle parait bombee ;
+   - une ombre portee plus dense mais COURTE (7 px au plus, 9 au survol) :
+     fond.css explique pourquoi, les cartes sont espacees de 11 a 13 px et
+     l ombre d une voisine se verrait a travers le verre.
+   Intensites baissees d un quart apres un essai « un poil trop prononce ». */
+body.relief :is(.card,.bar,.search,.search:focus-within){box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.21),
+  inset 0 -2px 0 rgba(0,0,0,.15),
+  inset 0 -16px 22px -18px rgba(0,0,0,.32),
+  0 1px 0 rgba(0,0,0,.32),
+  0 3px 6px -1px rgba(0,0,0,.25),
+  0 8px 14px -8px rgba(0,0,0,.35)}
+body.relief :is(a.card,.card.clic):hover{box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.21),
+  inset 0 -2px 0 rgba(0,0,0,.15),
+  inset 0 -16px 22px -18px rgba(0,0,0,.32),
+  0 1px 0 rgba(0,0,0,.32),
+  0 4px 8px -1px rgba(0,0,0,.3),
+  0 10px 16px -8px rgba(0,0,0,.42)}
+/* les petites tuiles (icones des raccourcis, pastilles de filtres, fleches) :
+   la meme recette, a leur echelle */
+body.relief :is(.t .i,.fl){box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.21),
+  inset 0 -2px 0 rgba(0,0,0,.15),
+  inset 0 -9px 12px -10px rgba(0,0,0,.32),
+  0 1px 0 rgba(0,0,0,.32),
+  0 3px 6px -2px rgba(0,0,0,.3)}
+/* LA BARRE DE FILTRES, SANS CONTOUR (demande du 01/11/2026) : ni anneau
+   sombre, ni tranche, ni trait colore. Le volume tient au bombe et a une
+   ombre douce dessous. Les pastilles d incident gardent leur sens par une
+   teinte rouge ou ambre, en plus de leur point.
+   ⚠️ Pas de matiere pleine bleu nuit non plus (essayee le 01/11/2026 pour un
+   rendu identique sur tout fond, jugee « moche ») : elles restent en verre.
+   ⚠️ « .filters > span » et pas « .filters span » : la pastille de la cloche
+   est le SEUL span enfant direct. Le second selecteur prenait aussi le nom
+   du menu (« Tout »), le support de la cloche et le compteur, qui portaient
+   alors un rectangle sombre. */
+body.relief :is(#filters button,.filters button,.filters > span,.filters .pil),
+body.relief #filters button.on{border-color:transparent;box-shadow:
+  inset 0 -7px 9px -8px rgba(0,0,0,.3),
+  0 2px 6px -1px rgba(0,0,0,.32)}
+body.relief #filters .pil.crit{background-color:rgba(255,69,58,.16)}
+body.relief #filters .pil.inc{background-color:rgba(255,159,10,.14)}
+/* LES MENUS DEROULANTS, DANS LA MATIERE DE LEUR PARENT (01/11/2026) : ils
+   detonnaient avec leurs fonds presque opaques et leurs anneaux blancs.
+   - les listes de la recherche (moteurs, propositions) prennent le verre de la
+     barre : meme dalle, meme volume, contour sombre compris ;
+   - le menu des groupes prend celui de son bouton : bombe, ombre douce, sans
+     contour ; il garde sa teinte de fond.css.
+   Tous passent au-dessus des cartes, dont le texte ne doit pas se lire au
+   travers : flou plus fort, un voile sombre de plus, et la grande ombre portee
+   d un element qui flotte.
+   Dedans, tout pareil et sans blanc : un choix survole ou actif devient un bloc
+   en relief, le moteur choisi garde sa teinte bleue.
+   ⚠️ Ces listes sont dans body, hors de main : les regles de relief du point 1
+   et du point 2 ne les atteignent pas, d ou leurs ombres de texte et de logo. */
+body.relief :is(#moteurs,#propositions){
+  background:var(--dalle),linear-gradient(rgba(10,12,26,.34),rgba(10,12,26,.4));
+  backdrop-filter:blur(20px) saturate(1.35) brightness(.96);
+  -webkit-backdrop-filter:blur(20px) saturate(1.35) brightness(.96);
+  text-shadow:0 1px 1px rgba(0,0,0,.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.21),
+    inset 0 -2px 0 rgba(0,0,0,.15),
+    inset 0 -16px 22px -18px rgba(0,0,0,.32),
+    0 1px 2px rgba(0,0,0,.34),
+    0 16px 34px -14px rgba(0,0,0,.62)}
+body.relief #filters .panneau{
+  background-image:var(--dalle);
+  box-shadow:
+    inset 0 -16px 22px -18px rgba(0,0,0,.32),
+    0 1px 2px rgba(0,0,0,.34),
+    0 16px 34px -14px rgba(0,0,0,.62)}
+body.relief :is(#moteurs li.actif,#moteurs li[role="option"]:hover,#propositions li[aria-selected="true"],#propositions li:not(.sep):hover){
+  background:rgba(0,0,0,.2);
+  box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.26),0 1px 3px rgba(0,0,0,.24)}
+body.relief #moteurs li[aria-selected="true"]{
+  background:rgba(77,151,238,.16);
+  box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.26),0 1px 3px rgba(0,0,0,.24)}
+body.relief #moteurs li[aria-selected="true"]:is(.actif,:hover){background:rgba(77,151,238,.24)}
+body.relief #propositions li.sep{background:rgba(0,0,0,.28)}
+body.relief #moteurs .pastille{background:rgba(0,0,0,.16);
+  box-shadow:inset 0 -5px 7px -6px rgba(0,0,0,.28),0 1px 2px rgba(0,0,0,.26)}
+body.relief :is(#moteurs svg,#propositions .pi :is(svg,img)){filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+/* le bouton du moteur, dans la barre : un bloc en relief comme les autres, sans voile blanc */
+body.relief .search .moteur{background:rgba(0,0,0,.16)}
+body.relief .search .moteur:is(:hover,[aria-expanded="true"]){background:rgba(0,0,0,.26)}
+/* les choix du menu des groupes : a plat, puis comme ceux des deux autres listes */
+@media (max-width:980px){
+  body.relief #filters .panneau button:not(#menu):not(#compact){box-shadow:none}
+  body.relief #filters .panneau button:not(#menu):not(#compact):is(:hover,:active):not(#_){background:rgba(0,0,0,.2);
+    box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.26),0 1px 3px rgba(0,0,0,.24)}
+}
+/* LE TEXTE AU MILIEU. Boite centree, mais la police garde de la place au-
+   dessus des lettres (accents) : « Tout » paraissait 1 a 2 px trop bas. Le
+   texte remonte d un pixel, les icones et les points ne bougent pas.
+   (Le rognage text-box ne remontait que d un demi-pixel, et seulement sur
+   un span, pas sur un texte pose directement dans un bouton.) */
+body.relief #filters :is(.menu-nom,.n,.pil b){position:relative;top:-1px}
+/* (un pixel de rembourrage passe du haut au bas : la hauteur ne change pas) */
+@media (min-width:981px){
+  body.relief #filters .panneau button:not(#menu):not(#compact),
+  body.relief #filters #compact{padding-top:calc(.34rem - 1px);padding-bottom:calc(.34rem + 1px)}
+}
+@media (max-width:980px){
+  body.relief #filters #compact{padding-top:0;padding-bottom:2px}
+  body.relief #filters .panneau button:not(#menu):not(#compact){padding-top:calc(.62rem - 1px);padding-bottom:calc(.62rem + 1px)}
+}
+body.relief #filters #compact svg{translate:0 1px}
+body.relief dialog.dlg{box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.22),
+  inset 0 -2px 0 rgba(0,0,0,.16),
+  inset 0 -24px 30px -26px rgba(0,0,0,.34),
+  0 1px 2px rgba(0,0,0,.36),
+  0 24px 60px -18px rgba(0,0,0,.72),
+  0 64px 128px -44px rgba(0,0,0,.62)}
+/* 7. LES EMOJI ET LA COCHE : une ombre de texte dedouble ces caracteres (le
+   systeme les dessine en emoji). La coche des encadres « tout va bien »
+   (.k, dans sa pastille ronde), celle du chiffre des sondes (b.ok) et les
+   emoji de la fenetre Mises a jour (avertissement, sablier, coche verte)
+   prennent leur ombre par un filtre, qui suit leur vraie forme. Ce sont des
+   feuilles, sans verre dedans. */
+body.relief :is(.k,b.ok,.dlg #mst,.dlg .motif > div){text-shadow:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+/* 7 bis. JAMAIS DEUX OMBRES SUR UN TEXTE, regle generale (01/11/2026) : un
+   texte pose dans un element qui porte deja une ombre en filtre (icones,
+   points, graphiques, coches) perd son ombre de texte. Sinon le filtre
+   ombrait le texte ET son ombre, et le caractere paraissait dedouble : vu
+   sur la coche, puis sur la fleche « → » entre deux versions, dans un <i>
+   que la regle des icones prenait pour une icone.
+   Un <i> qui contient du texte prend l ombre unique de la coche. */
+body.relief :is(main,.dlg) :is(svg,i,.pt,.ep,.chev),
+body.relief :is(main,.dlg) :is(svg,i,.pt,.ep,.k,b.ok,.chev) *{text-shadow:none}
+body.relief :is(main,.dlg) i:not(:empty):not(.b > i){filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
+/* 8. LES FENETRES, meme partage que les cartes (releve du 01/11/2026 sur
+   raccourci, mises a jour, conteneurs, acces, journal, graphe, disque,
+   espace, PC).
+   - En relief : tout ce qui se clique (boutons, croix, filtres du journal,
+     modes des mises a jour) et les etiquettes (pastilles des acces, des
+     requetes). Le bouton de periode inactif reste a plat dans son rail.
+   - Creuse : ce qu on remplit ou qu on lit (champs, cases, lignes a cocher,
+     avertissement, code d erreur, tuiles de mesure des disques) et les
+     rails (barres de memoire, selecteur de periode). */
+body.relief .dlg button:not([data-per]),
+body.relief dialog.dlg > button.dlg-x,
+body.relief :is(.dlg .mode,.acm span,.hist .rq){box-shadow:
+  inset 0 0 0 1px rgba(0,0,0,.18),
+  inset 0 -1px 0 rgba(0,0,0,.15),
+  inset 0 -6px 8px -7px rgba(0,0,0,.26),
+  0 1px 0 rgba(0,0,0,.26),
+  0 2px 4px -1px rgba(0,0,0,.2)}
+body.relief .dlg button:disabled{box-shadow:none}
+/* leurs bordures blanches passent au sombre ; les colorees (rouge, ambre,
+   vert, bleu) gardent leur couleur, elle porte un sens */
+body.relief .dlg button:not([data-per]):not(.danger):not(.go):not(.ok):not(.auto),
+body.relief .dlg button.go:disabled,
+body.relief :is(.dlg .mode,.acm span,.hist .rq):not(.auto):not(.ri),
+body.relief :is(.st,.note,.wgt):not(.ok):not(.wn):not(.on){border-color:rgba(0,0,0,.28)}
+/* creuse */
+body.relief .dlg :is(input:not([type=checkbox]):not([type=file]),textarea,select,code,.motif,.dtu),
+body.relief .hist input[type=checkbox]:not(:checked),
+body.relief :is(.majl,.hist) li.att:not(:has(:checked)){box-shadow:inset 0 1px 2px rgba(0,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.1)}
+body.relief .dlg :is(input:not([type=checkbox]):not([type=file]),textarea,select,code,.dtu),
+body.relief .hist input[type=checkbox]:not(:checked){background-color:rgba(0,0,0,.08);border-color:rgba(0,0,0,.28)}
+body.relief :is(.majl,.hist) li.att:not(:hover):not(:has(:checked)){background-color:rgba(0,0,0,.06);border-color:transparent}
+/* le champ qui a la main : un contour bleu, pas blanc.
+   ⚠️ « :not(#_) » pour passer devant la regle des creux juste au-dessus, plus
+   precise : sans lui, le trait sombre recouvrait le bleu et le champ actif ne
+   se distinguait plus (defaut trouve le 01/11/2026). */
+body.relief .dlg :is(input,textarea,select):focus:not(#_){border-color:rgba(77,151,238,.65)}
+/* les rails : barres de memoire des conteneurs, selecteur de periode (son
+   bouton actif reste en relief, comme un curseur dans sa glissiere) */
+body.relief :is(.grp-h .gb,.periode){background-color:rgba(0,0,0,.1);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+body.relief :is(.acb i,.gb i,.gb u){box-shadow:inset 0 -1px 0 rgba(0,0,0,.22)}
+/* les separateurs, graves */
+body.relief :is(.grp-h,details.grp:not([open])>summary.grp-h){border-bottom-color:rgba(0,0,0,.3)}
+body.relief :is(.ln+.ln,.ln.lnh,.jr>div,.jx>div,.dint>div,.acr,.acx-b,.dpt>*,.dkv>*){border-color:rgba(0,0,0,.3)}
+/* les chevrons dessines au trait : une ombre comme les icones */
+body.relief .chev{filter:drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+/* LE JOURNAL, dans sa fenetre : chaque evenement dans son propre creux, comme
+   les lignes de Securite. Avec de simples separateurs, la premiere ligne de
+   chaque jour n en avait pas au-dessus, et certaines lignes paraissaient
+   encadrees, d autres non. (Pas dans la carte : sa hauteur est comptee par
+   le rangement, des ecarts en plus la feraient deborder.) */
+body.relief .dlg .jx{gap:5px}
+body.relief .dlg .jx>div{border:0;border-radius:8px;padding:7px 10px;background:rgba(0,0,0,.06);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.1)}
+/* (version retenue : les evenements en relief, comme le reste du contenu) */
+body.relief.final .dlg .jx>div{position:relative;background:rgba(0,0,0,.12);
+  box-shadow:inset 0 -6px 8px -7px rgba(0,0,0,.3),0 1px 0 rgba(0,0,0,.32),0 2px 4px -1px rgba(0,0,0,.22)}
+/* Ses espacements, sur une echelle reguliere (mesures du 01/11/2026 : le
+   titre du jour etait COLLE a ses lignes, 0 px, avec 20 px au-dessus, et se
+   lisait avec le jour d avant ; le haut de la fenetre alternait 10, 15 et
+   6 px). Titre et sous-titre forment une paire serree, puis 14 px avant les
+   filtres, 16 avant la liste ; le titre du jour a 8 px sous lui et 18 au-
+   dessus, aligne sur le texte des lignes (leur rembourrage, 10 px). */
+body.relief #dlg:has(.jx) > h3{margin-bottom:6px}
+body.relief #dlg:has(.jx) > .sub{margin-bottom:0}
+body.relief #dlg:has(.jx) .jf{margin:14px 0 0}
+body.relief #dlg:has(.jx) > .scroll{margin-top:16px}
+body.relief #dlg:has(.jx) .psec{margin:18px 10px 8px}
+body.relief #dlg:has(.jx) .psec:first-child{margin-top:0}
+/* Changement d etat : la scene repeinte se pose par-dessus en fondu de 2,4 s,
+   la duree de l ancien fond. */
+.espace .espace-image.fondu{opacity:0;transition:opacity 2.4s ease}
+.espace .espace-image.fondu.visible{opacity:1}
+@media (max-width:700px){.espace .vaisseau{display:none}}
+@media (prefers-reduced-motion:reduce){.espace *,.espace *::after{animation:none!important}.espace .vaisseau{display:none}}
