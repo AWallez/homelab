@@ -17,6 +17,10 @@ body{margin:0;color:var(--ink);min-height:100vh;
 body{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 @supports(height:100lvh){.aurora{bottom:auto;height:100lvh}}
+/* Sur un ecran tactile, il remonte en plus sous la zone de la Dynamic Island, ou un
+   element fixe pose a 0 ne va pas dans Safari. (En dessous de ce fond, la couleur de
+   cette zone : `theme-color`, index.html, prelevee en haut de la scene.) */
+@media(pointer:coarse){@supports(height:100lvh){.aurora{top:-80px;height:calc(100lvh + 80px)}}}
 .aurora::before{
   background:
     radial-gradient(58% 48% at 12% 0%,rgba(38,110,214,.70),transparent 72%),
