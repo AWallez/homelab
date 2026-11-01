@@ -19,6 +19,17 @@ body{margin:0;color:var(--ink);min-height:100vh;
   background:radial-gradient(135% 100% at 50% 32%,transparent 42%,rgba(3,5,9,.60) 100%)}
 @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(3vw,2vw,0) scale(1.07)}}
 main{position:relative;z-index:1;max-width:75rem;margin-inline:auto;padding:1.75rem 1.25rem 4rem}
+/* EN ATTENDANT SON CONTENU, LA RECHERCHE SEULE, A SA PLACE DEFINITIVE (01/11/2026) :
+   ni blocs vides, ni page qui saute a l arrivee des releves. Les hauteurs gardees
+   sont celles de la barre et de deux lignes de raccourcis. app.js retire la classe
+   (`montrePage`) des que la page est complete. Filet : si le script tombe, le reste
+   apparait au bout de 3 s. */
+main.attente > :not(.search){visibility:hidden;animation:main-secours 0s linear 3s forwards}
+@keyframes main-secours{to{visibility:visible}}
+main.attente > .bar{min-height:78px}
+@media(max-width:1099px){main.attente > .bar{min-height:148px}}
+@media(max-width:559px){main.attente > .bar{min-height:182px}}
+main.attente > .racc{min-height:168px}
 @media(min-width:640px){main{padding-inline:1.5rem}}
 @media(min-width:1024px){main{padding-inline:2rem}}
 
@@ -308,7 +319,7 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 
 /* ---- Logos sans cadre ---- */
 .chip{width:40px;height:40px;background:none !important;border:0 !important;box-shadow:none !important}
-.chip img{width:34px;height:34px}
+.chip img{width:34px;height:34px;object-fit:contain}
 /* le fond n'est conservé que pour les initiales, sans logo */
 .chip:not(:has(img)){background:rgba(255,255,255,.08) !important;
   border:1px solid rgba(255,255,255,.12) !important;width:36px;height:36px}

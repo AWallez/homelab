@@ -347,7 +347,7 @@ const GROUPS = [
       pourquoi: d => pluriel(d.seerr.pending, "demande") },
     /* Tuile de 3 modules et non bandeau : en ligne, il faut 925 px pour 66 % de vide. */
     { n: "FanKarr", taille: "lien", niveau: "secondaire", ajuste: { min: 300, l: 3, max: 3, h: [2, 2, 2], formes: { 2: [300, 363], 3: [240, 280] } }, d: "Catalogue FanKai", u: go("FanKarr"), x: LIENS["FanKarr"],
-      ic: "fankarr.ico", mini: 1, w: 4,
+      ic: "fankarr.png", mini: 1, w: 4,
       /* Ce que FanKarr a telecharge (06/10/2026, demande : « des
          pastilles comme Sonarr et Radarr »), lu par systeme.py dans ses fichiers
          de suivi. LES DEUX MEMES que Sonarr et Radarr, en cours et place prise :

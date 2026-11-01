@@ -1848,7 +1848,8 @@ html:has(dialog[open]) { overflow: hidden }
 }
 .periode + .dot { margin-left: 10px }
 .periode [data-per] {
-  position: relative; font-size: 11px; line-height: 1; padding: 4px 7px;
+  /* 24 px de haut : la cible minimale au doigt (WCAG 2.2, 2.5.8) */
+  position: relative; font-size: 11px; line-height: 1; padding: 6.5px 7px;
   border-radius: 6px; color: var(--mut); cursor: pointer; user-select: none;
   -webkit-user-select: none; white-space: nowrap;
 }

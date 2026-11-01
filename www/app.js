@@ -1304,7 +1304,7 @@ function majAlertes() {
   al.innerHTML = `<span class="ic">${svg(cache ? CLOCHE_BARREE : CLOCHE, 2)}${
     l.length ? `<i class="pt ${niv}"></i>` : ""}</span>` + (l.length ? `<span class="n">${l.length}</span>` : "");
   al.title = (cache ? "Afficher" : "Masquer") + " les notifications";
-  al.setAttribute("aria-label", al.title);
+  al.setAttribute("aria-label", (l.length ? l.length + " : " : "") + al.title);
   al.setAttribute("aria-pressed", cache ? "true" : "false");
 }
 
@@ -1624,6 +1624,7 @@ function poseIcone(s, e) {
   // seule la derniere demandee s affiche (l apercu change vite)
   s._icone = im;
   if (!e) return;
+  im.alt = "";   // decorative : le nom du raccourci est ecrit dessous
   if (e.src) {
     im.style.objectFit = "contain";
   } else {
@@ -3697,8 +3698,10 @@ async function refresh() {
     /* Rien de neuf a dessiner : on garde la page, mais on dit depuis quand. */
     fondre(document.getElementById("fige"), figeHtml(null));
     if (DATA.nas) fondre(document.getElementById("bar"), bar(DATA));
-  } finally { TOUR = false; }
+  } finally { TOUR = false; montrePage(); }
 }
+// La page est complete : le reste apparait autour de la recherche (`main.attente`, style.css).
+function montrePage() { document.querySelector("main").classList.remove("attente"); }
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) { refresh(); checkVersion(); }
 });
@@ -4824,6 +4827,8 @@ function demoSelecteur() {
 }
 
 async function demoInit() {
+  // installation reelle : rien a demander, et donc plus de 404 en console a chaque ouverture
+  if (typeof DEMONSTRATION === "undefined") return;
   try {
     DEMO = await fetch("fixtures/scenarios.json?" + Date.now())
       .then(r => r.ok ? r.json() : null);
@@ -4849,8 +4854,8 @@ demoInit();
    comme avant.
    ⚠️ La vue « Tout » seulement, la seule qui s ouvre : partir sur un groupe filtre
    laisse la derniere vue complete en place.
-   ⚠️ Les cartes sont rangees pour une largeur : a une autre, seules la barre et
-   les pastilles reviennent, le rangement ne se devine pas.
+   ⚠️ Les cartes sont rangees pour une largeur : a une autre, rien ne revient, la
+   page attend ses releves (`main.attente`).
    Ce HTML ne peut rien executer : la CSP bloque tout script en ligne. */
 const INSTANTANE = "homelab.instantane" + location.search;
 function retientPage() {
@@ -4869,25 +4874,24 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) retie
 function rendPage() {
   let p = null;
   try { p = JSON.parse(localStorage.getItem(INSTANTANE)); } catch (e) { /* stockage refuse */ }
-  if (!p) return;
+  if (!p || p.l !== innerWidth) return;
+  const main = document.querySelector("main"), g = document.getElementById("groups");
   document.getElementById("fige").innerHTML = p.fige;
   document.getElementById("bar").innerHTML = p.bar;
   document.getElementById("soucis").innerHTML = p.soucis;
-  if (p.l === innerWidth) {
-    const main = document.querySelector("main"), g = document.getElementById("groups");
-    g.innerHTML = p.groupes;
-    g.className = p.gc;
-    if (p.gs) g.setAttribute("style", p.gs);
-    main.className = p.mc;
-    if (p.ms) main.setAttribute("style", p.ms);
-    // les raccourcis arrivent juste apres : leur place est gardee, rien ne saute
-    document.querySelector(".racc").style.minHeight = p.racc + "px";
-  }
+  g.innerHTML = p.groupes;
+  g.className = p.gc;
+  if (p.gs) g.setAttribute("style", p.gs);
+  main.className = p.mc;
+  if (p.ms) main.setAttribute("style", p.ms);
+  // les raccourcis arrivent juste apres : leur place est gardee, rien ne saute
+  document.querySelector(".racc").style.minHeight = p.racc + "px";
   // parti en plein fondu : tout est la d un coup
   document.querySelectorAll(".neuf,.chg").forEach((n) => n.classList.remove("neuf", "chg"));
   filters();
   document.getElementById("alertes").innerHTML = p.alertes;
   const heure = document.querySelector(".clock b");
   if (heure) heure.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  montrePage();
 }
 rendPage();

@@ -88,3 +88,7 @@ const AUTRES = { n: "Infrastructure", c: "#d95926" };
    point ambre ne change ni l etat general, ni le fond, ni les pastilles.
    ⚠️ Liste des NOMS DE CARTES : renommer une carte la fait sortir d ici. */
 const TACHES = ["CRM", "Seerr", "Radarr", "Sonarr", "Bazarr", "Mises à jour"];
+
+/* La demonstration (scenarios rejouables, voir `demoInit` dans app.js). ABSENT de
+   la copie du NAS : la page n y demande meme pas `fixtures/scenarios.json`. */
+const DEMONSTRATION = true;
