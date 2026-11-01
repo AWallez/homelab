@@ -17,10 +17,6 @@ body{margin:0;color:var(--ink);min-height:100vh;
 body{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 @supports(height:100lvh){.aurora{bottom:auto;height:100lvh}}
-/* Sur un ecran tactile, il remonte en plus sous la zone de la Dynamic Island, ou un
-   element fixe pose a 0 ne va pas dans Safari. (En dessous de ce fond, la couleur de
-   cette zone : `theme-color`, index.html, prelevee en haut de la scene.) */
-@media(pointer:coarse){@supports(height:100lvh){.aurora{top:-80px;height:calc(100lvh + 80px)}}}
 .aurora::before{
   background:
     radial-gradient(58% 48% at 12% 0%,rgba(38,110,214,.70),transparent 72%),
@@ -536,7 +532,7 @@ summary.grp-h::-webkit-details-marker{display:none}
 summary.grp-h:hover{background:rgba(255,255,255,.04)}
 /* Un fond plutot qu un cadre : le cadre restait visible apres un simple clic. */
 summary.grp-h:focus-visible{outline:none;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
-.grp-h .chev{width:7px;height:7px;flex:none;align-self:center;margin:0 1px 0 3px;
+.grp-h .chev{width:7px;height:7px;flex:none;align-self:baseline;margin:0 1px 0 3px;
   border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
   transform:rotate(-45deg);transition:transform .2s}
 details.grp[open]>summary .chev{transform:rotate(45deg)}
@@ -549,7 +545,8 @@ details.grp:not([open])>summary.grp-h{border-bottom-color:rgba(255,255,255,.07)}
    et les styles des valeurs viennent de `.ln`, on n ajuste que le nom et le
    filet. Les valeurs du titre sont en gras : ce sont des totaux. */
 summary.grp-h.ln{padding:7px 2px 7px;align-items:center}
-.grp-h .nm{display:flex;align-items:center;gap:9px}
+.grp-h .nm{display:flex;align-items:baseline;gap:9px}
+.grp-h .nm>i{align-self:center}
 .grp-h .nm small{font-size:.62rem;color:var(--mut);font-weight:400}
 .ln:not(summary) .nm small{font-size:.62rem;color:var(--mut);margin-left:7px}
 .grp-h .mm{font-weight:600}
@@ -1344,9 +1341,9 @@ dialog.dlg[open]{position:fixed;inset:0;margin:auto}
   padding:6px 0 0;border-top:1px solid rgba(255,255,255,.06);font-size:.72rem}
 .dq>i{width:7px;height:7px;border-radius:50%;align-self:center;background:var(--sok)}
 .dq>i.cr{background:var(--scr)}
-.dq .dn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dq .dn b{font-weight:600}
-.dq .dn small{font-size:.64rem;color:var(--mut);margin-left:6px}
+.dq .dn{display:flex;align-items:baseline;gap:6px;min-width:0;white-space:nowrap}
+.dq .dn b{flex:none;font-weight:600}
+.dq .dn small{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:.64rem;color:var(--mut)}
 .dq em{font-style:normal;font-size:.66rem;color:var(--mut);white-space:nowrap}
 .dq em.ok{color:#8ce8a4}.dq em.wn{color:#ffd08a}.dq em.cr{color:#ff8f88}
 /* L emplacement libre : un contour en pointilles, la ou un disque viendrait. */
@@ -1395,7 +1392,7 @@ summary.acr{cursor:pointer;list-style:none;border-radius:6px;transition:backgrou
 summary.acr::-webkit-details-marker{display:none}
 summary.acr:hover{background:rgba(255,255,255,.04)}
 summary.acr:focus-visible{outline:none;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
-.acr .chev{width:6px;height:6px;align-self:center;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
+.acr .chev{width:6px;height:6px;align-self:baseline;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
   transform:rotate(-45deg);transition:transform .2s}
 .acr.seul .chev{visibility:hidden}
 details.acj[open]>summary .chev{transform:rotate(45deg)}
@@ -1428,13 +1425,16 @@ details.acj[open]>summary .chev{transform:rotate(45deg)}
 
 /* ---- Fenetre d un disque (05/10/2026) ---- */
 /* Dans la carte Stockage, chaque disque devient un bouton : fond au survol et
-   chevron en bout de ligne. Les marges negatives elargissent le fond sans
-   decaler le texte. */
-.dq{grid-template-columns:7px minmax(0,1fr) auto auto auto 8px}
+   chevron juste apres son nom. Les marges negatives elargissent le fond sans
+   decaler le texte.
+   ⚠️ LE CHEVRON SE POSE SUR LA LIGNE DE BASE DE SON TEXTE, jamais centre sur le
+   bloc : sa boite de 6 ou 7 px a alors son milieu a mi-hauteur des minuscules.
+   Centre, il tombait entre deux lignes de texte (5 a 7 px trop bas, 01/11/2026). */
+.dq{grid-template-columns:7px minmax(0,1fr) auto auto auto}
 .dq[data-disque]{cursor:pointer;margin:0 -8px;padding:6px 8px 5px;border-radius:7px;transition:background .2s}
 .dq[data-disque]:hover{background:rgba(255,255,255,.06)}
 .dq[data-disque]:focus-visible{outline:none;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
-.dq .ouvre{width:6px;height:6px;align-self:center;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
+.dq .ouvre{flex:none;width:6px;height:6px;border-right:1.5px solid var(--mut);border-bottom:1.5px solid var(--mut);
   transform:rotate(-45deg);opacity:.7}
 .dq[data-disque]:hover .ouvre{opacity:1}
 /* Quatre chiffres en tete de fenetre. */
@@ -1475,7 +1475,7 @@ details.acj[open]>summary .chev{transform:rotate(45deg)}
   cursor:pointer;transition:background .2s}
 .vz:hover{background:rgba(255,255,255,.05)}
 .vz:focus-visible{outline:none;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)}
-.vz .gh .ouvre{width:6px;height:6px;align-self:center;margin-left:6px;border-right:1.5px solid var(--mut);
+.vz .gh .ouvre{display:inline-block;width:6px;height:6px;border-right:1.5px solid var(--mut);
   border-bottom:1.5px solid var(--mut);transform:rotate(-45deg);opacity:.7}
 .vz:hover .gh .ouvre{opacity:1}
 /* ⚠️ `.espw` ENVELOPPE LA ZONE DEFILANTE : il doit relayer la colonne flexible

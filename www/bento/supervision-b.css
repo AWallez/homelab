@@ -7,10 +7,16 @@
 /* A 8 demi-rangees, un volume a deux disques ou plus (miroir) ne tient qu en
    laissant tomber la ligne des emplacements libres, simple information. */
 .card[data-carte="stockage"][data-h="8"]:has(.dqs .dq + .dq) .libre { display: none }
-/* Tres etroite (telephone), le modele passe sous le nom au lieu d etre coupe. */
+/* Etroite : les mesures passent sous le nom, au lieu d un nom replie a cote d un
+   grand vide. Le nom et son chevron, le modele a la suite s il tient, sinon dessous.
+   Les pastilles du volume, passees a la ligne, partent de la gauche. */
 @container carte (max-width: 400px) {
-  .card[data-carte="stockage"] .dq .dn { white-space: normal }
-  .card[data-carte="stockage"] .dq .dn small { display: block; margin-left: 0 }
+  .card[data-carte="stockage"] .dq { grid-template-columns: 7px auto auto auto minmax(0, 1fr); row-gap: 3px }
+  .card[data-carte="stockage"] .dq .dn { grid-column: 2 / -1; flex-wrap: wrap; row-gap: 0 }
+  .card[data-carte="stockage"] .dq .dn .ouvre { order: 1 }
+  .card[data-carte="stockage"] .dq .dn small { order: 2; white-space: normal }
+  .card[data-carte="stockage"] .dq em:first-of-type { grid-column: 2 }
+  .card[data-carte="stockage"] .gh > .faits { margin-left: 0 }
 }
 
 /* ---- Uptime Kuma ---- */

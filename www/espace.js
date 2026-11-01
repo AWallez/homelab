@@ -108,11 +108,10 @@
     return [couloir(haut, document.querySelector(".racc")), couloir(recherche, recherche && recherche.nextElementSibling)];
   }
   function placeVaisseaux() {
-    // (le fond remonte au-dessus de l ecran sur tablette : `.aurora`, style.css)
-    const ys = couloirs(), haut = espace.getBoundingClientRect().top;
+    const ys = couloirs();
     espace.querySelectorAll(".vaisseau").forEach((v, k) => {
       if (ys[k] == null) v.style.display = "none";
-      else { v.style.display = ""; v.style.top = (ys[k] - haut).toFixed(0) + "px"; }
+      else { v.style.display = ""; v.style.top = ys[k].toFixed(0) + "px"; }
     });
   }
 

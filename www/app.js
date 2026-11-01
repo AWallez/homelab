@@ -834,11 +834,10 @@ const ligneDisque = (x, cfg) => {
      est redessinee toutes les deux secondes). */
   return `<div class="dq" data-disque="${esc(x.n)}" role="button" tabindex="0" title="Voir le détail du disque">`
     + `<i class="${ko ? "cr" : "ok"}"></i>`
-    + `<span class="dn"><b>${esc(role || modele)}</b><small>${esc(cap + (role ? " · " + modele : ""))}</small></span>`
+    + `<span class="dn"><b>${esc(role || modele)}</b><small>${esc(cap + (role ? " · " + modele : ""))}</small><span class="ouvre" aria-hidden="true"></span></span>`
     + `<em class="${tc}">${x.temp} °C</em>`
     + `<em class="${x.usure >= 80 ? "wn" : ""}">usure ${x.usure} %</em>`
-    + `<em class="${ko ? "wn" : "ok"}">${x.erreurs} erreur${x.erreurs > 1 ? "s" : ""}</em>`
-    + `<span class="ouvre" aria-hidden="true"></span></div>`;
+    + `<em class="${ko ? "wn" : "ok"}">${x.erreurs} erreur${x.erreurs > 1 ? "s" : ""}</em></div>`;
 };
 /* LES DISQUES iSCSI VUS DE L INTERIEUR (09/10/2026, `disques_iscsi` dans
    systeme.py). Le volume ne voit qu un gros fichier, de la meme taille qu il
@@ -865,8 +864,11 @@ const grappesDisques = (s, cfg) => {
     const membres = dq.filter(x => (g.disques || []).includes(x.n));
     membres.forEach(x => vus.add(x.n));
     const e = g.esp || null;
+    /* Le chevron colle au dernier mot (espace insecable) : en bout de ligne, il
+       passait seul a la ligne suivante ; et il vient avant les pastilles. */
+    const chevron = e && e.tot ? ` <span class="ouvre" aria-hidden="true"></span>` : "";
     let tete;
-    if (g.sys) tete = `<b>${esc(g.nom || "Système")}</b><span>hors grappe · disque de démarrage</span>`;
+    if (g.sys) tete = `<b>${esc(g.nom || "Système")}</b><span>hors grappe · disque de démarrage${chevron}</span>`;
     else {
       const r = redondance(g);
       const etat = g.att < 2 ? ["aucun miroir", "wn"]
@@ -874,7 +876,7 @@ const grappesDisques = (s, cfg) => {
         : g.n < g.att ? [(r === "parité" ? "grappe dégradée : " : "miroir dégradé : ") + g.n + "/" + g.att, "wn"]
         : [r === "parité" ? "parité active" : "miroir actif", "ok"];
       tete = `<b>${esc(g.nom)}</b><span>${esc([RAID[g.raid] || g.raid,
-                g.att + " disque" + (g.att > 1 ? "s" : ""), g.fs].filter(Boolean).join(" · "))}</span>`
+                g.att + " disque" + (g.att > 1 ? "s" : ""), g.fs].filter(Boolean).join(" · "))}${chevron}</span>`
         + `<span class="faits"><span class="${etat[1]}">${esc(etat[0])}</span>`
         + (g.err != null ? `<span class="${g.err > 0 ? "wn" : "ok"}">${g.err > 0 ? nb(g.err) + " erreurs" : "0 erreur"} btrfs</span>` : "")
         + `</span>`;
@@ -910,7 +912,7 @@ const grappesDisques = (s, cfg) => {
        espace (`popEspace`), les lignes de disque leur fiche. */
     const zone = !espace ? `<div class="gh">${tete}</div>${espace}`
       : `<div class="vz" data-espace="${esc(g.nom)}" role="button" tabindex="0" title="Voir ce qui prend la place">`
-        + `<div class="gh">${tete}<span class="ouvre" aria-hidden="true"></span></div>${espace}</div>`;
+        + `<div class="gh">${tete}</div>${espace}</div>`;
     return `<div class="dqb${g.sys ? " sys" : ""}">${zone}`
       + `<div class="dqs">${membres.map(x => ligneDisque(x, cfg)).join("")}</div></div>`;
   });
@@ -1049,9 +1051,9 @@ function corpsCarte(s, d) {
   const logo = s.ic ? `<img src="icons/${s.ic.includes(".") ? s.ic : s.ic + ".svg"}" alt="">` : esc(s.n.slice(0, 2).toUpperCase());
   const adr = [s.x && `<span class="dom lien" data-lien="${esc(s.x)}" title="${esc(s.x)}">${esc(label(s.x))}</span>`, s.u && `<span class="port">:${esc(s.u.split(":").pop())}</span>`].filter(Boolean).join("");
   const body = `<div class="head"><span class="chip">${logo}</span>
-      <div class="txt"><h3><span class="nom">${esc(s.n)}</span>${adr ? `<span class="adr">${adr}</span>` : ""}</h3>
+      <div class="txt"><h3><span class="nom">${esc(s.n)}</span>${s.pop ? '<i class="ouvre" aria-hidden="true"></i>' : ""}${adr ? `<span class="adr">${adr}</span>` : ""}</h3>
         <p>${esc(s.d)}</p></div>
-      ${s.per ? periode(s.n) : ""}<i class="dot${warn ? " " + niveau(s, warn) : ""}"></i>${s.pop ? '<i class="ouvre" aria-hidden="true"></i>' : ""}</div>
+      ${s.per ? periode(s.n) : ""}<i class="dot${warn ? " " + niveau(s, warn) : ""}"></i></div>
     ${viz ? `<div class="vizb">${viz}</div>` : ""}
     ${stats ? `<div class="stats">${stats.map(([v, l]) =>
       `<div class="st"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("")}</div>` : ""}

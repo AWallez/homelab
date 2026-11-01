@@ -11,8 +11,15 @@
    (--fond) jusqu a la scene. Seul espace.js rend le fond d origine, si WebGL manque
    (classe sans-scene). Le voile des bords (::after) reste : il passe devant la
    scene, et fait partie du rendu retenu. */
-body.verre-scene:not(.sans-scene) .aurora{background-image:none}
 body.verre-scene:not(.sans-scene) .aurora::before{content:none}
+/* LA ZONE AUTOUR DE LA DYNAMIC ISLAND (01/11/2026, Safari et Brave sur iPhone) : la
+   page n y dessine pas sa scene (un fond remonte de 80 px n y changeait rien), iOS la
+   peint d une couleur qu il reprend de la page. Sans les degrades d origine, il ne
+   restait sous la scene qu un noir uni : une bande noire, absente avec l ancien fond.
+   Partout la couleur du haut de la scene (#120e23), comme `theme-color` (index.html). */
+html{background:#120e23}
+body.verre-scene{background:transparent}
+body.verre-scene:not(.sans-scene) .aurora{background-color:#120e23;background-image:linear-gradient(180deg,#120e23,#07080c)}
 
 .espace{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}
 .espace.pret{opacity:1}

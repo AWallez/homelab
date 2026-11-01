@@ -1493,9 +1493,10 @@ body[data-fige="1"] .aurora { filter: grayscale(1) brightness(.8); transition: f
 /* Fond rouge au premier coup d oeil quand une carte est grave, plus seulement
    quand un conteneur est arrete : voir `sante()`. */
 
-/* Les cartes qui ouvrent une fenetre le disent : un chevron apres la pastille.
-   Rien ne les distinguait des cartes inertes. */
-.head .ouvre { width: 7px; height: 7px; flex: none; margin-left: 10px; opacity: .55;
+/* Les cartes qui ouvrent une fenetre le disent : un chevron apres leur nom.
+   Rien ne les distinguait des cartes inertes. (Sur la ligne de base : voir `.dq`,
+   style.css.) */
+.head .ouvre { width: 7px; height: 7px; flex: none; margin-left: -2px; opacity: .55;
   border-right: 1.5px solid var(--mut); border-bottom: 1.5px solid var(--mut);
   transform: rotate(-45deg); transition: opacity .2s }
 .card.clic:hover .head .ouvre { opacity: 1 }
