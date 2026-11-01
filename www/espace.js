@@ -213,14 +213,19 @@
 
   // Redessine si la largeur change, ou la hauteur de plus de 15 % : la barre
   // d adresse d un telephone qui se replie ne doit pas tout repeindre.
+  // ⚠️ L observateur en plus de `resize` : au chargement, la page peut etre
+  // brievement plus large que l ecran (443 px pour 375 sur telephone), sans
+  // evenement quand elle se remet a sa taille ; la scene restait decalee.
   let attente = 0;
-  addEventListener("resize", () => {
+  const surTaille = () => {
     clearTimeout(attente);
     attente = setTimeout(() => {
       const w = aurora.clientWidth, h = aurora.clientHeight;
       if (w !== taille[0] || Math.abs(h - taille[1]) > taille[1] * .15) dessine();
       else placeVaisseaux();
     }, 300);
-  });
+  };
+  addEventListener("resize", surTaille);
+  new ResizeObserver(surTaille).observe(aurora);
 
 })();
