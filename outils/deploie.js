@@ -34,8 +34,9 @@ const ENVOIE = process.argv.includes("--envoie");
 /* La liste blanche. Un fichier absent d ici ne sera jamais deploye. */
 /* 17/10/2026 : le rangement en bento (`rangement.js`, aussi charge en
    travailleur), ses feuilles par groupe (`bento/`) et l atelier des cartes
-   (`atelier.js`, que la page charge toujours, et `atelier.css`). */
-const FRONT = ["index.html", "cartes.js", "app.js", "rangement.js", "style.css", "fond.css", "atelier.js", "atelier.css", "manifest.json"];
+   (`atelier.js`, que la page charge toujours, et `atelier.css`).
+   01/11/2026 : le fond spatial et l habillage du contenu (`espace.js`). */
+const FRONT = ["index.html", "cartes.js", "app.js", "rangement.js", "style.css", "fond.css", "espace.js", "atelier.js", "atelier.css", "manifest.json"];
 const DOSSIERS = ["icons", "bento"];
 
 /* Noms interdits, verifies malgre la liste blanche : deux garde-fous valent
