@@ -328,7 +328,9 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 .rq{font-size:.6rem;color:#ffc46b;border:1px solid rgba(255,159,10,.4);
   border-radius:99px;padding:.05rem .35rem;margin-left:.35rem;white-space:nowrap}
 .dlg button.go.busy{padding-left:2.1rem;position:relative;color:#ffc46b}
-.dlg button.go.busy::before{content:"";position:absolute;left:.9rem;top:50%;margin-top:-6px;
+/* 16 px de haut, bordure comprise : `*{box-sizing}` n atteint pas les pseudo-elements.
+   Avec -6 px, comptes sur 12, la roue tombait 2 px trop bas dans le bouton. */
+.dlg button.go.busy::before{content:"";position:absolute;left:.9rem;top:50%;margin-top:-8px;
   width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,196,107,.28);
   border-top-color:#ffc46b;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
