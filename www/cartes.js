@@ -876,14 +876,19 @@ GROUPS.push(
          un etat qu on ne rencontre jamais en fonctionnement normal.
          La note annonce desormais la PROCHAINE copie : elle ne part qu apres
          l ecart minimal, et seulement si le PC repond. Un PC reste eteint se lit
-         donc ici bien avant de declencher l alerte des 48 h. */
+         donc ici bien avant de declencher l alerte des 48 h.
+         « Imminente » un quart d heure au plus : le NAS essaie toutes les 10 min.
+         Au-dela, elle n est pas passee, et le dire (01/11/2026, le lien 10 Gb du
+         PC etait tombe et la carte promettait une copie depuis des heures). */
       note: d => { const b = d.backup || {};
         if (b.h == null) return null;
         if (b.h < 0) return "Aucune sauvegarde enregistrée";
         if (!b.t) return b.date ? "Dernière copie le " + b.date : null;
-        const p = b.t + SAUVEGARDE_ECART_H * 3600, on = (d.pc || {}).on;
-        if (p <= Date.now() / 1000)
-          return on ? "Copie imminente : le PC est allumé" : "Prochaine copie dès que le PC s'allume";
+        const p = b.t + SAUVEGARDE_ECART_H * 3600, on = (d.pc || {}).on, retard = Date.now() / 1000 - p;
+        if (retard >= 0) {
+          if (!on) return "Prochaine copie dès que le PC s'allume";
+          return retard < 900 ? "Copie imminente : le PC est allumé" : "Copie non passée alors que le PC est allumé";
+        }
         const dt = new Date(p * 1000);
         return "Prochaine copie " + (dt.toDateString() === new Date().toDateString() ? "" : "demain ")
           + "vers " + dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")
