@@ -9,7 +9,14 @@
 body{margin:0;color:var(--ink);min-height:100vh;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+/* LE FOND JUSQU AUX BORDS DE L ECRAN (iPhone, 01/11/2026 : bandes noires en haut et en
+   bas, derriere le contenu). `viewport-fit=cover` (index.html) etend la page sous les
+   zones reservees ; ces marges y gardent le contenu lisible. La hauteur prise sur
+   `lvh`, la plus grande : quand les barres du navigateur se replient, le fond est
+   deja assez haut. Le haut de l ecran : voir le fondu de relief.css. */
+body{padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+@supports(height:100lvh){.aurora{bottom:auto;height:100lvh}}
 .aurora::before{
   background:
     radial-gradient(58% 48% at 12% 0%,rgba(38,110,214,.70),transparent 72%),
