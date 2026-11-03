@@ -28,7 +28,7 @@ bouchon() { printf '#!/bin/bash\n%s\n' "$2" > "$B/$1"; chmod +x "$B/$1"; }
 lisible() { python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$1" 2>/dev/null; }
 
 echo "smart.sh"
-prepare smart.sh; cp "$R/fixtures/smart.json" "$H/www/smart.json"; cp "$H/www/smart.json" "$T/avant"
+prepare smart.sh; cp "$R/www/smart.json" "$H/www/smart.json"; cp "$H/www/smart.json" "$T/avant"
 printf '#!/bin/sh\nexit 0\n' > "$H/nvme-slots.sh"; chmod +x "$H/nvme-slots.sh"
 bash "$T/smart.sh" 2>/dev/null; rc=$?
 vrai "aucun disque lu : code d erreur" '[ "$rc" -ne 0 ]'
