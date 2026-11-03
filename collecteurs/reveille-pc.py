@@ -87,7 +87,9 @@ def main() -> int:
 
     print("  %d paquets envoyes sur le port %d" % (envoyes, PORT))
     print("  Aucun accuse de reception n existe : la seule preuve est que le PC demarre.")
-    return 0
+    # Aucun envoi reussi : code d erreur, pour que `pc-watch.sh` ne l annonce
+    # pas comme parti.
+    return 0 if envoyes else 1
 
 
 if __name__ == "__main__":

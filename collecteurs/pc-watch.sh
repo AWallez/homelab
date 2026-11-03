@@ -35,8 +35,12 @@ run(){
   case "$A" in
     on)
       st running "reveil demande"
-      /usr/bin/python3 "$ICI/reveille-pc.py" >> /var/log/pc-watch.log 2>&1
-      st "done" "paquet magique envoye"
+      # Le code de retour etait ignore : un envoi rate s affichait comme reussi.
+      if /usr/bin/python3 "$ICI/reveille-pc.py" >> /var/log/pc-watch.log 2>&1; then
+        st "done" "paquet magique envoye"
+      else
+        st "done" "reveil en echec (voir pc-watch.log)"
+      fi
       ;;
     off)
       # ⚠️ LA CLE EST RESTREINTE A UNE COMMANDE FORCEE cote PC. Sans cette
