@@ -169,6 +169,18 @@ test("collect.sh, sources muettes : tout ce qu il ecrit, la demonstration le con
   assert.deepEqual(ecartsDeForme(b.json("www/data.json"), demo("data.json")), []);
 });
 
+test("www/data.json : les cles qu ecrit collect.sh, ni plus ni moins", { skip: SAUF }, (t) => {
+  const b = bancCollecte(t);
+  b.lance("collect.sh");
+  const prod = b.json("www/data.json"), dm = demo("data.json");
+  // les commentaires de base.json (`_`, `_t`…) ne comptent pas
+  const cles = (o) => Object.keys(o).filter((k) => !k.startsWith("_")).sort();
+  assert.deepEqual(cles(dm), cles(prod));
+  // les deux sections que la page complete depuis systeme.json (`fusionSysteme`)
+  assert.deepEqual(cles(dm.nas), cles(prod.nas), "nas : les ventilateurs viennent de systeme.json");
+  assert.deepEqual(cles(dm.backup), cles(prod.backup), "backup : le compte rendu vient de systeme.json");
+});
+
 test("ecartsDeForme : une cle inconnue ou un type change est vu", () => {
   assert.deepEqual(ecartsDeForme({ a: 1, b: { c: "x" } }, { a: "@-3h", b: { c: "y" } }), []);
   assert.deepEqual(ecartsDeForme({ a: 1, z: 2 }, { a: 1 }), [".z : absent de la demonstration"]);

@@ -21,7 +21,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { banc, demo, genre, RACINE } = require("./aide/banc.js");
-const { fonction } = require("./aide/charge.js");
+const { fonction, nu } = require("./aide/charge.js");
 
 /* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
    smart.json les grappes, les emplacements et les roles que systeme.py publie
@@ -173,6 +173,30 @@ test("www/systeme.json : `mem` et `stock` ont les cles que rend systeme.py", () 
   const slots = st.src.indexOf('"slots": {', st.debut);
   assert.ok(slots > 0, "stockage() : `slots` introuvable");
   assert.deepEqual(tri(Object.keys(sy.stock.slots)), tri(clesDict(st.src, st.src.indexOf("{", slots))));
+});
+
+test("la demonstration passe par fusionSysteme : ventilateurs et compte rendu de sauvegarde", () => {
+  const d = demo("data.json"), sy = demo("systeme.json"), backup = { ...d.backup };
+  assert.ok(sy.fans.length > 0 && Object.keys(sy.backup).length > 0, "rien a fusionner ne prouverait rien");
+  fusionSysteme(d, sy);
+  assert.deepEqual(d.nas.fans, sy.fans);
+  assert.deepEqual(nu(d.backup), { ...backup, ...sy.backup }, "l age et la date de data.json, completes du compte rendu");
+});
+
+/** Les sections de systeme.json, lues dans `main()` de systeme.py. */
+function sectionsSysteme() {
+  const src = fs.readFileSync(path.join(RACINE, "collecteurs", "systeme.py"), "utf8");
+  const debut = src.indexOf("\ndef main("), fin = src.indexOf("\nif __name__", debut);
+  assert.ok(debut > 0 && fin > debut, "main() introuvable dans systeme.py");
+  const corps = src.slice(debut, fin);
+  return [...new Set([...corps.matchAll(/out = \{"(\w+)"/g), ...corps.matchAll(/\("(\w+)", (?:lambda|\w+\))/g),
+                      ...corps.matchAll(/out\["(\w+)"\]/g)].map((x) => x[1]))].sort();
+}
+
+test("www/systeme.json : les sections que publie systeme.py, ni plus ni moins", () => {
+  const sections = sectionsSysteme();
+  assert.ok(sections.length > 10, "sections mal lues : " + sections);
+  assert.deepEqual(Object.keys(demo("systeme.json")).sort(), sections);
 });
 
 test("clesDict : premier niveau seulement, commentaires et chaines compris", () => {
