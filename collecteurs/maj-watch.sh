@@ -24,8 +24,10 @@ cau() { (cd "$OUTIL" && python3 -m compose_auto_update --config "$OUTIL/config.t
 # nginx le fichier visé. `mv -T` remplace le lien sans le suivre.
 st() {
   local t; t=$(mktemp "$D/.maj-status.XXXXXX") || return 0
+  # Un `jq` en echec laissait un fichier vide, publie tel quel : la page lisait
+  # un JSON invalide. L ancien etat reste alors en place.
   jq -nc --arg s "$1" --arg a "$(date '+%H:%M:%S')" --arg m "$2" --argjson ok "${3:-true}" \
-     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$t"
+     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$t" || { rm -f "$t"; return 0; }
   chown 101:101 "$t" 2>/dev/null; chmod 664 "$t"; mv -fT "$t" "$ST"
 }
 
