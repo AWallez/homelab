@@ -1,14 +1,17 @@
-/* Les collecteurs du NAS face aux FORMES que la page attend, prises dans
- * `fixtures/`, avec des bouchons a la place de docker, smartctl et ntfy.
+/* Les collecteurs du NAS face aux donnees de la DEMONSTRATION, avec des
+ * bouchons a la place de docker, smartctl et ntfy.
  *
  *   node --test tests/*.test.js
  *
- * Ce que ca prouve : un collecteur nourri de mesures plausibles ecrit un
- * fichier de la meme forme que la fixture que la demonstration affiche (memes
- * cles, memes types, memes noms de colonnes). Ce que ca ne prouve pas : le
- * comportement sur le vrai materiel, sous cron, avec les versions d outils du
- * NAS. `outils/teste-collecteurs.sh` couvre, lui, les pannes (source muette,
- * sortie tronquee) : ces essais ne le remplacent pas.
+ * Ce que ca prouve : nourri de mesures plausibles, un collecteur ecrit un
+ * fichier de la meme forme que celui que la demonstration publie (memes cles,
+ * memes types, memes noms de colonnes), donc un fichier que la page sait lire.
+ * Ce que ca ne prouve pas : le comportement sur le vrai materiel, sous cron,
+ * avec les versions d outils du NAS. `outils/teste-collecteurs.sh` couvre, lui,
+ * les pannes (source muette, sortie tronquee) : ces essais ne le remplacent pas.
+ *
+ * ⚠️ LA REFERENCE EST `www/`, PAS `fixtures/` : la page ne lit que `www/`, que
+ * `outils/genere-fixtures.js` produit a partir de `fixtures/base.json`.
  *
  * ⚠️ AUCUN ACCES AU NAS : voir `aide/banc.js`. Chaque essai verifie a la fin
  * qu aucun outil reseau n a ete appele. */
@@ -16,7 +19,16 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { banc, fixture, genre } = require("./aide/banc.js");
+const { banc, demo, genre } = require("./aide/banc.js");
+const { fonction } = require("./aide/charge.js");
+
+/* Ce que la PAGE ajoute elle-meme au chargement, depuis `systeme.json`
+   (`fusionSysteme`, www/app.js) : `grappes`, `slots` et le `role` de chaque
+   disque dans smart.json, l `anon` de chaque conteneur dans containers.json.
+   Les collecteurs ne les ecrivent pas ; la demonstration les porte deja dans le
+   fichier, son systeme.json n ayant ni `stock` ni `mem`. On rejoue donc la
+   fusion, avec la fonction de la page, avant de comparer. */
+const fusionSysteme = fonction("app.js", "fusionSysteme");
 
 const outilsPresents = ["bash", "jq", "awk", "flock"].every((o) =>
   require("node:child_process").spawnSync("sh", ["-c", "command -v " + o]).status === 0);
@@ -39,11 +51,11 @@ function avecBanc(t, reseauPermis = []) {
 
 /* ---- smart.sh ------------------------------------------------------------- */
 
-test("smart.sh : smart.json a la forme de fixtures/smart.json, valeurs converties", { skip: SAUF }, (t) => {
+test("smart.sh, fusionne par la page : la forme de www/smart.json, valeurs converties", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
-  const fx = fixture("smart.json");
-  // un releve smartctl par disque de la fixture, dans les unites de smartctl
-  const releves = fx.d.map((d) => ({
+  const dm = demo("smart.json");
+  // un releve smartctl par disque de la demonstration, dans les unites de smartctl
+  const releves = dm.d.map((d) => ({
     model_name: d.modele,
     user_capacity: { bytes: d.go * 1e9 + 123456 },
     smart_status: { passed: d.ok },
@@ -56,8 +68,9 @@ test("smart.sh : smart.json a la forme de fixtures/smart.json, valeurs convertie
     },
   }));
   b.ecrit("releves.json", releves.map((r) => JSON.stringify(r)).join("\n") + "\n");
-  // deux emplacements ; `/dev/null` existe partout, il tient lieu de controleur
-  b.ecrit("nvme-slots.sh", "#!/bin/sh\nprintf '0 null\\n1 null\\n'\n");
+  // les emplacements des disques de la demonstration (`nvme1` : slot 1) ;
+  // `/dev/null` existe partout, il tient lieu de controleur
+  b.ecrit("nvme-slots.sh", "#!/bin/sh\n" + dm.d.map((d) => `echo "${d.n.slice(4)} null"`).join("\n") + "\n");
   fs.chmodSync(b.chemin("nvme-slots.sh"), 0o755);
   // smartctl rend les releves l un apres l autre
   b.bouchon("smartctl", `n=$(cat "${b.T}/n" 2>/dev/null || echo 1); echo $((n + 1)) > "${b.T}/n"
@@ -65,22 +78,25 @@ sed -n "\${n}p" "${b.chemin("releves.json")}"`);
 
   const r = b.lance("smart.sh");
   assert.equal(r.rc, 0, r.erreurs);
-  const out = b.json("www/smart.json");
-  assert.deepEqual(forme(out), forme(fx));
-  assert.equal(out.d.length, fx.d.length);
-  out.d.forEach((d, i) => {
-    assert.deepEqual(forme(d), forme(fx.d[i]), "disque " + i);
-    // memes valeurs que la fixture, une fois les unites de smartctl converties
-    assert.deepEqual(d, { ...fx.d[i], n: "nvme" + i });
+  const smart = b.json("www/smart.json");
+  // ce que systeme.py publie sous `stock`, repris de la demonstration
+  const roles = Object.fromEntries(dm.d.filter((d) => d.role).map((d) => [d.n, d.role]));
+  fusionSysteme({ smart }, { stock: { grappes: dm.grappes, slots: dm.slots, roles } });
+  assert.deepEqual(forme(smart), forme(dm));
+  assert.equal(smart.d.length, dm.d.length);
+  smart.d.forEach((d, i) => {
+    assert.deepEqual(forme(d), forme(dm.d[i]), "disque " + i);
+    // memes valeurs que la demonstration, une fois les unites de smartctl converties
+    assert.deepEqual(d, dm.d[i]);
   });
 });
 
 /* ---- containers.sh -------------------------------------------------------- */
 
-test("containers.sh : containers.json a la forme de fixtures/containers.json", { skip: SAUF }, (t) => {
+test("containers.sh, fusionne par la page : la forme de www/containers.json", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
-  const fx = fixture("containers.json");
-  const noms = fx.c.slice(0, 3).map((c) => c.n);
+  const dm = demo("containers.json");
+  const noms = dm.c.slice(0, 3).map((c) => c.n);
   const id = (i) => "id" + i;
   // l etat precedent : le premier conteneur avait redemarre 1 fois, il en est a 2
   b.ecrit("restarts.state", noms.map((n, i) => n + ";" + (i === 0 ? 1 : 0)).join("\n") + "\n");
@@ -94,22 +110,25 @@ esac`);
 
   const r = b.lance("containers.sh");
   assert.equal(r.rc, 0, r.erreurs);
-  const out = b.json("www/containers.json");
-  assert.deepEqual(forme(out), forme(fx));
-  assert.deepEqual(out.c.map((c) => c.n).sort(), [...noms].sort());
-  for (const c of out.c) {
-    assert.deepEqual(forme(c), forme(fx.c[0]), c.n);
+  const cont = b.json("www/containers.json");
+  // `mem.anon` de systeme.py : la memoire reelle de chaque conteneur, en Mo
+  fusionSysteme({ cont }, { mem: { anon: Object.fromEntries(noms.map((n, i) => [n, 100 + i])) } });
+  assert.deepEqual(forme(cont), forme(dm));
+  assert.deepEqual(cont.c.map((c) => c.n).sort(), [...noms].sort());
+  for (const c of cont.c) {
+    assert.deepEqual(forme(c), forme(dm.c[0]), c.n);
     const i = noms.indexOf(c.n);
     assert.equal(c.cpu, i + 1.5);
-    // ⚠️ `mem` est un POURCENTAGE (`docker stats`, MemPerc), que la page
-    // reconvertit en Mo (`moC`). Voir le compte rendu : fixtures/containers.json
-    // porte encore des Mo, de l ancien format.
+    // `mem` est un POURCENTAGE (`MemPerc` de docker stats), que la page
+    // reconvertit en Mo (`moC`) : la demonstration aussi
     assert.equal(c.mem, i + 2.25);
     assert.equal(c.rs, i === 0 ? 2 : 0);
+    assert.equal(c.anon, 100 + i);
   }
+  assert.ok(dm.c.every((c) => c.mem >= 0 && c.mem <= 100), "www/containers.json : `mem` hors d un pourcentage");
   // le redemarrage (1 -> 2) entre au journal des 24 h
-  assert.deepEqual(out.ev.map((e) => e.n), [noms[0]]);
-  assert.deepEqual(forme(out.ev[0]), forme(fx.ev[0]));
+  assert.deepEqual(cont.ev.map((e) => e.n), [noms[0]]);
+  assert.deepEqual(forme(cont.ev[0]), forme(dm.ev[0]));
 });
 
 /* ---- history-build.sh et history-min.sh ------------------------------------ */
@@ -122,9 +141,13 @@ function historique(b, n, cellules = (i) => [12, 40, 55, 1000, 0.5, 48, 0, 0, 0.
   b.ecrit("history.csv", lignes.join("\n") + "\n");
 }
 
-/* La page lit chaque serie PAR SON NOM. Un nom que le collecteur publie et que
-   la fixture n a pas, c est une courbe que la demonstration ne montre jamais. */
-const ABSENTS_CONNUS = new Set(["nvme4"]);   // 5e emplacement M.2 : voir le compte rendu
+/* La page lit chaque serie PAR SON NOM : un nom que le collecteur publie et que
+   la demonstration n a pas, c est une courbe qu elle ne montre jamais.
+   SAUF les colonnes `nvme<N>`, une par emplacement M.2 : propres a
+   l installation, la page les decouvre seule et n affiche que celles qui
+   portent une valeur (`disquesHist`, www/app.js ; carte Températures,
+   www/cartes.js). Le NAS en a cinq, la demonstration quatre : pas un ecart. */
+const parInstallation = (n) => /^nvme\d+$/.test(n);
 
 test("history-build.sh : history.json lisible, colonnes connues de la demonstration", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
@@ -132,8 +155,8 @@ test("history-build.sh : history.json lisible, colonnes connues de la demonstrat
   const r = b.lance("history-build.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const out = b.json("www/history.json");
-  const fx = fixture("history.json");
-  for (const k of ["j", "s", "champs"]) assert.equal(genre(out[k]), genre(fx[k]), k);
+  const dm = demo("history.json");
+  for (const k of ["j", "s", "champs"]) assert.equal(genre(out[k]), genre(dm[k]), k);
   // chaque point a autant de valeurs que de noms
   for (const p of out.j) assert.equal(p.length, out.champs.length);
   for (const p of out.s) assert.equal(p.length, out.champs_s.length);
@@ -141,25 +164,27 @@ test("history-build.sh : history.json lisible, colonnes connues de la demonstrat
   // la moyenne du processeur sur les creneaux : 12, la valeur ecrite
   const cpu = out.champs.indexOf("cpu");
   assert.ok(out.j.length > 0 && out.j.every((p) => p[cpu] === 12));
-  const inconnus = [...out.champs, ...out.champs_s].filter((n) => !fx.champs.includes(n) && !ABSENTS_CONNUS.has(n));
-  assert.deepEqual([...new Set(inconnus)], [], "colonnes publiees mais absentes de fixtures/history.json");
+  // la demonstration n a pas `champs_s` : la page lit alors la serie de 7 jours
+  // avec `champs` (`Hs`, www/app.js), ou chaque nom doit donc se trouver
+  const inconnus = [...out.champs, ...out.champs_s].filter((n) => !dm.champs.includes(n) && !parInstallation(n));
+  assert.deepEqual([...new Set(inconnus)], [], "colonnes publiees mais absentes de www/history.json");
 });
 
-test("history-min.sh : history-min.json de la forme de fixtures/history-min.json", { skip: SAUF }, (t) => {
+test("history-min.sh : history-min.json de la forme de www/history-min.json", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
   historique(b, 30);
   const r = b.lance("history-min.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const out = b.json("www/history-min.json");
-  const fx = fixture("history-min.json");
-  assert.deepEqual(Object.keys(out).sort(), Object.keys(fx).sort());
+  const dm = demo("history-min.json");
+  assert.deepEqual(Object.keys(out).sort(), Object.keys(dm).sort());
   for (const p of out.m) assert.equal(p.length, out.champs.length);
-  const inconnus = out.champs.filter((n) => !fx.champs.includes(n) && !ABSENTS_CONNUS.has(n));
-  assert.deepEqual(inconnus, [], "colonnes publiees mais absentes de fixtures/history-min.json");
+  const inconnus = out.champs.filter((n) => !dm.champs.includes(n) && !parInstallation(n));
+  assert.deepEqual(inconnus, [], "colonnes publiees mais absentes de www/history-min.json");
   // les colonnes communes sont dans le meme ordre : la page lit par nom, mais
   // un ecart d ordre signalerait un collecteur et un generateur qui divergent
-  const communs = out.champs.filter((n) => fx.champs.includes(n));
-  assert.deepEqual(communs, fx.champs.filter((n) => out.champs.includes(n)));
+  const communs = out.champs.filter((n) => dm.champs.includes(n));
+  assert.deepEqual(communs, dm.champs.filter((n) => out.champs.includes(n)));
 });
 
 /* ---- alerts.sh ------------------------------------------------------------- */

@@ -21,9 +21,24 @@ function charge(fichiers, globaux = {}) {
   return { ctx, lire: (nom) => vm.runInContext(nom, ctx) };
 }
 
+/** UNE fonction d un script de `www/` qui ne se charge pas entier : `app.js`
+ *  a besoin du DOM des son chargement (`HTMLDialogElement`). Son texte, de
+ *  `function nom(` en debut de ligne jusqu a la premiere accolade fermante en
+ *  debut de ligne, est execute seul. A reserver aux fonctions qui ne lisent que
+ *  leurs arguments : une variable du reste du fichier y serait indefinie. */
+function fonction(fichier, nom) {
+  const src = fs.readFileSync(path.join(WWW, fichier), "utf8");
+  const debut = src.indexOf("\nfunction " + nom + "(");
+  const fin = debut < 0 ? -1 : src.indexOf("\n}\n", debut);
+  if (fin < 0) throw new Error("fonction " + nom + " introuvable dans www/" + fichier);
+  const ctx = vm.createContext({});
+  vm.runInContext(src.slice(debut, fin + 2), ctx, { filename: "www/" + fichier });
+  return vm.runInContext(nom, ctx);
+}
+
 /* Les objets nes dans le contexte ont leurs propres `Object` et `Array` :
    `assert.deepStrictEqual` les jugerait differents d objets identiques crees
    ici. On les fait passer par JSON avant de comparer. */
 const nu = (v) => JSON.parse(JSON.stringify(v));
 
-module.exports = { charge, nu, WWW };
+module.exports = { charge, fonction, nu, WWW };

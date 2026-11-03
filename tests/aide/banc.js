@@ -16,7 +16,7 @@ const { spawnSync } = require("node:child_process");
 
 const RACINE = path.join(__dirname, "..", "..");
 const COLLECTEURS = path.join(RACINE, "collecteurs");
-const FIXTURES = path.join(RACINE, "fixtures");
+const WWW = path.join(RACINE, "www");
 const RESEAU = ["ssh", "scp", "curl", "wget", "nc", "ping"];
 
 function banc() {
@@ -70,8 +70,12 @@ function banc() {
   return { T, H, B, bouchon, prepare, lance, chemin, lit, json, ecrit, reseau, range };
 }
 
-const fixture = (nom) => JSON.parse(fs.readFileSync(path.join(FIXTURES, nom), "utf8"));
+/* Les donnees de la DEMONSTRATION, telles que Pages les publie : `www/*.json`,
+   produites par `outils/genere-fixtures.js` a partir de `fixtures/base.json`.
+   C est ce que la page lit, donc ce a quoi un collecteur doit ressembler.
+   `fixtures/` ne garde que les sources ecrites a la main (README). */
+const demo = (nom) => JSON.parse(fs.readFileSync(path.join(WWW, nom), "utf8"));
 /** Le type JSON d une valeur, pour comparer des formes et non des valeurs. */
 const genre = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
 
-module.exports = { banc, fixture, genre, RACINE };
+module.exports = { banc, demo, genre, RACINE };
