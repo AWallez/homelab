@@ -86,4 +86,12 @@ END {
   printf ",\"champs\":"; noms(NJ, nj)
   printf ",\"champs_s\":"; noms(NS, ns)
   printf "}\n"
-}' "$SRC" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT" && chmod 644 "$OUT"
+}' "$SRC" > "$OUT.tmp"
+
+# Ecriture atomique et validee, comme `history-min.sh` : un awk interrompu ou
+# une valeur non numerique dans le CSV ne doit pas remplacer un bon fichier.
+if [ -s "$OUT.tmp" ] && jq -e . "$OUT.tmp" >/dev/null 2>&1; then
+  mv "$OUT.tmp" "$OUT"; chmod 644 "$OUT"
+else
+  rm -f "$OUT.tmp"; echo "history.json non remplace : awk en echec" >&2
+fi
