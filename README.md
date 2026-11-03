@@ -118,7 +118,7 @@ node --test tests/*.test.js
 |---|---|
 | `www/` | le front et les données servies. Autonome, publiable tel quel |
 | `collecteurs/` | les scripts shell et Python qui alimentent le tableau de bord, et les veilleurs qui exécutent les demandes de la page |
-| `fixtures/` | les sources écrites à la main : un état nominal et quatorze calques |
+| `fixtures/` | les sources écrites à la main : un état nominal et les calques des scénarios |
 | `outils/` | générateur, serveur de développement, déploiement |
 | `tests/` | essais `node --test` du rangement et des collecteurs, sans le NAS |
 
