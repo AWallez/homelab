@@ -64,10 +64,17 @@ BEGIN {
   # et `Se` les comptent A PART. ⚠️ Compter l existence dans `Sn[b,2]`, comme
   # avant, doublait le compte du processeur des qu il est entre dans `S`, et
   # sa moyenne sur 7 jours tombait de moitie.
-  if (t >= now-86400) { b=int(t/P); if ($2 != "") Je[b]++; for (k=1; k<=nj; k++) { i=J[k]; if ($i != "") { Jv[b,i]+=$i; Jn[b,i]++ } } }
-  b=int(t/Q); if ($2 != "") Se[b]++
-  for (k=1; k<=ns; k++) { i=S[k]; if ($i != "") { Sv[b,i]+=$i; Sn[b,i]++ } }
+  if (t >= now-86400) { b=int(t/P); if (mesure($2)) Je[b]++; for (k=1; k<=nj; k++) { i=J[k]; if (mesure($i)) { Jv[b,i]+=$i; Jn[b,i]++ } } }
+  b=int(t/Q); if (mesure($2)) Se[b]++
+  for (k=1; k<=ns; k++) { i=S[k]; if (mesure($i)) { Sv[b,i]+=$i; Sn[b,i]++ } }
 }
+# ⚠️ UNE CELLULE NE COMPTE QUE SI C EST UN NOMBRE FINI (03/11/2026). mawk lit
+# `inf` et `nan` comme des nombres et les reecrit tels quels : jq les accepte, le
+# navigateur refuse le fichier entier. Et `abc` comptait pour 0, ce qui faussait
+# la moyenne. Une mauvaise cellule vaut donc une cellule vide : refuser le fichier
+# figerait les courbes tant que la ligne reste dans la fenetre, soit sept jours.
+# Les bornes ecartent `1e999`, qui a la forme d un nombre mais vaut l infini.
+function mesure(v) { return v ~ /^-?[0-9]+(\.[0-9]*)?([eE][-+]?[0-9]+)?$/ && v+0 < 1e300 && v+0 > -1e300 }
 function bloc(ex, nb, val, cols, n, pas, deb, fin,   b, k, i, first) {
   first=1
   for (b=deb; b<=fin; b++) {
@@ -88,9 +95,10 @@ END {
   printf "}\n"
 }' "$SRC" > "$OUT.tmp"
 
-# Ecriture atomique et validee, comme `history-min.sh` : un awk interrompu ou
-# une valeur non numerique dans le CSV ne doit pas remplacer un bon fichier.
-if [ -s "$OUT.tmp" ] && jq -e . "$OUT.tmp" >/dev/null 2>&1; then
+# Ecriture atomique et validee, comme `history-min.sh` : un awk interrompu ne
+# doit pas remplacer un bon fichier.
+# ⚠️ `jq -e .` NE SUFFIT PAS : jq accepte `[inf]` et `[nan]`, le navigateur non.
+if [ -s "$OUT.tmp" ] && jq -e '[.. | numbers | select(isinfinite or isnan)] | length == 0' "$OUT.tmp" >/dev/null 2>&1; then
   mv "$OUT.tmp" "$OUT"; chmod 644 "$OUT"
 else
   rm -f "$OUT.tmp"; echo "history.json non remplace : awk en echec" >&2

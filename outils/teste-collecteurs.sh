@@ -24,6 +24,8 @@ prepare() {
       -e "s#^export PATH=.*#export PATH=\"$B:\$PATH\"#" "$R/collecteurs/$1" > "$T/$1"
 }
 bouchon() { printf '#!/bin/bash\n%s\n' "$2" > "$B/$1"; chmod +x "$B/$1"; }
+# Le navigateur lit le JSON strictement, comme python3 : ni `inf`, ni `nan`.
+lisible() { python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$1" 2>/dev/null; }
 
 echo "smart.sh"
 prepare smart.sh; cp "$R/fixtures/smart.json" "$H/www/smart.json"; cp "$H/www/smart.json" "$T/avant"
@@ -47,6 +49,40 @@ cp "$H/www/history.json" "$T/avant"; mkdir -p "$T/awk-ko"
 printf '#!/bin/sh\nprintf "{\\"j\\":[[1,2"\n' > "$T/awk-ko/awk"; chmod +x "$T/awk-ko/awk"
 PATH="$T/awk-ko:$PATH" bash "$T/history-build.sh" 2>/dev/null
 vrai "sortie tronquee : history.json garde" 'cmp -s "$T/avant" "$H/www/history.json"'
+printf '#!/bin/sh\nprintf "{\\"j\\":[[1,inf]]}\\n"\n' > "$T/awk-ko/awk"
+PATH="$T/awk-ko:$PATH" bash "$T/history-build.sh" 2>/dev/null
+vrai "sortie non finie : history.json garde" 'cmp -s "$T/avant" "$H/www/history.json"'
+# Les colonnes apres le processeur, pour fabriquer une ligne avec une cellule mauvaise.
+RESTE=40,55,1000,0.5,48,0,0,0.4,0.3,10,41,40,39,71,,,120,1,500,20,1,1,
+cp "$H/history.csv" "$T/csv-bon"
+for v in inf nan -nan 1e999 abc; do
+  { cat "$T/csv-bon"; echo "$NOW,$v,$RESTE"; } > "$H/history.csv"
+  bash "$T/history-build.sh" 2>/dev/null
+  vrai "cellule $v : JSON lisible, moyenne juste" \
+    'lisible "$H/www/history.json" && [ "$(jq -r ".j[-1][1]" "$H/www/history.json")" = 12 ]'
+done
+
+echo "history-min.sh"
+prepare history-min.sh; cp "$T/csv-bon" "$H/history.csv"
+bash "$T/history-min.sh"
+vrai "serie fine valide : ecrite" 'jq -e ".m | length > 0" "$H/www/history-min.json" >/dev/null'
+cp "$H/www/history-min.json" "$T/avant"
+PATH="$T/awk-ko:$PATH" bash "$T/history-min.sh" 2>/dev/null
+vrai "sortie non finie : history-min.json garde" 'cmp -s "$T/avant" "$H/www/history-min.json"'
+for v in inf nan -nan 1e999 abc; do
+  { cat "$T/csv-bon"; echo "$NOW,$v,$RESTE"; } > "$H/history.csv"
+  bash "$T/history-min.sh" 2>/dev/null
+  vrai "cellule $v : JSON lisible, moyenne juste" \
+    'lisible "$H/www/history-min.json" && [ "$(jq -r ".m[-1][1]" "$H/www/history-min.json")" = 12 ]'
+done
+# Une heure infinie ou demesuree faisait tourner la boucle des minutes sans fin,
+# et cron en relancait une autre chaque minute.
+for v in inf nan abc 99999999999999999; do
+  { cat "$T/csv-bon"; echo "$v,12,$RESTE"; } > "$H/history.csv"
+  timeout 10 bash "$T/history-min.sh" 2>/dev/null; rc=$?
+  vrai "heure $v : pas de boucle sans fin, JSON lisible" \
+    '[ "$rc" -eq 0 ] && lisible "$H/www/history-min.json"'
+done
 
 echo "containers.sh"
 prepare containers.sh
