@@ -29,6 +29,15 @@ test("pages.yml : seul www/ est televerse", () => {
   assert.deepEqual(chemins, ["www"]);
 });
 
+/* `tests.yml` ne repete pas shellcheck : il compte sur `pages.yml`. Si ce
+   dernier cessait de le lancer, plus rien ne verifierait les scripts du NAS. */
+test("pages.yml : shellcheck sur les scripts du NAS, dont tests.yml se dispense", () => {
+  const yml = lit(".github/workflows/pages.yml");
+  assert.match(yml, /^\s+shellcheck -S warning collecteurs\/\*\.sh outils\/\*\.sh$/m);
+  assert.match(yml, /^\s+run: bash outils\/teste-collecteurs\.sh$/m);
+  assert.doesNotMatch(lit(".github/workflows/tests.yml"), /^\s+(run: )?shellcheck /m);
+});
+
 test("deploie.js : la liste blanche ne vise que www/, et rien de tests/", () => {
   const src = lit("outils/deploie.js");
   assert.match(src, /const RACINE = path\.resolve\(__dirname, "\.\.", "www"\);/);
