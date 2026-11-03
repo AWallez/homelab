@@ -492,8 +492,8 @@ const Hf = (d, n) => { const i = colf(d, n);
    - un VRAI ZERO (rien a telecharger) : la courbe reste a zero, c est une information ;
    - une COUPURE connue du journal : une bande rouge a son heure ;
    - un TROU dans les releves (le NAS ne mesurait plus) : une bande grise.
-   Les bandes s appuient sur les points de la courbe et non sur l heure seule : l axe range les
-   points a intervalles reguliers. ⚠️ Rien n est retire du trace : retirer la partie a zero aurait
+   Les points et les bandes sont places a leur heure : un trou de 45 min a la largeur de 45 min.
+   ⚠️ Rien n est retire du trace : retirer la partie a zero aurait
    vide les graphes de debit au moindre calme. */
 const heureCourte = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 /* Les coupures d une categorie du journal (du plus recent au plus ancien) : `debut` et `fin` pour un
@@ -510,23 +510,41 @@ const coupuresDe = (d, cat, { debut, fin, instant }) => {
   return r;
 };
 const bandesGraphe = (ts, coupures) => {
-  if (ts.length < 3) return "";
-  const n = ts.length - 1, X = (i) => i / n * 268;
+  if (ts.length < 3 || !(ts[ts.length - 1] > ts[0])) return "";
+  const n = ts.length - 1, X = (t) => (t - ts[0]) / (ts[n] - ts[0]) * 268;
   const ec = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b), pas = ec[ec.length >> 1];
-  const indice = (t) => { const i = ts.findIndex((x) => x >= t); return i < 0 ? n : i; };
   const bande = (x1, x2, cl, titre) => {
     const l = Math.max(2.5, x2 - x1), x = Math.max(0, Math.min(268 - l, (x1 + x2 - l) / 2));
     return `<rect class="${cl}" x="${x.toFixed(1)}" y="1" width="${l.toFixed(1)}" height="77" data-l="${esc(titre)}"/>`;
   };
   let h = "";
   for (let i = 1; i <= n; i++) if (ts[i] - ts[i - 1] > 3 * pas)
-    h += bande(X(i - 1), X(i), "trou", "Aucun relevé de " + heureCourte(ts[i - 1]) + " à " + heureCourte(ts[i]));
+    h += bande(X(ts[i - 1]), X(ts[i]), "trou", "Aucun relevé de " + heureCourte(ts[i - 1]) + " à " + heureCourte(ts[i]));
   for (const c of coupures || []) {
     if (c.b < ts[0] || c.a > ts[n]) continue;
-    h += bande(X(indice(c.a)), X(indice(c.b)), "coupe", c.a === c.b ? "Coupure vers " + heureCourte(c.a)
+    h += bande(X(Math.max(c.a, ts[0])), X(Math.min(c.b, ts[n])), "coupe", c.a === c.b ? "Coupure vers " + heureCourte(c.a)
       : "Coupure de " + heureCourte(c.a) + " à " + heureCourte(c.b));
   }
   return h;
+};
+/* Les heures des points, pour l infobulle, tiennent en peu de place : des releves reguliers donnent
+   « 60x1436,180 » et non 1 438 nombres. Elles sont dans la page, et donc dans l instantane du navigateur. */
+const compacteTs = (ts) => {
+  const r = [];
+  for (let i = 1; i < ts.length; i++) {
+    const d = ts[i] - ts[i - 1], l = r[r.length - 1];
+    if (l && l[0] === d) l[1]++; else r.push([d, 1]);
+  }
+  return r.map(([d, n]) => n > 1 ? d + "x" + n : String(d)).join(",");
+};
+const deplieTs = (s, t0) => {
+  const r = [t0];
+  for (const m of (s || "").split(",")) {
+    if (!m) continue;
+    const [d, n = 1] = m.split("x");
+    for (let i = 0; i < +n; i++) r.push(r[r.length - 1] + +d);
+  }
+  return r;
 };
 /* LE SURVOL (03/11/2026, demande) : la bande visee s eclaire et l infobulle du graphe dit ce qu elle
    signifie, a la souris comme au doigt. Une bande peut ne faire que quelques pixels : 3 unites de
@@ -610,7 +628,15 @@ const graphe = (series, o) => {
      03/11/2026 : l espace au-dessus est une marge fixe (`.grb`, theme.css), et non
      15 % de la hauteur, soit 30 px vides sur une grande carte. */
   const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 77).toFixed(1);
-  const X = (i, n) => (i / (n - 1) * 268).toFixed(1);
+  /* LES POINTS SONT PLACES A LEUR HEURE (03/11/2026, demande), et plus a intervalles reguliers : un trou
+     de 45 min avait la largeur d un seul pas, et les reperes de l axe du temps se decalaient de la courbe.
+     `reduis` regroupe les points par `p` : le point i part du releve i x p, le dernier reste le dernier.
+     Sans heures, ou si elles ne correspondent pas a la serie, on revient au rang du point. */
+  const X = (i, n, L) => {
+    if (ts.length !== L || !(ts[L - 1] > ts[0])) return (i / (n - 1) * 268).toFixed(1);
+    const j = i >= n - 1 ? L - 1 : i * Math.max(1, Math.ceil(L / 480));
+    return ((ts[j] - ts[0]) / (ts[L - 1] - ts[0]) * 268).toFixed(1);
+  };
   const haut = (y) => (y / 79 * 100).toFixed(2) + "%";
   /* ⚠️ LE MOT « SEUIL » A ETE RETIRE, ce n est pas un oubli. Ecrit en entier,
      l etiquette faisait 36,5 unites pour une gouttiere de 26 : elle debordait
@@ -651,7 +677,7 @@ const graphe = (series, o) => {
   const calme = o.u === "dbt" && !ok.some((x) => x.v.some((n) => n > 0));
   return `<div class="grb">${calme ? `<div class="gr-calme">Aucune activité sur cette période</div>` : ""}<div class="gax" aria-hidden="true">${calme ? "" : `<span style="top:${haut(1)}">${esc(f(M))}</span>`}`
     + `${calme ? "" : `<span style="top:${haut(39.5)}">${esc(f((M + m) / 2))}</span>`}<span style="top:${haut(78)}">${esc(f(m))}</span>${slt}</div>`
-    + `<svg class="gr" viewBox="0 0 272 79" preserveAspectRatio="none" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="0" data-x1="268" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : ""}>
+    + `<svg class="gr" viewBox="0 0 272 79" preserveAspectRatio="none" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="0" data-x1="268" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}" data-dt="${compacteTs(ts)}"` : ""}>
     <rect class="capt" x="0" y="0" width="268" height="79"/>
         <g stroke="rgba(255,255,255,.10)" stroke-width="1">
       <line x1="0" y1="1" x2="268" y2="1"/><line x1="0" y1="39.5" x2="268" y2="39.5"/><line x1="0" y1="78" x2="268" y2="78"/>
@@ -659,8 +685,8 @@ const graphe = (series, o) => {
     ${ok.map(x => { const vd = reduis(x.v, 480), n = vd.length;
       const k = x.d0 ? Math.max(0, vd.findIndex(z => z > 0)) : 0;
       const kf = x.d0 ? Math.max(0, x.v.findIndex(z => z > 0)) : 0;
-      const pts = vd.slice(k).map((y, i) => X(i + k, n) + "," + Y(y)).join(" L ");
-      return `<path d="M ${pts} L 268,78 L ${X(k, n)},78 Z" fill="${x.c}" fill-opacity="${op}"/>
+      const pts = vd.slice(k).map((y, i) => X(i + k, n, x.v.length) + "," + Y(y)).join(" L ");
+      return `<path d="M ${pts} L 268,78 L ${X(k, n, x.v.length)},78 Z" fill="${x.c}" fill-opacity="${op}"/>
       <path class="serie${agite(vd.slice(k).map(Y))}" data-n="${esc(x.n || "")}" data-k="${kf}" data-v="${x.v.map(z => +(+z).toFixed(1)).join(",")}" d="M ${pts}" fill="none" stroke="${x.c}" stroke-width="2" stroke-linejoin="round"/>
       <path class="bout" d="M 268,${Y(vd[n - 1])} L 268,${Y(vd[n - 1])}" stroke="${x.c}" stroke-width="7" stroke-linecap="round"/>`; }).join("")}
   </svg></div>` + (ts.length > 1 ? `<div class="gech">${echelle(ts, o.pas || 3)}</div>` : "");
@@ -3248,7 +3274,27 @@ let TOUR = false;           // un tour de rafraichissement en cours
 let BENTO = null;               // dernier rangement : { cle, page }
 /* nom de carte → { sig, formes: Set("3x5") vues trop vides, minH: Map(largeur →
    demi-rangees) mesuree quand la carte debordait } */
-const ECARTEES = new Map();
+/* ⚠️ GARDEES D UNE VISITE A L AUTRE (03/11/2026, demande : « comme si elle avait calcule une premiere
+   pour afficher puis une deuxieme »). En memoire seule, elles repartaient de zero a chaque chargement :
+   le premier rangement ignorait quelles cartes debordent, et les cartes glissaient ensuite. Liees a la
+   version du rangement ; `sig` oublie comme avant celles d un contenu qui a change de forme. */
+const ECARTS = "homelab.ecarts";
+const ECARTEES = new Map((() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(ECARTS) || "null");
+    if (!v || v.version !== RANGEMENT.VERSION) return [];
+    return v.l.map(([n, sig, formes, minH]) => [n, { sig, formes: new Set(formes), minH: new Map(minH) }]);
+  } catch (e) { return []; }
+})());
+const garderEcarts = () => {
+  try { localStorage.setItem(ECARTS, JSON.stringify({ version: RANGEMENT.VERSION, l: [...ECARTEES].map(([n, e]) => [n, e.sig, [...e.formes], [...e.minH]]) })); }
+  catch (e) { /* stockage refuse : la page repart de zero, sans gravite */ }
+};
+/* ⚠️ LE PREMIER DESSIN SE RANGE EN ENTIER AVANT D APPARAITRE (03/11/2026). Ses passes de verification
+   partaient au travailleur : la page montrait le premier rangement, puis les cartes glissaient vers le bon.
+   Tant que `PAGE_RANGEE` est faux, tout se fait d un seul tenant, avant la peinture, et il a droit a plus de
+   passes : une verification restee en plan referait bouger la page au tour suivant. */
+let PAGE_RANGEE = false;
 const SANS_RELEVE_HTML = /<div class="vizb">\s*<div class="note[^"]*">[^<]*<\/div>\s*<\/div>/;
 const carteDe = (el) => GROUPS.flatMap((g) => g.s).find((s) => slug(s.n) === el.dataset.carte);
 
@@ -3431,7 +3477,7 @@ function bento(racine, visibles, asynchrone) {
     const g0 = retrouver(cle);
     const garde = (g0 && conforme(g0.page) && g0) || (pr && pr.excl === excl && conforme(pr.page) && { cle, W, page: pr.page });
     if (garde) { BENTO = garde; garder(BENTO); }
-    else if (TRAVAIL && BENTO && (asynchrone || ATTENDU === cle || BENTO.W !== W)) {
+    else if (TRAVAIL && BENTO && PAGE_RANGEE && (asynchrone || ATTENDU === cle || BENTO.W !== W)) {
       // en attendant le travailleur (sans les definitions des cartes : des
       // fonctions ne passent pas au travailleur)
       if (ATTENDU !== cle) {
@@ -3562,7 +3608,7 @@ function dessineGroupes(passe = 0, anime = true, largeur = false) {
     racine.parentElement.classList.toggle("coins", coins);
     fondre(racine, html);
     // l en-tete n a pas la hauteur prevue : les coins se rangent de nouveau
-    if (coins && mesureTete(racine) && passe < 3) return dessineGroupes(passe + 1, false);
+    if (coins && mesureTete(racine) && passe < (PAGE_RANGEE ? 3 : 8)) return dessineGroupes(passe + 1, false);
     document.querySelectorAll(".card.clic").forEach(c => c.onclick = ev => {
       if (ev.target.closest("a")) return;
       if (c.dataset.pop === "conteneurs") popConteneurs();
@@ -3571,13 +3617,14 @@ function dessineGroupes(passe = 0, anime = true, largeur = false) {
       else { document.getElementById("dlg").classList.remove("large"); popUpdates(); }
     });
     // des tuiles toutes pareilles : rien a verifier apres coup
-    if (compact) { PLACES_VUES = places; return; }
+    if (compact) { PLACES_VUES = places; PAGE_RANGEE = true; return; }
     // les passes de verification se dessinent sans animation, DANS celle-ci ;
     // pas sur un rangement provisoire, etire en attendant le travailleur ; ni
     // pendant un trajet : les cartes transformees fausseraient la mesure (le
     // tour suivant verifiera)
-    if (!PROVISOIRE && !enVol() && ecarte(racine) && passe < 3) return dessineGroupes(passe + 1, false);
+    if (!PROVISOIRE && !enVol() && ecarte(racine) && passe < (PAGE_RANGEE ? 3 : 8)) return dessineGroupes(passe + 1, false);
     PLACES_VUES = placesDe(AFFICHEE);
+    PAGE_RANGEE = true;
   };
   const change = passe === 0 && PLACES_VUES !== null && places !== PLACES_VUES;
   if (!change) return peindre();
@@ -3716,6 +3763,8 @@ function ecarte(racine) {
       if ((e.minH.get(px) || 0) < n) { e.minH.set(px, n); change = true; }
     }
   }
+  // la vraie page seulement : l atelier essaie les cartes a toutes les tailles
+  if (change && racine.id === "groups") garderEcarts();
   return change;
 }
 
@@ -3779,6 +3828,9 @@ async function refresh() {
       if (l.qbit && d.qbit) { d.qbit.dl = l.qbit.dl; d.qbit.ul = l.qbit.ul; }
       if (d.jellyfin) d.jellyfin.now = l.jnow;
     }
+    /* En demonstration, le scenario arrive par une autre requete : dessine sans lui, le premier tour rangeait
+       la page selon la base, et le tour suivant la rangeait de nouveau, cartes en alerte comprises. */
+    await DEMO_PRET;
     DATA = demo(d);
     DERNIER_OK = Date.now();
     fondre(document.getElementById("fige"), figeHtml(DATA));
@@ -3790,6 +3842,10 @@ async function refresh() {
        l en-tete, qui decide de celle des coins. Arrives apres le premier
        dessin, ils faisaient ranger la page une seconde fois. */
     await RACCOURCIS;
+    /* ⚠️ LA RESERVE DE `main.attente` PART AVANT DE RANGER (03/11/2026) : ses hauteurs gardees (barre 78 px,
+       raccourcis 168 px) entraient dans la mesure de l en-tete, et toute la page descendait de 3 px au tour
+       suivant. Sans effet a l ecran : rien n est peint avant la fin du dessin. */
+    montrePage();
     dessineGroupes();
     sante();
     suisAncre();
@@ -3820,7 +3876,10 @@ setInterval(refresh, 2000);
 /* l horloge bat chaque seconde, independamment des donnees */
 setInterval(() => {
   const b = document.querySelector(".clock b");
-  if (b) b.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (!b) return;
+  // seulement quand l heure change : reecrire le meme texte fait quand meme travailler le navigateur
+  const t = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (b.textContent !== t) b.textContent = t;
 }, 1000);
 
 /* ---- Rechargement automatique quand le code ou les styles changent ---- */
@@ -4372,12 +4431,22 @@ function litGraphe(svg, e) {
   const x = svgX(svg, e);
   if (x == null) return null;
   const x0 = +svg.dataset.x0, x1 = +svg.dataset.x1, u = svg.dataset.u || "%";
-  const i = Math.max(0, Math.min(n - 1, Math.round((x - x0) / (x1 - x0) * (n - 1))));
   const t0 = +svg.dataset.t0, t1 = +svg.dataset.t1;
+  /* Le point le plus proche de l heure visee (voir `X` dans `graphe`). Sans heures, le rang du point. */
+  const heures = svg.dataset.dt ? deplieTs(svg.dataset.dt, t0) : [];
+  let i = Math.max(0, Math.min(n - 1, Math.round((x - x0) / (x1 - x0) * (n - 1))));
+  let ti = t0 + (t1 - t0) * i / (n - 1), vx = x0 + i / (n - 1) * (x1 - x0);
+  if (heures.length === n && t1 > t0) {
+    const vise = t0 + (x - x0) / (x1 - x0) * (t1 - t0);
+    let a = 0, b = n - 1;
+    while (b - a > 1) { const m = (a + b) >> 1; if (heures[m] < vise) a = m; else b = m; }
+    i = vise - heures[a] <= heures[b] - vise ? a : b;
+    ti = heures[i];
+    vx = x0 + (ti - t0) / (t1 - t0) * (x1 - x0);
+  }
   /* Sur 7 jours, l heure seule ne dit pas QUEL jour : « mar. 14:00 ». */
-  const ti = t0 + (t1 - t0) * i / (n - 1);
   return {
-    vx: x0 + i / (n - 1) * (x1 - x0),
+    vx,
     titre: !(t0 && t1) ? "" : t1 - t0 > 2 * 86400
       ? new Date(ti * 1000).toLocaleDateString("fr-FR", { weekday: "short" }) + " " + hhmm(ti) : hhmm(ti),
     lignes: ss.map((s, k) => ({
@@ -4948,7 +5017,7 @@ async function demoInit() {
   demoSelecteur();
   refresh();
 }
-demoInit();
+const DEMO_PRET = demoInit();
 
 /* ============ La page de la derniere visite (01/11/2026) ============
    Demande : plus de blocs vides a l ouverture. Mesure : ce script est pret a

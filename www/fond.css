@@ -13,24 +13,31 @@
    `@property` enregistre les variables comme des couleurs, ce qui les rend
    INTERPOLABLES : sans ca une variable change d un coup et le fond sauterait
    d une teinte a l autre. Avec, le passage calme -> alerte est un fondu de
-   2,4 s. `app.js` pose `data-sante` sur le body. */
+   2,4 s. `app.js` pose `data-sante` sur le body.
+   ⚠️ LES TEINTES ET LEUR FONDU SONT SUR `.aurora`, PAS SUR LE BODY (03/11/2026).
+   Une variable enregistree et heritee, animee sur le body, recalcule TOUTE la
+   page a chaque image : mesure, 47 recalculs de 1 898 elements en 2,4 s, soit
+   1,5 s de travail a la premiere visite et a chaque changement d etat. Seul le
+   fond les lit : sur `.aurora`, le fondu ne touche plus que lui. */
 @property --e1 { syntax: "<color>"; inherits: true; initial-value: rgba(42,111,214,.70) }
 @property --e2 { syntax: "<color>"; inherits: true; initial-value: rgba(122,68,198,.52) }
 @property --e3 { syntax: "<color>"; inherits: true; initial-value: rgba(14,154,148,.44) }
 
 body {
   --fond: #07080c;
+  background: var(--fond);
+  transition: background-color 2.4s ease;
+}
+.aurora {
   --e1: rgba(42,111,214,.70);   /* bleu    : haut gauche */
   --e2: rgba(122,68,198,.52);   /* violet  : haut droite */
   --e3: rgba(14,154,148,.44);   /* sarcelle: bas centre  */
-  background: var(--fond);
-  transition: --e1 2.4s ease, --e2 2.4s ease, --e3 2.4s ease,
-              background-color 2.4s ease;
+  transition: --e1 2.4s ease, --e2 2.4s ease, --e3 2.4s ease;
 }
 /* au moins une sonde en alerte */
-body[data-sante="warn"] { --e1: rgba(214,138,44,.68); --e2: rgba(168,86,44,.50); --e3: rgba(120,104,32,.38) }
+body[data-sante="warn"] .aurora { --e1: rgba(214,138,44,.68); --e2: rgba(168,86,44,.50); --e3: rgba(120,104,32,.38) }
 /* au moins un conteneur arrete */
-body[data-sante="crit"] { --e1: rgba(212,62,52,.72); --e2: rgba(140,34,60,.54); --e3: rgba(110,28,28,.42) }
+body[data-sante="crit"] .aurora { --e1: rgba(212,62,52,.72); --e2: rgba(140,34,60,.54); --e3: rgba(110,28,28,.42) }
 
 
 /* 2. LE VERRE
@@ -1474,7 +1481,7 @@ dialog.dlg::after {
 .fige .fg b { font-weight: 700 }
 .fige .fg.pb { font-size: .7rem; color: #c9d3e3; background: rgba(255,255,255,.05);
   border-color: rgba(255,255,255,.14) }
-body[data-fige="1"] .aurora { filter: grayscale(1) brightness(.8); transition: filter 1.2s ease }
+body[data-fige="1"] .aurora { filter: grayscale(1) brightness(.8); transition: filter 1.2s ease, --e1 2.4s ease, --e2 2.4s ease, --e3 2.4s ease }
 /* Carte d un service muet, ou dont les donnees ne s affichent pas. */
 .note.muet { color: #ffd08a }
 /* Ratio d un tracker dont le releve est fige depuis plus de 6 h (08/10/2026) :
@@ -1503,7 +1510,7 @@ body[data-fige="1"] .aurora { filter: grayscale(1) brightness(.8); transition: f
 #groups.compact .head .ouvre { display: none }
 
 /* Le premier fond pose sans fondu : voir le debut d app.js. */
-body.sans-fondu { transition: none !important }
+body.sans-fondu, body.sans-fondu .aurora { transition: none !important }
 
 /* LE PREMIER ECRAN. La premiere carte arrivait a 70 % de la hauteur sur bureau
    et a 85 % sur iPhone : barre, raccourcis, recherche et filtres empilaient

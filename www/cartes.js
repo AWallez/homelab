@@ -262,7 +262,7 @@ const GROUPS = [
         const bilan = hs === 0 ? ["relevé de joignabilité en cours"]
           : [(ko > 0 ? "indisponible " + duree(ko) : "aucune coupure")
              + (hs >= 160 ? " sur 7 j" : " depuis " + hs + " h"),
-             ko > 0 ? "wn" : "ok"];
+             ko > 0 ? "" : "ok"];
         // Releve du site absent : le dire, plutot qu un « 0 ms » invente.
         const vu = s.ok != null && (s.ok === false || s.ms != null);
         /* Releve d UptimeRobot trop vieux (coupure d Internet de la maison) :
@@ -731,7 +731,7 @@ GROUPS.push(
           : [(ko > 0 ? "port indisponible " + duree(ko) : "aucune coupure")
              + (vus >= 138 ? " sur 24 h"
                            : " depuis " + Math.max(1, Math.round(vus / 6)) + " h"),
-             ko > 0 ? "wn" : "ok"];
+             ko > 0 ? "" : "ok"];
 
         /* Sans releve du tunnel, une note a la place de son etat ; le ruban et
            son bilan, tires de l historique, restent. */
@@ -960,8 +960,7 @@ GROUPS.push(
                       ? ["en service depuis "
                          + (d.nas.uptime >= 86400 ? Math.floor(d.nas.uptime / 86400) + " j"
                             : d.nas.uptime >= 3600 ? Math.floor(d.nas.uptime / 3600) + " h"
-                            : Math.round(d.nas.uptime / 60) + " min"),
-                         d.nas.uptime < 3600 ? "wn" : ""]
+                            : Math.round(d.nas.uptime / 60) + " min")]
                       : null]),
       /* La temperature n allume plus cette carte (08/10/2026) : 85 °C allumait
          deux pastilles, celle-ci et Temperatures, pour un seul evenement. */
@@ -1312,8 +1311,10 @@ GROUPS.push(
       warn: d => (d.acces || {}).ext > 0,
       pourquoi: d => pluriel(d.acces.ext, "connexion") + " depuis Internet sur 24 h" },
     /* Le lien du serveur vers le switch. Il passe a l ambre s il negocie moins
-       que prevu, s il perd ses trames geantes, ou s il est TOMBE ET REMONTE
-       depuis le demarrage : c est ce que produit un switch qui se fige.
+       que prevu ou s il perd ses trames geantes.
+       ⚠️ UNE COUPURE TERMINEE N ALLUME PLUS RIEN (03/11/2026, demande) : une
+       fenetre de 24 h n est pas un etat, et la carte restait ambre un jour entier
+       pour un lien deja remonte. Elle reste ecrite, sans couleur, et sur le graphe.
        La courbe est la colonne `reseau`, collectee depuis l origine et jamais
        affichee jusqu ici : recu et envoye confondus. */
     /* Tailles mesurees le 16/10/2026 : 374 px a 6 modules, le graphe grandit
@@ -1346,26 +1347,25 @@ GROUPS.push(
           + past([v.length ? ["moyenne " + Mo(red)] : null,
                   v.length ? ["pointe " + Mo(Math.max(...v))] : null,
                   /* Sur 24 h (`coup24`) : compte depuis le demarrage, une seule coupure
-                     gardait la carte ambre jusqu au redemarrage suivant. */
-                  coup24(l) > 0 ? [coup24(l) + " coupure" + (coup24(l) > 1 ? "s" : "") + " sur 24 h", "wn"]
+                     aurait ete comptee jusqu au redemarrage suivant. */
+                  coup24(l) > 0 ? [coup24(l) + " coupure" + (coup24(l) > 1 ? "s" : "") + " sur 24 h"]
                               : ["lien stable sur 24 h", "ok"],
                   [nb(l.err) + " erreur" + (l.err > 1 ? "s" : "") + " reçue" + (l.err > 1 ? "s" : ""),
                    l.err > 10000 ? "wn" : ""]]);
       },
       warn: d => { const l = d.lan;
         if (l && !l.up) return "crit";
-        return !!l && ((l.vit > 0 && l.vit < LIEN.vit) || l.mtu < LIEN.mtu || coup24(l) > 0); },
+        return !!l && ((l.vit > 0 && l.vit < LIEN.vit) || l.mtu < LIEN.mtu); },
       pourquoi: d => { const l = d.lan;
         if (!l.up) return "le serveur n'a plus de lien réseau";
         return [l.vit > 0 && l.vit < LIEN.vit ? "lien négocié à " + (l.vit >= 1000 ? vg(l.vit / 1000) + " Gb/s" : l.vit + " Mb/s") : "",
-                l.mtu < LIEN.mtu ? "trames de " + l.mtu + " octets" : "",
-                coup24(l) > 0 ? pluriel(coup24(l), "coupure") + " sur 24 h" : ""].filter(Boolean).join(SEP); } },
+                l.mtu < LIEN.mtu ? "trames de " + l.mtu + " octets" : ""].filter(Boolean).join(SEP); } },
     /* La premiere question d une panne : le serveur, la box ou l operateur ?
        Le debit est celui de TOUTE LA MAISON, puisque c est la box qui le mesure.
-       ⚠️ LE REDEMARRAGE DE LA BOX EST AMBRE MAIS NE DECLENCHE RIEN. Il explique
-       une panne du port du VPN, qui en suit souvent un, mais c est la carte VPN
-       qui porte cette alerte : le dire deux fois teindrait la page pour un
-       evenement deja passe. */
+       ⚠️ LE REDEMARRAGE DE LA BOX ET LES ERREURS FIBRE SUR 24 H SONT ECRITS, SANS
+       COULEUR (03/11/2026, demande) : ce sont des evenements passes, pas un etat.
+       L anciennete de la box explique une panne du port du VPN, qui en suit
+       souvent une, mais c est la carte VPN qui porte cette alerte. */
     /* Tailles mesurees le 16/10/2026 : comme Reseau local ; pendant une
        coupure, le texte de « Hors ligne » passe sur trois lignes a cote du
        nombre a 6 demi-rangees (feuille bento). */
@@ -1381,7 +1381,6 @@ GROUPS.push(
             + `<div class="note">${boxMuette(d) ? "La box ne répond pas" : "Relevé de la box en attente"}</div>`;
         }
         const gb = k => k >= 1000000 ? vg(k / 1000000) + " Gb/s" : Math.round(k / 1000) + " Mb/s";
-        const recent = w.boxup >= 0 && w.boxup < 86400;
         const h = (w.h || []).filter(x => Array.isArray(x) && x.length >= 3);
         /* Sur 7 jours : `wan.h7`, une ligne par heure close, meme forme. */
         const g = sept("Internet") ? (w.h7 || []).filter(x => Array.isArray(x) && x.length >= 3) : h;
@@ -1408,20 +1407,19 @@ GROUPS.push(
              : `<div class="note">Débit en cours d'enregistrement</div>`)
           + past([w.lat > 0 ? ["latence " + w.lat + " ms", w.lat > 40 ? "wn" : ""] : ["latence : sans réponse", "wn"],
                   /* -1 ou absent : la box n a pas donne son anciennete. */
-                  Number.isFinite(w.boxup) && w.boxup >= 0 ? ["box en service depuis " + anciennete(w.boxup), recent ? "wn" : ""] : null,
+                  Number.isFinite(w.boxup) && w.boxup >= 0 ? ["box en service depuis " + anciennete(w.boxup)] : null,
                   mu ? null : [err24(w) > 0 ? pluriel(err24(w), "erreur fibre", "erreurs fibre") + " sur 24 h" : "aucune erreur fibre sur 24 h",
-                   err24(w) > 0 ? "wn" : "ok"]]);
+                   err24(w) > 0 ? "" : "ok"]]);
       },
       /* Sans releve (17/10/2026) : coupure en cours au journal, ROUGE ; box qui
          ne repond pas, ambre (Internet marche peut-etre, mais on n en sait
          rien). La carte le disait sans que la pastille s allume. */
       warn: d => { const w = d.wan;
         if (!w) return debutCoupure(d) != null ? "crit" : boxMuette(d);
-        if (!w.ok) return "crit"; if (w.muette) return true; return err24(w) > 0; },
+        if (!w.ok) return "crit"; return !!w.muette; },
       pourquoi: d => !d.wan ? (debutCoupure(d) != null ? "connexion coupée depuis " + coupureDepuis(d) : "la box ne répond pas")
         : d.wan.muette ? (d.wan.ok ? "la box ne répond pas" : "Internet injoignable, la box ne répond pas")
-        : !d.wan.ok ? "la box n'a plus de connexion Internet"
-        : pluriel(err24(d.wan), "erreur fibre", "erreurs fibre") + " sur 24 h" },
+        : "la box n'a plus de connexion Internet" },
   ]},
   { n: "Bureau et infrastructure", i: "server", s: [
     /* Tailles mesurees le 16/10/2026 (pire etat : 12 345 678 req., 125 ms) :

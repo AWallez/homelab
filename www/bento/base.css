@@ -15,12 +15,16 @@
    modules, des groupes cote a cote) ; le haut de page (mesures, raccourcis,
    recherche, barre des groupes) garde ses 75rem, centre : sa refonte viendra
    plus tard. */
-main:has(> #groups:is(.bento,.compact)){max-width:150rem}
+/* ⚠️ PAS DE `main:has(...)` (03/11/2026) : a chaque changement dans la page, meme
+   un texte, le navigateur reevaluait la regle et recalculait toute la page, soit
+   1 898 elements a chaque seconde, tic de l horloge compris. `#groups` porte
+   toujours `bento` ou `compact`, sauf dans l atelier : c est la meme condition. */
+:where(body:not(.atelier)) main:not(#_){max-width:150rem}
 /* ⚠️ SANS POIDS (`:where`, 17/10/2026) : une regle plus precise faisait passer
    la barre de recherche de ses 600 px (`.search`, style.css) a 1 200. Les
    elements du haut qui ont leur propre largeur la gardent ; les autres
    s arretent aux 75rem d avant. */
-main:where(:has(> #groups:is(.bento,.compact))) > :where(:not(#groups)){max-width:75rem;margin-inline:auto}
+:where(body:not(.atelier)) main > :where(:not(#groups)){max-width:75rem;margin-inline:auto}
 
 /* L animation du rangement (glissement des cartes) n a besoin d aucune regle
    ici : voir `envol` (app.js). */
