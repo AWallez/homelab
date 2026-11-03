@@ -106,6 +106,12 @@ node outils/genere-fixtures.js
 
 Le tirage est déterministe : la même graine rend les mêmes courbes, avec un rythme jour/nuit et des incidents corrélés entre les sondes.
 
+Pour lancer les tests, sans NAS ni dépendance :
+
+```bash
+node --test tests/*.test.js
+```
+
 ## Structure du dépôt
 
 | Dossier | Contenu |
