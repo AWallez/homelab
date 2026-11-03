@@ -93,9 +93,12 @@ KO=""; muet(){ KO="$KO\"$1\","; }
 # En essai, le cache vit dans /tmp lui aussi : un premier essai fait une passe
 # complete, un second dans les 5 min une passe ordinaire, et les deux se mesurent.
 LENT_V=2; LENT=$ETATS/lent.sh; LENT_T=0
+# shellcheck source=/dev/null  # cache ecrit par ce script, chemin variable
 [ -r "$LENT" ] && . "$LENT"
 if [ "${LENT_VU:-0}" != "$LENT_V" ] || [ $((NOWS - LENT_T)) -ge 290 ]; then
-  KO_LENT=""; muetl(){ KO_LENT="$KO_LENT\"$1\","; }
+  KO_LENT=""
+  # shellcheck disable=SC2089  # guillemets VOULUS : du JSON, pas du shell
+  muetl(){ KO_LENT="$KO_LENT\"$1\","; }
   CORES=$(nproc 2>/dev/null || echo 1)
   # ⚠️ LE CHEMIN NOYAU N EST PAS UNE IDENTITE : le noyau 6.18 a interverti nvme0
   # et nvme1, et les deux courbes se sont echangees en silence. Le slot vient du
@@ -292,6 +295,7 @@ if [ "${LENT_VU:-0}" != "$LENT_V" ] || [ $((NOWS - LENT_T)) -ge 290 ]; then
   : "${UR:=null}"
 
   LENT_T=$NOWS; LENT_VU=$LENT_V
+  # shellcheck disable=SC2090  # KO_LENT porte du JSON, relu tel quel par `.`
   declare -p LENT_T LENT_VU KO_LENT CORES SLOTS RMIS RQ RSZ SMIS SQ SSZ PSA PMSG PIX BZE BZM \
     JM JS JE JNOW SRP SRA AQ AB AL LEADS CTOT CTRT CAGE CSRUN CSM CSS CSIA CSIT \
     UV UP7 UVI USERIE WT WC WNAMES WCL UPD UPDH BAGO BDATE UR > "$LENT.tmp" 2>/dev/null \

@@ -103,11 +103,12 @@ fi
 
 # Un seul `docker inspect` pour tout le monde : un par conteneur coutait deux
 # secondes sur vingt-sept, meme lecon que dans containers.sh.
-docker inspect $(docker ps -q) \
+mapfile -t IDS < <(docker ps -q 2>/dev/null)
+[ "${#IDS[@]}" -gt 0 ] && docker inspect "${IDS[@]}" \
   --format '{{.Name}}|{{.Created}}|{{ index .Config.Labels "org.opencontainers.image.version" }}|{{.Config.Image}}|{{.Image}}' \
   2>/dev/null | sed 's#^/##' > "$TMP"
 
-while IFS='|' read -r nom cree ver image sha; do
+while IFS='|' read -r nom cree ver _ sha; do
   [ -n "${nom:-}" ] || continue
 
   # Sans etiquette de version, on retombe sur l empreinte courte de l image :
