@@ -114,6 +114,7 @@ Le tirage est déterministe : la même graine rend les mêmes courbes, avec un r
 | `collecteurs/` | les scripts shell et Python qui alimentent le tableau de bord, et les veilleurs qui exécutent les demandes de la page |
 | `fixtures/` | les sources écrites à la main : un état nominal et quatorze calques |
 | `outils/` | générateur, serveur de développement, déploiement |
+| `tests/` | essais `node --test` du rangement et des collecteurs, sans le NAS |
 
 La page ne connaît qu'un seul fichier propre à l'installation, `www/site.js` : adresse du serveur, ports, liens publics, raccourcis par défaut. Le code des cartes (`www/cartes.js`) et celui de la page (`www/app.js`) sont identiques partout, et c'est tout ce que le script de déploiement envoie : il refuse `site.js`, dont la version publiée ici est anonymisée.
 
