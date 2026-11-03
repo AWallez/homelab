@@ -1,0 +1,50 @@
+# Tests du depot : `node --test` sur `tests/`, puis shellcheck sur les scripts.
+#
+# ⚠️ SEPARE DE `pages.yml`, et sans rien publier : ce workflow ne fait que lire
+# le depot. Aucune dependance npm (Node seul, `node:test` et `node:vm`), et
+# aucun acces au NAS : les collecteurs tournent avec des bouchons (voir
+# `tests/aide/banc.js`).
+#
+# `tests/` ne part nulle part : Pages ne televerse que `www/`, et le NAS ne
+# recoit que la liste blanche de `outils/deploie.js`. `tests/publication.test.js`
+# le verifie.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # bash, jq, awk et flock viennent avec l image ; sans eux, les essais des
+      # collecteurs seraient sautes, pas reussis : on le verifie avant.
+      - name: Outils des collecteurs
+        run: |
+          for o in bash jq awk flock shellcheck; do
+            command -v "$o" >/dev/null || { echo "absent : $o"; exit 1; }
+          done
+
+      - name: node --test
+        run: node --test tests/*.test.js
+
+      # Jusqu aux AVERTISSEMENTS, comme `pages.yml` : les simples notes ne
+      # bloquent pas.
+      - name: shellcheck
+        run: shellcheck -S warning collecteurs/*.sh outils/*.sh
