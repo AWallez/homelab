@@ -22,12 +22,11 @@ const fs = require("node:fs");
 const { banc, demo, genre } = require("./aide/banc.js");
 const { fonction } = require("./aide/charge.js");
 
-/* Ce que la PAGE ajoute elle-meme au chargement, depuis `systeme.json`
-   (`fusionSysteme`, www/app.js) : `grappes`, `slots` et le `role` de chaque
-   disque dans smart.json, l `anon` de chaque conteneur dans containers.json.
-   Les collecteurs ne les ecrivent pas ; la demonstration les porte deja dans le
-   fichier, son systeme.json n ayant ni `stock` ni `mem`. On rejoue donc la
-   fusion, avec la fonction de la page, avant de comparer. */
+/* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
+   smart.json les grappes, les emplacements et les roles que systeme.py publie
+   sous `stock`, et sur chaque conteneur l `anon` de `mem`. La demonstration
+   passe par elle depuis le 03/11/2026, comme la production : ses smart.json et
+   containers.json ont donc la forme exacte de ceux des collecteurs. */
 const fusionSysteme = fonction("app.js", "fusionSysteme");
 
 const outilsPresents = ["bash", "jq", "awk", "flock"].every((o) =>
@@ -51,7 +50,7 @@ function avecBanc(t, reseauPermis = []) {
 
 /* ---- smart.sh ------------------------------------------------------------- */
 
-test("smart.sh, fusionne par la page : la forme de www/smart.json, valeurs converties", { skip: SAUF }, (t) => {
+test("smart.sh : la forme exacte de www/smart.json, valeurs converties", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
   const dm = demo("smart.json");
   // un releve smartctl par disque de la demonstration, dans les unites de smartctl
@@ -79,9 +78,6 @@ sed -n "\${n}p" "${b.chemin("releves.json")}"`);
   const r = b.lance("smart.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const smart = b.json("www/smart.json");
-  // ce que systeme.py publie sous `stock`, repris de la demonstration
-  const roles = Object.fromEntries(dm.d.filter((d) => d.role).map((d) => [d.n, d.role]));
-  fusionSysteme({ smart }, { stock: { grappes: dm.grappes, slots: dm.slots, roles } });
   assert.deepEqual(forme(smart), forme(dm));
   assert.equal(smart.d.length, dm.d.length);
   smart.d.forEach((d, i) => {
@@ -93,7 +89,7 @@ sed -n "\${n}p" "${b.chemin("releves.json")}"`);
 
 /* ---- containers.sh -------------------------------------------------------- */
 
-test("containers.sh, fusionne par la page : la forme de www/containers.json", { skip: SAUF }, (t) => {
+test("containers.sh : la forme exacte de www/containers.json", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
   const dm = demo("containers.json");
   const noms = dm.c.slice(0, 3).map((c) => c.n);
@@ -111,8 +107,6 @@ esac`);
   const r = b.lance("containers.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const cont = b.json("www/containers.json");
-  // `mem.anon` de systeme.py : la memoire reelle de chaque conteneur, en Mo
-  fusionSysteme({ cont }, { mem: { anon: Object.fromEntries(noms.map((n, i) => [n, 100 + i])) } });
   assert.deepEqual(forme(cont), forme(dm));
   assert.deepEqual(cont.c.map((c) => c.n).sort(), [...noms].sort());
   for (const c of cont.c) {
@@ -123,7 +117,6 @@ esac`);
     // reconvertit en Mo (`moC`) : la demonstration aussi
     assert.equal(c.mem, i + 2.25);
     assert.equal(c.rs, i === 0 ? 2 : 0);
-    assert.equal(c.anon, 100 + i);
   }
   assert.ok(dm.c.every((c) => c.mem >= 0 && c.mem <= 100), "www/containers.json : `mem` hors d un pourcentage");
   // le redemarrage (1 -> 2) entre au journal des 24 h
