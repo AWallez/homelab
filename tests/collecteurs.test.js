@@ -19,7 +19,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { banc, demo, genre } = require("./aide/banc.js");
+const path = require("node:path");
+const { banc, demo, genre, RACINE } = require("./aide/banc.js");
 const { fonction } = require("./aide/charge.js");
 
 /* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
@@ -122,6 +123,61 @@ esac`);
   // le redemarrage (1 -> 2) entre au journal des 24 h
   assert.deepEqual(cont.ev.map((e) => e.n), [noms[0]]);
   assert.deepEqual(forme(cont.ev[0]), forme(dm.ev[0]));
+});
+
+/* ---- systeme.json : ce que la page range dans smart.json et containers.json ---- */
+
+test("la demonstration passe par fusionSysteme : grappes, emplacements, roles et anon", () => {
+  const smart = demo("smart.json"), cont = demo("containers.json"), sy = demo("systeme.json");
+  fusionSysteme({ smart, cont }, sy);
+  assert.ok(sy.stock.grappes.length > 0 && cont.c.length > 0, "une demonstration sans grappe ni conteneur ne prouverait rien");
+  assert.deepEqual(smart.grappes, sy.stock.grappes);
+  assert.deepEqual(smart.slots, sy.stock.slots);
+  for (const x of smart.d) assert.equal(x.role, sy.stock.roles[x.n], x.n + " : son role");
+  for (const c of cont.c) assert.equal(c.anon, sy.mem.anon[c.n], c.n + " : sa memoire reelle");
+});
+
+/** Les cles de premier niveau du dictionnaire Python qui s ouvre a `debut`. */
+function clesDict(src, debut) {
+  const cles = [];
+  let prof = 0, chaine = null;
+  for (let k = debut; k < src.length; k++) {
+    const c = src[k];
+    if (chaine) { if (c === "\\") k++; else if (c === chaine) chaine = null; continue; }
+    if (c === "#") { k = src.indexOf("\n", k); continue; }          // commentaire
+    if (c === '"' || c === "'") {
+      const m = prof === 1 && /^(["'])(\w+)\1\s*:/.exec(src.slice(k, k + 80));
+      if (m) { cles.push(m[2]); k += m[0].length - 1; } else chaine = c;
+      continue;
+    }
+    if ("{[(".includes(c)) prof++;
+    else if ("}])".includes(c) && --prof === 0) return cles;
+  }
+  throw new Error("dictionnaire non referme");
+}
+/** Les cles du dictionnaire que rend `def fonction` de collecteurs/systeme.py. */
+function clesRendues(fonctionPy, premiere) {
+  const src = fs.readFileSync(path.join(RACINE, "collecteurs", "systeme.py"), "utf8");
+  const f = src.indexOf("\ndef " + fonctionPy + "(");
+  const m = f < 0 ? null : new RegExp("return \\{\\s*\"" + premiere + "\"").exec(src.slice(f));
+  assert.ok(m, fonctionPy + "() introuvable dans systeme.py");
+  return { src, debut: f + m.index + m[0].indexOf("{"), cles: clesDict(src, f + m.index + m[0].indexOf("{")) };
+}
+
+test("www/systeme.json : `mem` et `stock` ont les cles que rend systeme.py", () => {
+  const sy = demo("systeme.json");
+  const tri = (l) => [...l].sort();
+  assert.deepEqual(tri(Object.keys(sy.mem)), tri(clesRendues("memoire", "tot").cles));
+  const st = clesRendues("stockage", "grappes");
+  assert.deepEqual(tri(Object.keys(sy.stock)), tri(st.cles));
+  const slots = st.src.indexOf('"slots": {', st.debut);
+  assert.ok(slots > 0, "stockage() : `slots` introuvable");
+  assert.deepEqual(tri(Object.keys(sy.stock.slots)), tri(clesDict(st.src, st.src.indexOf("{", slots))));
+});
+
+test("clesDict : premier niveau seulement, commentaires et chaines compris", () => {
+  const py = 'return {\n  "a": f(1, {"x": 2}),  # "faux": commentaire\n  "b": "c: d", "e": [{"y": 3}],\n}';
+  assert.deepEqual(clesDict(py, py.indexOf("{")), ["a", "b", "e"]);
 });
 
 /* ---- history-build.sh et history-min.sh ------------------------------------ */
