@@ -27,7 +27,10 @@ done > "$SW"
 # ⚠️ UN SEUL `docker inspect` pour tout le monde : un par conteneur coutait deux
 # secondes sur vingt-sept.
 RS=$(mktemp); trap 'rm -f "$SW" "$RS"' EXIT
-docker inspect $(docker ps -q) \
+# Identifiants en tableau : sans conteneur, `docker inspect` sans argument
+# echoue, et c est ce cas qu il faut savoir reconnaitre plus bas.
+mapfile -t IDS < <(docker ps -q 2>/dev/null)
+[ "${#IDS[@]}" -gt 0 ] && docker inspect "${IDS[@]}" \
   --format '{{.Name}};{{.RestartCount}};{{.State.StartedAt}}' 2>/dev/null \
   | sed 's#^/##' | while IFS=';' read -r nom rs st; do
       d=$(date -d "$st" +%s 2>/dev/null || echo 0)
@@ -65,8 +68,11 @@ if [ -f "$PREV" ]; then
     NR==FNR { p[$1] = $2; next }
     ($1 in p) && $2+0 > p[$1]+0 { printf "%d;%s;%d\n", now, $1, $2 }' "$PREV" "$RS" >> "$EVF"
 fi
-cut -d';' -f1,2 "$RS" > "$PREV"
-[ -f "$EVF" ] && { awk -F';' -v c=$((NOW - 86400)) '$1+0 >= c' "$EVF" > "$EVF.tmp"; mv "$EVF.tmp" "$EVF"; }
+# ⚠️ Docker muet, RS est vide : l ancien etat est garde. L effacer faisait
+# oublier les compteurs, et le redemarrage suivant passait inapercu.
+[ -s "$RS" ] && cut -d';' -f1,2 "$RS" > "$PREV"
+# `&&` : un awk en echec ne doit pas vider le journal.
+[ -f "$EVF" ] && { awk -F';' -v c=$((NOW - 86400)) '$1+0 >= c' "$EVF" > "$EVF.tmp" && mv "$EVF.tmp" "$EVF"; }
 EVJ=$(awk -F';' 'BEGIN{printf "["}
   {printf "%s{\"n\":\"%s\",\"t\":%s}", (NR>1?",":""), $2, $1}
   END{printf "]"}' "$EVF" 2>/dev/null)
