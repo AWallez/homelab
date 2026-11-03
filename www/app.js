@@ -2160,8 +2160,16 @@ function paintUpd(maj, note, vers) {
   const lienSur = (s) => typeof s === "string" && /^https:\/\/[\w.-]+\//.test(s);
   const RAISON = { telechargement: "téléchargement impossible",
                    installation: "mise à jour annulée, ancienne version remise",
+                   image_inchangee: "téléchargement sans effet, rien d'installé",
+                   preparation: "mise à jour non commencée, rien d'installé",
                    majeure: "version majeure à valider",
-                   retour_arriere: "retour arrière ÉCHOUÉ" };
+                   code: "code à déployer",
+                   construction: "reconstruction impossible",
+                   controle: "contrôle avant installation en échec",
+                   retour_arriere: "retour arrière ÉCHOUÉ",
+                   interrompue: "mise à jour INTERROMPUE" };
+  // ⚠️ Le service est peut-être arrêté : ces blocages-là s'affichent en urgence.
+  const URGENT = ["retour_arriere", "interrompue"];
   const quand = (s) => s ? `${s.slice(8, 10)}/${s.slice(5, 7)} à ${s.slice(11, 16)}` : "?";
 
   const rangee = (n, v, s) => {
@@ -2206,7 +2214,7 @@ function paintUpd(maj, note, vers) {
   const motif = (x) => {
     if (!x.bloc && !x.avert.length) return "";
     const b = x.bloc;
-    return `<div class="motif${b && b.raison === "retour_arriere" ? " urgent" : ""}">${b
+    return `<div class="motif${b && URGENT.includes(b.raison) ? " urgent" : ""}">${b
       ? `<b>Manuel temporaire : ${esc(RAISON[b.raison] || b.raison)}</b>${esc(b.message)}. ${esc(b.conseil)}${
           b.erreur ? `<details><summary>Erreur exacte</summary><code>${esc(b.erreur)}</code></details>` : ""}`
       : ""}${x.avert.map(a => `<div>⚠️ ${esc(a)}</div>`).join("")}</div>`;
