@@ -21,7 +21,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { banc, demo, genre, RACINE } = require("./aide/banc.js");
-const { fonction, nu } = require("./aide/charge.js");
+const { fonction } = require("./aide/charge.js");
 
 /* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
    smart.json les grappes, les emplacements et les roles que systeme.py publie
@@ -180,7 +180,8 @@ test("la demonstration passe par fusionSysteme : ventilateurs et compte rendu de
   assert.ok(sy.fans.length > 0 && Object.keys(sy.backup).length > 0, "rien a fusionner ne prouverait rien");
   fusionSysteme(d, sy);
   assert.deepEqual(d.nas.fans, sy.fans);
-  assert.deepEqual(nu(d.backup), { ...backup, ...sy.backup }, "l age et la date de data.json, completes du compte rendu");
+  // `{ ...d.backup }` : la fusion cree l objet dans le contexte vm, sa copie non
+  assert.deepEqual({ ...d.backup }, { ...backup, ...sy.backup }, "l age et la date de data.json, completes du compte rendu");
 });
 
 /** Les sections de systeme.json, lues dans `main()` de systeme.py. */
