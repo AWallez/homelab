@@ -1,0 +1,343 @@
+/* L HABILLAGE DU PORTAIL (03/11/2026, retenu apres comparaison de plusieurs versions). Charge en dernier :
+   relief.css reste sa base, ses regles passent apres.
+   L idee : le verre ne se voit que s il y a un DESSIN derriere lui. Sur un degrade lisse, un flou ne change
+   rien et la carte parait opaque. Le fond devient une carte de relief : des courbes de niveau fines (iso.js),
+   posees sur les trois masses de couleur de l etat du homelab. */
+@font-face{font-family:"Inter Variable";font-style:normal;font-display:swap;font-weight:100 900;src:url(polices/inter-latin-wght-normal.woff2) format("woff2")}
+
+/* LE FOND */
+.aurora,body.verre-scene:not(.sans-scene) .aurora{background:var(--fond)!important}
+.aurora::before,.aurora::after{content:none!important}
+.masse{position:absolute;border-radius:50%;filter:blur(90px);will-change:transform;opacity:.68}
+.m1{width:62vmax;height:62vmax;left:-16vmax;top:6vh;background:var(--e1);animation:m1 46s ease-in-out infinite alternate}
+.m2{width:54vmax;height:54vmax;right:-14vmax;top:26vh;background:var(--e2);animation:m2 58s ease-in-out infinite alternate}
+.m3{width:50vmax;height:50vmax;left:24vw;bottom:-22vmax;background:var(--e3);animation:m3 52s ease-in-out infinite alternate}
+@keyframes m1{to{transform:translate(9vw,7vh)}}
+@keyframes m2{to{transform:translate(-8vw,6vh)}}
+@keyframes m3{to{transform:translate(6vw,-7vh)}}
+/* sur iPhone, rien ne bouge */
+@media(pointer:coarse),(prefers-reduced-motion:reduce){.masse{animation:none;will-change:auto}}
+#iso{position:absolute;inset:0;width:100%;height:100%}
+/* LE HAUT DU FOND : il ne s efface que sur ecran tactile, ou iOS peint une couleur unie autour de la Dynamic
+   Island et le dessin s y couperait net. Sur ordinateur, les lignes et la couleur montent jusqu en haut : la
+   barre a quelque chose a laisser voir. */
+@media(pointer:coarse){
+  .m1{top:14vh}
+  .m2{top:34vh}
+  #iso{-webkit-mask:linear-gradient(180deg,transparent 56px,#000 110px);mask:linear-gradient(180deg,transparent 56px,#000 110px)}
+}
+@media(pointer:fine){
+  .m1{top:-14vh}
+  .m2{top:-6vh}
+}
+
+/* LE VERRE : la meme transparence pour les cartes, la barre du haut et la recherche, au repos et au survol.
+   Sur un fond fait de lignes, c est le flou qui decide : a 7 px les lignes disparaissaient et la carte
+   paraissait opaque. Les raccourcis, plus clairs, laissent passer les lignes nettes. */
+body.verre-scene.relief.final :is(.card,.bar,.search),
+body.verre-scene.relief.final a.card:hover,body.verre-scene.relief.final .card.clic:hover{backdrop-filter:blur(3px) saturate(1.5);-webkit-backdrop-filter:blur(3px) saturate(1.5);background:var(--dalle),linear-gradient(rgb(9 11 24/.2),rgb(9 11 24/.28))}
+body.verre-scene.relief.final .card{transition:transform .3s cubic-bezier(.2,.8,.2,1),background-color .25s ease}
+body.verre-scene.relief.final .t .i{backdrop-filter:blur(1.5px) saturate(1.3);-webkit-backdrop-filter:blur(1.5px) saturate(1.3);background:var(--dalle),linear-gradient(rgb(9 11 24/.2),rgb(9 11 24/.2))}
+/* les textes poses a meme le fond gardent leur lisibilite */
+.t .l,h2{position:relative}
+
+/* 11 PX AU MINIMUM PARTOUT : la liste de la section 41 de fond.css, sans sa limite au telephone. Sur ordinateur,
+   des dizaines de textes faisaient de 8,8 a 9,6 px : c etait le vrai frein a la lecture, plus que le contraste.
+   Les pastilles de la barre de filtres n y sont pas : elles gardent leur dessin. */
+.met .mi>small,
+.hp em,
+.clock>span,
+.t .l,
+.st span,
+.dlg label,
+.rq,
+.sub2,
+.jauge-t span,
+.past span,
+.past:has(span:nth-child(3)) span,
+.leg span,
+.s7n span,
+.jours em,
+.clg span,
+.grp-h em,
+.grp-h .nm small,
+.ln:not(summary) .nm small,
+.psec,
+.ln .dv,
+.pied,
+.majh,
+.majh b,
+.majl .rq,
+.hist .rq,
+#groups.compact .card:not(:has(.adr)) .head p,
+.wgt b,
+.chk .k,
+.chk em,
+.sh,
+.ses span,
+.jr>div,
+.jr .s,
+.jr .q small,
+.jr .r,
+.dint>div:not(.note),
+.dint small,
+.dint .r,
+.dint .lieu,
+.acr .lieu,
+.rg small,
+.rg b,
+.gh>span,
+.bv,
+.dq .dn small,
+.dq em,
+.libre,
+.faits span,
+.acx-m,
+.acx-a span,
+.acr .s,
+.acr .q small,
+.acr .r,
+.acm span,
+.acm small,
+.acr,
+.dtu span,
+.ln.lnh,
+.ln.lnh .nm,
+.ln.lnh .mm,
+.ln.lnh .sw,
+.ln.lnh .cp,
+.ln.lnh .dv,
+.hist .hd,
+.hist .hv,
+.hist .hv.brut,
+.hist .hl,
+.sub3,
+.hist .mode,
+.hist .motif,
+.hist .motif code,
+.trkh,
+.trk .q,
+.ech span,
+.rleg,
+#tip b,
+.pcn,
+.trk small.age{font-size:11px}
+.adr,
+#groups.compact .head .adr{font-size:11px!important}
+.met .mi b .u{font-size:11px}
+
+/* LES BASES */
+:root{--systeme:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter Variable","Segoe UI Variable Text",system-ui,sans-serif;
+  --arrondi:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Inter Variable",system-ui,sans-serif;
+  --ressort:linear(0,.08 5%,.27 12%,.55 22%,.78 34%,.91 46%,.97 60%,.995 78%,1);--bleu:#64b5ff}
+html{color-scheme:dark;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body.verre-scene.relief.final{--ink:#f5f5f7;--mut:#c8d1df;font-family:var(--systeme);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+::selection{background:rgb(10 132 255/.5)}
+:focus-visible{outline:2px solid var(--bleu);outline-offset:2px}
+.card.clic:focus-visible{outline:2px solid var(--bleu);outline-offset:3px}
+*{scrollbar-color:rgb(255 255 255/.26) transparent}
+a,button,.card.clic,[role="button"]{touch-action:manipulation}
+
+/* LA HIERARCHIE : le poids et la taille, plus les capitales espacees. Le titre garde ses 25 px de haut : le
+   rangement les compte. */
+body.verre-scene.relief.final h2{font-size:1.25rem;line-height:25px;font-weight:500;letter-spacing:-.02em;text-transform:none;color:var(--ink)}
+/* le logo de section suit le titre agrandi ; ses marges negatives gardent les 25 px de haut */
+body.verre-scene.relief.final h2 svg{width:18px;height:18px;padding:5px;margin-block:-1.5px}
+/* et le titre s ecarte des cartes, au-dessous comme au-dessus, pour que le rond respire. Le decalage de la barre
+   du haut, entre les coins, suit (TITRE dans app.js : 25 + 11). */
+body.verre-scene.relief.final :is(#groups.bento,#groups .bento) .sec:not(#_){margin-bottom:10px}
+body.verre-scene.relief.final :is(#groups.bento,#groups .bento) .sec h2:not(#_){margin:0 0 11px}
+main.coins .bar:not(#_){margin-top:36px}
+.head h3{font-weight:600;letter-spacing:-.016em}
+body.verre-scene.relief.final .head p{color:var(--mut)}
+.hero b{font-family:var(--arrondi);font-weight:700;letter-spacing:-.03em}
+.hero span{color:var(--mut)}
+#bar .hp .line{font-size:1.4rem;font-weight:700;letter-spacing:-.024em;line-height:1.2}
+#bar .hp em{font-style:normal}
+#bar .mi b,#bar .clock b{font-family:var(--arrondi);font-weight:700;letter-spacing:-.02em}
+#bar .mi small{text-transform:none;letter-spacing:0}
+.sh,.trkh,.rleg{text-transform:none;letter-spacing:0}
+
+/* L EFFET DE CREUX vient d une ombre qui tombe du bord haut, sans anneau tout autour : un anneau regulier se lit
+   comme un contour dessine.
+   LES CREUX : plus sombres que la carte, mais pas trop : un fond trop noir avale l ombre interieure, et c est
+   elle qui fait le creux. Le fond s assombrit du bas vers le haut, comme un puits.
+   LES PASTILLES : toujours ce meme fond, l effet de creux reste identique ; seule la couleur du texte dit l etat.
+   Une teinte eclaircissait le fond et faisait paraitre la pastille posee dessus. */
+body.verre-scene.relief.final{--trou:linear-gradient(180deg,rgb(3 5 12/.19),rgb(3 5 12/.07) 75%);--creux:inset 0 2px 4px -1px rgb(0 0 0/.65),inset 0 1px 1px rgb(0 0 0/.32)}
+body.verre-scene.relief.final :is(.past span,.faits span,.verdict em,.card .pil,.rg .p,.grp-h .gb,.periode,.jauge-b,.tr:not(.vide),.card[data-carte="jellyfin"] :is(.st,.note)):not(#_){background:var(--trou);box-shadow:var(--creux)}
+.past span,.faits span,.verdict em,.card .pil{font-weight:500;color:var(--ink)}
+body.verre-scene.relief.final :is(.past span,.faits span,.verdict em,.card .pil,.card[data-carte="jellyfin"] :is(.st,.note)):is(.ok):not(#_){color:#5cf08c}
+body.verre-scene.relief.final :is(.past span,.faits span,.verdict em,.card .pil,.card[data-carte="jellyfin"] :is(.st,.note)):is(.wn,.inc):not(#_){color:#ffc247}
+body.verre-scene.relief.final :is(.past span,.faits span,.verdict em,.card .pil,.card[data-carte="jellyfin"] :is(.st,.note)):is(.cr,.crit):not(#_){color:#ff7f76}
+.calme,.calme b,.note,.note b{font-size:.75rem}
+
+/* LE TEXTE CENTRE DANS LES PASTILLES. Les minuscules se tiennent sous le milieu de leur ligne : un pixel de moins
+   au-dessus qu en dessous les remet au centre. */
+:is(.past,.past:has(span:nth-child(3))) span{display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 10px 6px}
+.faits span,.verdict em,.card .pil{text-align:center}
+.verdict em,.card .pil{padding-top:3px;padding-bottom:5px}
+.faits span{padding:3px 9px 5px}
+/* les blocs poses sous les pastilles (Sauvegarde, Journal, Acces) : le meme rembourrage qu elles */
+body.verre-scene.relief.final .card>.note:not(#_){padding:4px 10px 6px}
+.ses span{justify-content:center;text-align:center;padding-top:4px;padding-bottom:6px}
+
+/* CARTE ACCES : ce qui est connecte maintenant passe en relief, comme le reste du contenu. */
+body.verre-scene.relief.final .ses span:not(#_){position:relative;background-image:none;box-shadow:inset 0 -6px 8px -7px rgb(0 0 0/.3),0 1px 0 rgb(0 0 0/.32),0 2px 4px -1px rgb(0 0 0/.22)}
+body.verre-scene.relief.final .ses span.vide:not(#_){background-color:rgb(0 0 0/.16)}
+body.verre-scene.relief.final .ses span:not(#_)::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(180deg,rgb(0 0 0/.14),rgb(0 0 0/.52));-webkit-mask:var(--anneau);-webkit-mask-composite:xor;mask:var(--anneau);mask-composite:exclude}
+
+/* FENETRE JOURNAL : plus de blocs, une simple barre entre deux evenements. */
+body.verre-scene.relief.final .dlg .jx{gap:0}
+body.verre-scene.relief.final .dlg .jx>div:not(#_){background:none;box-shadow:none;border:0;border-bottom:1px solid rgb(200 209 223/.14);border-radius:0;padding:8px 10px}
+body.verre-scene.relief.final .dlg .jx>div:last-child:not(#_){border-bottom:0}
+
+/* LES GRAPHES EN 3D : les barres et les jauges s assombrissent en bas et portent une ombre. Les graphes SVG passent
+   par le filtre #biseau (index.html). */
+body.verre-scene.relief.final .b>i:not(#_){box-shadow:inset 0 -1px 0 rgb(0 0 0/.34),inset 0 -5px 5px -2px rgb(0 0 0/.3),0 1px 0 rgb(0 0 0/.4),0 3px 5px -2px rgb(0 0 0/.5)}
+/* Carte Statistiques : plus de trait sous les barres, l ombre s y collait. Chaque jour reste visible : une barre
+   fait au moins 3 px, meme a zero. */
+body.verre-scene.relief.final .jours .b:not(#_){border-bottom:0;padding-bottom:0}
+body.verre-scene.relief.final .jours .b i:not(#_){border-radius:3px}
+body.verre-scene.relief.final :is(.jauge-b i,.tr i,.gb i,.gb u,.acb i):not(#_){box-shadow:inset 0 -1px 0 rgb(0 0 0/.34),inset 0 -3px 3px -1px rgb(0 0 0/.28)}
+
+/* LA BARRE DE FILTRES ET LES NOTIFICATIONS gardent leur dessin, seule leur teinte monte. */
+body.verre-scene.relief.final #filters :is(.panneau button:not(#menu):not(#compact),#menu,#compact,#alertes):not(#_),body.verre-scene.relief.final .racc .fl:not(#_){background-color:rgb(9 11 24/.18)}
+body.verre-scene.relief.final #filters .soucis .pil:not(#_){background-color:rgb(14 15 20/.46)}
+body.verre-scene.relief.final #filters .soucis .pil.inc:not(#_){background-color:rgb(255 159 10/.2)}
+body.verre-scene.relief.final #filters .soucis .pil.crit:not(#_){background-color:rgb(255 69 58/.22)}
+body.verre-scene.relief.final dialog.dlg:not(#_){background-color:rgb(13 15 21/.38)}
+@media(max-width:980px){body.verre-scene.relief.final #filters .panneau:not(#_){background-color:rgb(13 15 20/.34)}}
+
+/* LE MENU DEROULANT DES FILTRES : du texte sans fond ; au survol, un fond de la couleur de son parent. */
+@media(max-width:980px){
+  body.verre-scene.relief.final #filters .panneau button:not(#menu):not(#compact):not(#_){background:none;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;border-color:transparent}
+  body.verre-scene.relief.final #filters .panneau button:not(#menu):not(#compact):not(#_):is(:hover,:active){background:rgb(13 15 20/.34)}
+}
+
+/* LES MENUS DE LA RECHERCHE : la meme matiere que le menu des filtres. Pour les moteurs, le meme gabarit aussi : du
+   texte sans fond, le survol de la couleur du menu, le logo sans pastille et la coche pour dire lequel est choisi. */
+body.verre-scene.relief.final :is(#moteurs,#propositions):not(#_){background:var(--dalle);background-color:rgb(13 15 20/.34);backdrop-filter:blur(20px) saturate(1.4) brightness(1.06);-webkit-backdrop-filter:blur(20px) saturate(1.4) brightness(1.06);border-radius:16px;box-shadow:inset 0 -16px 22px -18px rgb(0 0 0/.32),0 1px 2px rgb(0 0 0/.34),0 16px 34px -14px rgb(0 0 0/.62)}
+body.verre-scene.relief.final #moteurs:not(#_){padding:5px}
+body.verre-scene.relief.final #moteurs .titre:not(#_){display:none}
+body.verre-scene.relief.final #moteurs li[role="option"]:not(#_){background:none;box-shadow:none;border-radius:11px;padding:8.92px 10px 10.92px;font-size:.72rem;font-weight:550;color:#b8c2d2;gap:10px;transition:background .16s ease,color .16s ease}
+body.verre-scene.relief.final #moteurs li[role="option"][aria-selected="true"]:not(#_){color:var(--ink)}
+body.verre-scene.relief.final #moteurs li[role="option"]:not(#_):is(:hover,.actif){background:rgb(13 15 20/.34);box-shadow:none;color:var(--ink)}
+body.verre-scene.relief.final #moteurs .pastille:not(#_){background:none;box-shadow:none;width:20px;height:20px}
+body.verre-scene.relief.final #propositions:not(#_) li:not(.sep):is([aria-selected="true"],:hover){background:rgb(13 15 20/.34);box-shadow:none}
+
+/* DANS LES MENUS, les choix ne se touchent plus : quand le survol passe de l un a l autre, on voit deux blocs
+   separes et non une seule bande.
+   ⚠️ `:not([hidden])` : un display pose sans condition passe devant l attribut hidden, et le menu ne se ferme plus. */
+body.verre-scene.relief.final #moteurs:not([hidden]):not(#_),body.verre-scene.relief.final #propositions:not([hidden]):not(#_){display:flex;flex-direction:column;gap:4px}
+@media(max-width:980px){
+  body.verre-scene.relief.final #filters .panneau:not(#_){display:flex;flex-direction:column;gap:4px}
+  body.verre-scene.relief.final #filters .panneau button:not(#menu):not(#compact):not(#_){margin:0}
+}
+
+/* LES BARRES : leur ombre reste, mais elle s arrete avant la legende. Le ruban a son propre filtre, a l ombre plus
+   courte (index.html), et la legende s ecarte un peu. */
+body.verre-scene.relief.final svg.batt:not(#_){filter:url(#biseau-barre)}
+svg.batt+.ech:not(#_){margin-top:6px}
+svg.batt+.ech span::before{top:-5px;height:4px}
+.jours:not(#_){gap:10px}
+
+/* LES COURBES : la legende se colle au graphe. Le dessin s arrete a sa ligne de base (app.js). */
+.gr{overflow:visible}
+.gech .ech:not(#_){margin-top:5px}
+.gech .ech span::before{top:-5px;height:4px}
+/* LES REPERES NE SE CHEVAUCHENT PLUS AU TELEPHONE. Cale par son cote, le repere du bord s etale vers son voisin :
+   sous 340 px de large il touche forcement le suivant. On le recentre sur son trait : il ne deborde que dans le
+   vide sous l axe ou dans la marge de la carte. Plus etroit encore, un repere sur deux suffit. */
+.ech{container-type:inline-size}
+@container (max-width:340px){
+  .ech span.deb,.ech span.bout{transform:translateX(-50%)}
+  .ech span.deb::before,.ech span.bout::before{left:50%;right:auto}
+}
+@container (max-width:235px){
+  .ech span.imp:not(#_){font-size:0!important}
+}
+
+/* UN ZERO NE DIT PAS TOUT : une coupure en rouge, un trou dans les releves en gris, et un message quand il ne s est
+   rien passe sur toute la periode (`bandesGraphe`, app.js). */
+.gr .coupe{fill:rgb(255 69 58/.42)}
+.gr .trou{fill:rgb(200 209 223/.22)}
+.gr .coupe,.gr .trou{transition:fill .12s}
+.gr .coupe.vise{fill:rgb(255 69 58/.78)}
+.gr .trou.vise{fill:rgb(200 209 223/.5)}
+.grb{position:relative}
+/* LE TRACE COMMENCE EN HAUT DU GRAPHE : la marge etait proportionnelle (15 % de la hauteur, 30 px sur une grande
+   carte) et ne servait a rien. L espace au-dessus est maintenant fixe, et la barre du survol y monte de 8 px. */
+.grb:not(#_){margin-top:13px}
+.gr-calme{position:absolute;inset:0 0 0 var(--gax,34px);display:grid;place-items:center;font-size:.75rem;color:var(--mut);pointer-events:none}
+
+/* LA FENETRE D UN GRAPHE TIENT DANS L ECRAN. Seul le trace cede de la hauteur, jusqu a 120 px ; le defilement
+   n arrive qu en dernier recours, et il ne prend que la zone sous le titre. Les marges negatives laissent aux
+   reperes du bord la place de deborder sans etre coupes. */
+.dlg .courbe{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden auto;margin-inline:-14px;padding-inline:14px}
+.dlg .courbe>*{flex:none}
+.dlg .courbe>.grb{flex:0 1 auto;min-height:120px}
+/* TELEPHONE EN PAYSAGE : la fenetre s etire sur toute la zone de la page, hors encoche. Le titre, le texte et la
+   periode tiennent sur une ligne, et le trace prend tout le reste. Le ruban (VPN, Kuma) garde sa petite fenetre.
+   ⚠️ `inset-block` et des pourcentages, jamais `dvh` ni `svh` : sur Brave pour iPhone, seule la zone de la page suit
+   les barres du navigateur quand elles se replient. Valide sur son iPhone le 03/11/2026. */
+@media (orientation:landscape) and (max-height:520px){
+  dialog.dlg:has(.courbe .grb)[open]{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);column-gap:10px;
+    width:min(1100px,calc(100% - 2*max(8px,env(safe-area-inset-left),env(safe-area-inset-right))));max-width:none;
+    height:auto;max-height:none;
+    inset-block:0;margin-block:6px;padding:10px 16px max(8px,calc(env(safe-area-inset-bottom) - 6px))}
+  dialog.dlg:has(.courbe .grb)>h3{grid-column:1;grid-row:1;align-self:center;margin:0;padding-right:0}
+  dialog.dlg:has(.courbe .grb)>.sub{grid-column:2;grid-row:1;align-self:center;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  dialog.dlg:has(.courbe .grb)>.periode{grid-column:3;grid-row:1;align-self:center;margin:0 38px 0 0}
+  dialog.dlg:has(.courbe .grb)>.courbe{grid-column:1/-1;grid-row:2}
+  .dlg .courbe>.grb{flex:1 1 0;height:auto;min-height:110px}
+  .dlg-x:not(#_){top:9px;right:9px}
+}
+
+/* LE SURVOL DES GRAPHES, comme les disques de la carte Stockage (app.js) */
+#survol-graphe{position:fixed;z-index:3;pointer-events:none;border-radius:7px;background:rgb(255 255 255/.05);opacity:0;transition:opacity .2s}
+#survol-graphe.vu{opacity:1}
+
+/* L ETAT : des points nets. */
+.dot,.dot.warn,.dot.crit,.dot.tache{box-shadow:none}
+
+/* LA RECHERCHE : un peu plus haute, et sans contour quand on ecrit dedans. */
+body.verre-scene.relief.final .search{padding-block:11.5px}
+.search input:focus,.search input:focus-visible{outline:none}
+
+/* LES FENETRES : sans liseré blanc, et elles arrivent d ou l on regarde. Le flou reste porte par le voile (fond.css) :
+   le mettre aussi sur la fenetre donne des rectangles noirs. */
+dialog.dlg::after{content:none}
+body.verre-scene.relief.final dialog.dlg{border-radius:20px;box-shadow:0 40px 90px -24px #000}
+dialog.dlg[open]{animation:feuille .42s var(--ressort)}
+@keyframes feuille{from{opacity:0;transform:translateY(22px) scale(.97)}}
+
+/* LA REPONSE COMMENCE A L APPUI ; et au doigt, une carte ne reste pas soulevee apres le toucher. */
+a.card:active,.card.clic:active,.t:active .i,.dlg button:active:not(:disabled),.fl:active,.pcb button:active:not(:disabled){transform:scale(.97);transition:transform .1s ease-out}
+body.verre-scene .t .i{transition:transform .32s var(--ressort)}
+@media(hover:none){a.card:hover,.card.clic:hover{transform:none}}
+
+/* LES ZONES DE TOUCHER encore sous 44 px : le dessin ne change pas (meme methode que fond.css). */
+@media(pointer:coarse){
+  .periode [data-per],.search .moteur{position:relative}
+  .periode [data-per]::before,.search .moteur::before{content:"";position:absolute;inset:-11px -3px}
+  .search input{padding-block:11px;margin-block:-11px}
+  .pcb button{min-height:44px}
+}
+
+/* LES REGLAGES DU SYSTEME : moins de transparence, plus de contraste, moins de mouvement. */
+@media(prefers-reduced-transparency:reduce){
+  #iso{display:none}
+  body.verre-scene.relief.final :is(.card,.bar,.search,.t .i),
+  body.verre-scene.relief.final a.card:hover,body.verre-scene.relief.final .card.clic:hover{background:#171b2c;backdrop-filter:none;-webkit-backdrop-filter:none}
+  body.verre-scene.relief.final dialog.dlg{background:#171b2c}
+}
+@media(prefers-contrast:more){
+  body.verre-scene.relief.final{--mut:#f5f5f7}
+  body.verre-scene.relief.final :is(.card,.bar,.search),
+  body.verre-scene.relief.final a.card:hover,body.verre-scene.relief.final .card.clic:hover{background:#05060c;backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid #fff}
+}
+@media(prefers-reduced-motion:reduce){
+  dialog.dlg[open]{animation:none}
+  a.card:active,.card.clic:active,.t:active .i,.fl:active{transform:none}
+}

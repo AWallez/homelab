@@ -6,14 +6,6 @@
    ⚠️ Dans le head, en dernier des feuilles : ses regles passent apres fond.css et
    style.css, et s appliquent des le premier affichage. */
 
-/* LE HAUT DU FOND SUR ECRAN TACTILE (02/11/2026). Autour de la Dynamic Island, iOS peint
-   une couleur unie reprise de la page (--fond) : ni la page ni un element fixe n y
-   entrent, en Safari comme en Brave. Le fond se coupait net contre elle, d ou une barre.
-   Il s y fond ici, avec le voile des bords de fond.css, repris tel quel. */
-@media(pointer:coarse){.aurora::after{background-image:
-  linear-gradient(180deg,#07080c 0,rgba(7,8,12,.82) 24px,rgba(7,8,12,.5) 52px,rgba(7,8,12,.18) 84px,rgba(7,8,12,0) 110px),
-  radial-gradient(118% 118% at 50% 50% in oklab,rgba(2,4,9,0) 42%,rgba(2,4,9,.08) 58%,rgba(2,4,9,.24) 72%,rgba(2,4,9,.44) 86%,rgba(2,4,9,.60) 100%)}}
-
 /* LE VERRE ADAPTE, retenu avec le relief : le flou double par rapport a fond.css, la
    couleur passe toujours, a peine d ombre dessous. (Ses aretes brillantes sont
    retirees, point 6.)

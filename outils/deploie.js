@@ -35,9 +35,11 @@ const ENVOIE = process.argv.includes("--envoie");
 /* 17/10/2026 : le rangement en bento (`rangement.js`, aussi charge en
    travailleur), ses feuilles par groupe (`bento/`) et l atelier des cartes
    (`atelier.js`, que la page charge toujours, et `atelier.css`).
-   01/11/2026 : l habillage du contenu (`relief.css`). */
-const FRONT = ["index.html", "cartes.js", "app.js", "rangement.js", "style.css", "fond.css", "relief.css", "atelier.js", "atelier.css", "manifest.json"];
-const DOSSIERS = ["icons", "bento"];
+   01/11/2026 : l habillage du contenu (`relief.css`).
+   03/11/2026 : l habillage du portail (`theme.css`), les courbes du fond (`iso.js`)
+   et sa police (`polices/`). */
+const FRONT = ["index.html", "cartes.js", "app.js", "rangement.js", "style.css", "fond.css", "relief.css", "theme.css", "iso.js", "atelier.js", "atelier.css", "manifest.json"];
+const DOSSIERS = ["icons", "bento", "polices"];
 
 /* Noms interdits, verifies malgre la liste blanche : deux garde-fous valent
    mieux qu un quand l erreur consiste a ecraser des mesures irremplacables. */

@@ -30,23 +30,37 @@
 <!-- L habillage du contenu, en dernier : ses regles passent apres les autres, et
      leurs classes (`verre-scene relief final`) sont sur le body. -->
 <link rel="stylesheet" href="relief.css">
+<!-- L habillage du portail : le fond, le verre, les creux, les graphes. -->
+<link rel="stylesheet" href="theme.css">
   <meta name="referrer" content="no-referrer">
 </head>
 <body class="verre-scene relief final">
-<div class="aurora"></div>
+<div class="aurora"><i class="masse m1"></i><i class="masse m2"></i><i class="masse m3"></i><canvas id="iso"></canvas></div>
 <!-- Le biseau des graphiques (relief.css, point 5), en ombres seules : le bas de chaque
      forme s assombrit dedans, et un liseré d ombre ne depasse QUE dessous. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
 <filter id="biseau" x="-2%" y="-10%" width="104%" height="125%" color-interpolation-filters="sRGB">
   <feOffset in="SourceAlpha" dy="-1" result="remonte"/>
   <feComposite in="SourceAlpha" in2="remonte" operator="out" result="basDedans"/>
-  <feFlood flood-color="#000" flood-opacity=".3"/>
+  <feFlood flood-color="#000" flood-opacity=".46"/>
   <feComposite in2="basDedans" operator="in" result="ombreDedans"/>
   <feOffset in="SourceAlpha" dy="1" result="decale"/>
   <feComposite in="decale" in2="SourceAlpha" operator="out" result="bord"/>
-  <feFlood flood-color="#000" flood-opacity=".38"/>
+  <feFlood flood-color="#000" flood-opacity=".58"/>
   <feComposite in2="bord" operator="in" result="ombre"/>
-  <feMerge><feMergeNode in="ombre"/><feMergeNode in="SourceGraphic"/><feMergeNode in="ombreDedans"/></feMerge>
+  <feOffset in="SourceAlpha" dy="3" result="loin"/><feGaussianBlur in="loin" stdDeviation="1.6" result="flou"/><feComposite in="flou" in2="SourceAlpha" operator="out" result="portee"/><feFlood flood-color="#000" flood-opacity="0.5"/><feComposite in2="portee" operator="in" result="ombreLoin"/><feMerge><feMergeNode in="ombreLoin"/><feMergeNode in="ombre"/><feMergeNode in="SourceGraphic"/><feMergeNode in="ombreDedans"/></feMerge>
+</filter>
+<!-- Le ruban des barres : la meme recette, a l ombre courte, qui ne descend pas sur sa legende. -->
+<filter id="biseau-barre" x="-2%" y="-10%" width="104%" height="125%" color-interpolation-filters="sRGB">
+  <feOffset in="SourceAlpha" dy="-1" result="remonte"/>
+  <feComposite in="SourceAlpha" in2="remonte" operator="out" result="basDedans"/>
+  <feFlood flood-color="#000" flood-opacity=".46"/>
+  <feComposite in2="basDedans" operator="in" result="ombreDedans"/>
+  <feOffset in="SourceAlpha" dy="1" result="decale"/>
+  <feComposite in="decale" in2="SourceAlpha" operator="out" result="bord"/>
+  <feFlood flood-color="#000" flood-opacity=".58"/>
+  <feComposite in2="bord" operator="in" result="ombre"/>
+  <feOffset in="SourceAlpha" dy="1.5" result="loin"/><feGaussianBlur in="loin" stdDeviation="0.7" result="flou"/><feComposite in="flou" in2="SourceAlpha" operator="out" result="portee"/><feFlood flood-color="#000" flood-opacity="0.42"/><feComposite in2="portee" operator="in" result="ombreLoin"/><feMerge><feMergeNode in="ombreLoin"/><feMergeNode in="ombre"/><feMergeNode in="SourceGraphic"/><feMergeNode in="ombreDedans"/></feMerge>
 </filter></svg>
 <main class="attente">
   <div id="bar" class="bar"></div>
@@ -89,5 +103,7 @@
 <script defer src="app.js"></script>
 <!-- L atelier des cartes : inactif sauf avec `?atelier` dans l adresse. -->
 <script defer src="atelier.js"></script>
+<!-- Les courbes de niveau du fond. -->
+<script defer src="iso.js"></script>
 </body>
 </html>

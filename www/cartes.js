@@ -1340,7 +1340,7 @@ GROUPS.push(
           + (v.length > 1
              ? leg([["reçu et envoyé", "#4d97ee", Mo(v[v.length - 1])]])
                + graphe([{ v: Hp(d, "Réseau local", "reseau"), c: "#4d97ee", n: "trafic" }],
-                        { f: MoAxe, u: "dbt", ts: Hp(d, "Réseau local", "t"),
+                        { f: MoAxe, u: "dbt", ts: Hp(d, "Réseau local", "t"), coupures: coupuresDe(d, "reseau", { instant: /lien réseau est tombé/ }),
                           alt: "Trafic du lien " + surP("Réseau local") })
              : `<div class="note">Trafic en cours d'enregistrement</div>`)
           + past([v.length ? ["moyenne " + Mo(red)] : null,
@@ -1404,7 +1404,7 @@ GROUPS.push(
              ? leg([["reçu", "#4d97ee", Mo(+der[1] || 0)], ["envoyé", "#34c759", Mo(+der[2] || 0)]])
                + graphe([{ v: g.map(x => +x[1] || 0), c: "#4d97ee", n: "reçu" },
                          { v: g.map(x => +x[2] || 0), c: "#34c759", n: "envoyé" }],
-                        { f: MoAxe, u: "dbt", ts: g.map(x => x[0]), alt: "Débit de la box " + surP("Internet") })
+                        { f: MoAxe, u: "dbt", ts: g.map(x => x[0]), coupures: coupuresDe(d, "reseau", { debut: /^Connexion Internet coupée$/, fin: /^Connexion Internet rétablie$/ }), alt: "Débit de la box " + surP("Internet") })
              : `<div class="note">Débit en cours d'enregistrement</div>`)
           + past([w.lat > 0 ? ["latence " + w.lat + " ms", w.lat > 40 ? "wn" : ""] : ["latence : sans réponse", "wn"],
                   /* -1 ou absent : la box n a pas donne son anciennete. */

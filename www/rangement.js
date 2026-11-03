@@ -33,7 +33,7 @@ const RANGEMENT = (() => {
      resultats. Elle entre dans les cles des rangements gardes (navigateur,
      `homelab.bento`) et prepares : sans elle, un rangement calcule par l ancien
      code revenait tel quel (17/10/2026 : des coins absents, gardes d avant). */
-  const VERSION = "2026-10-18b";
+  const VERSION = "2026-11-03";
   /* L ECART ENTRE DEUX GROUPES (17/10/2026, demande) : le MEME dans
      les deux sens, pour distinguer les groupes d un coup d oeil (12 px, celui
      des cartes, les fondait l un dans l autre). Entre deux rangees, le titre du

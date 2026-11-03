@@ -191,7 +191,7 @@ const echelle = (ts, pas, n) => {
     // TRAIT reste a sa position exacte — c est lui qui porte la mesure.
     if (x < 0.2 || x > 99.8) continue;
     const cl = x < 4 ? "rep deb" : x > 94 ? "rep bout" : "rep";
-    m.push(`<span class="${cl}" style="left:${x.toFixed(1)}%">${String(h).padStart(2, "0")} h</span>`);
+    m.push(`<span class="${cl}${h % 6 ? " imp" : ""}" style="left:${x.toFixed(1)}%">${String(h).padStart(2, "0")} h</span>`);
   }
   return `<div class="ech">${m.join("")}</div>`;
 };
@@ -488,6 +488,64 @@ const Hf = (d, n) => { const i = colf(d, n);
 
    ⚠️ Sans la serie fine, `p` vaut 1 et la fonction rend le tableau intact : les
    145 points de la serie a 10 min ne sont jamais degrades. */
+/* UN ZERO NE DIT PAS TOUT (03/11/2026, demande). Sur un graphe, trois choses se ressemblaient :
+   - un VRAI ZERO (rien a telecharger) : la courbe reste a zero, c est une information ;
+   - une COUPURE connue du journal : une bande rouge a son heure ;
+   - un TROU dans les releves (le NAS ne mesurait plus) : une bande grise.
+   Les bandes s appuient sur les points de la courbe et non sur l heure seule : l axe range les
+   points a intervalles reguliers. ⚠️ Rien n est retire du trace : retirer la partie a zero aurait
+   vide les graphes de debit au moindre calme. */
+const heureCourte = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+/* Les coupures d une categorie du journal (du plus recent au plus ancien) : `debut` et `fin` pour un
+   evenement qui a une duree, `instant` pour celui qui n a qu une heure. */
+const coupuresDe = (d, cat, { debut, fin, instant }) => {
+  const l = (d.journal || []).filter((x) => Array.isArray(x) && x[1] === cat).slice().reverse(), r = [];
+  let ouvert = null;
+  for (const e of l) {
+    if (debut && debut.test(e[2])) ouvert = e[0];
+    else if (fin && fin.test(e[2])) { r.push({ a: ouvert == null ? e[0] : ouvert, b: e[0] }); ouvert = null; }
+    else if (instant && instant.test(e[2])) r.push({ a: e[0], b: e[0] });
+  }
+  if (ouvert != null) r.push({ a: ouvert, b: Date.now() / 1000 });
+  return r;
+};
+const bandesGraphe = (ts, coupures) => {
+  if (ts.length < 3) return "";
+  const n = ts.length - 1, X = (i) => i / n * 268;
+  const ec = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b), pas = ec[ec.length >> 1];
+  const indice = (t) => { const i = ts.findIndex((x) => x >= t); return i < 0 ? n : i; };
+  const bande = (x1, x2, cl, titre) => {
+    const l = Math.max(2.5, x2 - x1), x = Math.max(0, Math.min(268 - l, (x1 + x2 - l) / 2));
+    return `<rect class="${cl}" x="${x.toFixed(1)}" y="1" width="${l.toFixed(1)}" height="77" data-l="${esc(titre)}"/>`;
+  };
+  let h = "";
+  for (let i = 1; i <= n; i++) if (ts[i] - ts[i - 1] > 3 * pas)
+    h += bande(X(i - 1), X(i), "trou", "Aucun relevé de " + heureCourte(ts[i - 1]) + " à " + heureCourte(ts[i]));
+  for (const c of coupures || []) {
+    if (c.b < ts[0] || c.a > ts[n]) continue;
+    h += bande(X(indice(c.a)), X(indice(c.b)), "coupe", c.a === c.b ? "Coupure vers " + heureCourte(c.a)
+      : "Coupure de " + heureCourte(c.a) + " à " + heureCourte(c.b));
+  }
+  return h;
+};
+/* LE SURVOL (03/11/2026, demande) : la bande visee s eclaire et l infobulle du graphe dit ce qu elle
+   signifie, a la souris comme au doigt. Une bande peut ne faire que quelques pixels : 3 unites de
+   tolerance de chaque cote si le pointeur n est sur aucune, et l eclairage suit la meme regle que le texte (d ou la classe, pas :hover).
+   `zero` : tout est a zero a cet instant sur un graphe de debit, ce qui n est ni une coupure ni un trou. */
+let bandesVisees = [];
+const relacheBandes = () => { bandesVisees.forEach((r) => r.classList.remove("vise")); bandesVisees = []; };
+const lignesBandes = (svg, x, zero) => {
+  relacheBandes();
+  const toutes = [...svg.querySelectorAll("rect.coupe, rect.trou")];
+  const a_moins_de = (r, m) => x >= +r.getAttribute("x") - m && x <= +r.getAttribute("x") + +r.getAttribute("width") + m;
+  const dedans = toutes.filter((r) => a_moins_de(r, 0));
+  bandesVisees = dedans.length ? dedans : toutes.filter((r) => a_moins_de(r, 3));
+  bandesVisees.forEach((r) => r.classList.add("vise"));
+  const l = bandesVisees.map((r) => ({ n: r.dataset.l, c: r.classList.contains("coupe") ? "#ff453a" : "#8a94a6", v: "" }));
+  if (!l.length && zero) l.push({ n: svg.parentElement.querySelector(".gr-calme") ? "Aucune activité sur cette période" : "Aucune activité à cet instant", c: "#8a94a6", v: "" });
+  return l;
+};
+
 const reduis = (v, cible) => {
   const p = Math.max(1, Math.ceil(v.length / cible));
   if (p === 1) return v;
@@ -548,10 +606,12 @@ const graphe = (series, o) => {
      gardent leur epaisseur (`vector-effect`, voir style.css) ; le point terminal
      est un trait de longueur nulle a bouts ronds : un cercle deviendrait une
      ellipse. Coordonnees du dessin : trace de 0 a 268 sur 272 (4 de marge pour
-     le point), de 12 a 78 sur 84. */
-  const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 66).toFixed(1);
+     le point), de 1 a 78 sur 79. Le trace commence en haut du dessin depuis le
+     03/11/2026 : l espace au-dessus est une marge fixe (`.grb`, theme.css), et non
+     15 % de la hauteur, soit 30 px vides sur une grande carte. */
+  const Y = y => (78 - Math.min(Math.max(y - m, 0) / (M - m), 1) * 77).toFixed(1);
   const X = (i, n) => (i / (n - 1) * 268).toFixed(1);
-  const haut = (y) => (y / 84 * 100).toFixed(2) + "%";
+  const haut = (y) => (y / 79 * 100).toFixed(2) + "%";
   /* ⚠️ LE MOT « SEUIL » A ETE RETIRE, ce n est pas un oubli. Ecrit en entier,
      l etiquette faisait 36,5 unites pour une gouttiere de 26 : elle debordait
      dans l aire de trace, ou elle traversait la courbe memoire. Reduite au seul
@@ -566,7 +626,7 @@ const graphe = (series, o) => {
   const sl = o.seuil == null || o.seuil > M || o.seuil < m ? "" :
     `<line x1="0" y1="${Y(o.seuil)}" x2="268" y2="${Y(o.seuil)}" stroke="${o.seuilC || "#ff453a"}"
        stroke-width="1.4" stroke-dasharray="4 4" opacity=".75"/>`;
-  const slt = sl && [12, 45, 78].every(y => Math.abs(y - ys) > 7)
+  const slt = sl && [1, 39.5, 78].every(y => Math.abs(y - ys) > 7)
     ? `<span class="sl" style="top:${haut(Math.min(ys, 76))};color:${o.seuilC || "#ff8f88"}">${esc(f(o.seuil))}</span>` : "";
   /* Trois series se superposent depuis la fusion Systeme + swap : on allege
      le remplissage, sinon les aires s additionnent en une soupe. */
@@ -582,17 +642,20 @@ const graphe = (series, o) => {
   const agite = (pts) => {
     let t = 0;
     for (let i = 1; i < pts.length; i++) t += Math.abs(pts[i] - pts[i - 1]);
-    const a = t / 268;
+    const a = t / 268 * 66 / 77;
     return a >= 4 ? " tres-agitee" : a >= 1.5 ? " agitee" : "";
   };
   const ts = o.ts || [];
-  return `<div class="grb"><div class="gax" aria-hidden="true"><span style="top:${haut(12)}">${esc(f(M))}</span>`
-    + `<span style="top:${haut(45)}">${esc(f((M + m) / 2))}</span><span style="top:${haut(78)}">${esc(f(m))}</span>${slt}</div>`
-    + `<svg class="gr" viewBox="0 0 272 84" preserveAspectRatio="none" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="0" data-x1="268" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : ""}>
-    <rect class="capt" x="0" y="6" width="268" height="78"/>
+  /* SANS AUCUNE ACTIVITE (03/11/2026, demande) : un graphe de debit tout a zero le dit, et ne garde que le
+     repere 0. Il garde sa taille : le rangement ne doit pas bouger a chaque periode calme. */
+  const calme = o.u === "dbt" && !ok.some((x) => x.v.some((n) => n > 0));
+  return `<div class="grb">${calme ? `<div class="gr-calme">Aucune activité sur cette période</div>` : ""}<div class="gax" aria-hidden="true">${calme ? "" : `<span style="top:${haut(1)}">${esc(f(M))}</span>`}`
+    + `${calme ? "" : `<span style="top:${haut(39.5)}">${esc(f((M + m) / 2))}</span>`}<span style="top:${haut(78)}">${esc(f(m))}</span>${slt}</div>`
+    + `<svg class="gr" viewBox="0 0 272 79" preserveAspectRatio="none" role="img" aria-label="${esc(o.alt || "historique")}" data-lec="gr" data-x0="0" data-x1="268" data-u="${esc(o.u || "%")}"${ts.length > 1 ? ` data-t0="${ts[0]}" data-t1="${ts[ts.length - 1]}"` : ""}>
+    <rect class="capt" x="0" y="0" width="268" height="79"/>
         <g stroke="rgba(255,255,255,.10)" stroke-width="1">
-      <line x1="0" y1="12" x2="268" y2="12"/><line x1="0" y1="45" x2="268" y2="45"/><line x1="0" y1="78" x2="268" y2="78"/>
-    </g>${sl}
+      <line x1="0" y1="1" x2="268" y2="1"/><line x1="0" y1="39.5" x2="268" y2="39.5"/><line x1="0" y1="78" x2="268" y2="78"/>
+    </g>${sl}${bandesGraphe(ts, o.coupures)}
     ${ok.map(x => { const vd = reduis(x.v, 480), n = vd.length;
       const k = x.d0 ? Math.max(0, vd.findIndex(z => z > 0)) : 0;
       const kf = x.d0 ? Math.max(0, x.v.findIndex(z => z > 0)) : 0;
@@ -2681,18 +2744,22 @@ function popGraphe(carte) {
    TRACE garde ses deux temps (sa valeur, puis la fenetre) ; la legende ou
    l axe ouvrent directement. */
 const ZONE_GRAPHE = ".leg, .grb, .gech, .rleg, svg.batt.fin, .ech";
-function dansGraphe(carte, x, y) {
+const HORS_GRAPHE = ".periode, button, [data-lien], [data-pc], [data-disque], [data-espace]";
+function boiteGraphe(carte) {
   const g = carte.querySelector(GRAPHE);
-  if (!g) return false;
+  if (!g) return null;
   const rs = [...g.parentElement.children].filter((e) => e.matches(ZONE_GRAPHE)).map((e) => e.getBoundingClientRect());
-  const M = 10;
-  return x >= Math.min(...rs.map((r) => r.left)) - M && x <= Math.max(...rs.map((r) => r.right)) + M
-    && y >= Math.min(...rs.map((r) => r.top)) - M && y <= Math.max(...rs.map((r) => r.bottom)) + M;
+  return { l: Math.min(...rs.map((r) => r.left)), d: Math.max(...rs.map((r) => r.right)),
+           h: Math.min(...rs.map((r) => r.top)), b: Math.max(...rs.map((r) => r.bottom)) };
+}
+function dansGraphe(carte, x, y) {
+  const z = boiteGraphe(carte), M = 10;
+  return !!z && x >= z.l - M && x <= z.d + M && y >= z.h - M && y <= z.b + M;
 }
 addEventListener("click", (e) => {
   if (e.defaultPrevented || !e.target.closest) return;
   const carte = e.target.closest("#groups .card");
-  if (!carte || e.target.closest(".periode, button, [data-lien], [data-pc], [data-disque], [data-espace]")) return;
+  if (!carte || e.target.closest(HORS_GRAPHE)) return;
   if (!dansGraphe(carte, e.clientX, e.clientY)) return;
   e.preventDefault(); e.stopPropagation();
   const trace = e.target.closest("svg[data-lec]");
@@ -2700,6 +2767,37 @@ addEventListener("click", (e) => {
   cacheTip();
   popGraphe(carte);
 }, true);
+/* LE SURVOL DES GRAPHES (03/11/2026, demande), comme les disques de la carte Stockage : une zone s eclaire pour
+   dire qu un clic ouvre le graphe en grand. Meme zone que le clic, memes exceptions.
+   ⚠️ UN VOILE POSE PAR-DESSUS, PAS UN CONTENEUR : la legende, le trace et l axe sont freres, et le trace s etire
+   dans la carte (`.card[data-h] .grb`). Les envelopper casserait cet etirement. */
+if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  const voile = document.createElement("i"), BORD = 6;
+  voile.id = "survol-graphe";
+  voile.setAttribute("aria-hidden", "true");
+  document.body.append(voile);
+  let prevu = 0, x = 0, y = 0, cible = null, carte = null;
+  const cache = () => {
+    voile.classList.remove("vu");
+    if (carte) carte.style.removeProperty("cursor");
+    carte = null;
+  };
+  const maj = () => {
+    prevu = 0;
+    const c = cible && cible.closest && cible.closest("#groups .card");
+    if (!c || document.querySelector("dialog[open]") || cible.closest(HORS_GRAPHE) || !dansGraphe(c, x, y)) return cache();
+    const z = boiteGraphe(c);
+    voile.style.cssText = `left:${z.l - BORD}px;top:${z.h - BORD}px;width:${z.d - z.l + 2 * BORD}px;height:${z.b - z.h + 2 * BORD}px`;
+    voile.classList.add("vu");
+    if (carte && carte !== c) carte.style.removeProperty("cursor");
+    carte = c;
+    c.style.cursor = "pointer";
+  };
+  const demande = () => { if (!prevu) prevu = setTimeout(maj, 30); };
+  addEventListener("mousemove", (e) => { x = e.clientX; y = e.clientY; cible = e.target; demande(); }, { passive: true });
+  addEventListener("scroll", demande, { passive: true });
+  document.addEventListener("mouseleave", cache);
+}
 
 /* ---- Fenetre d un disque (05/10/2026) ----
    Pourquoi : la ligne d un disque dans la carte Stockage
@@ -3258,7 +3356,7 @@ try {
    au-dessus, et la rangee des coins doit couvrir titre + en-tete. Une section
    de H demi-rangees fait `56 H + 20` px, titre compris. */
 // `px` : la place minimale de l en-tete, ou la barre tient sur une ligne
-const COINS = { min: 2100, px: 1100 }, TITRE = 32;
+const COINS = { min: 2100, px: 1100 }, TITRE = 36;
 let TETE_H = 425;
 /* `Hplancher` : la hauteur de l en-tete aux ecarts resserres au minimum
    (`ECARTS_MIN`), si les coins ne peuvent pas atteindre `Hmin`. */
@@ -4288,7 +4386,7 @@ function litGraphe(svg, e) {
       /* Une série qui démarre en cours de route n'a pas de passé : « — » et
          non « 0 °C », qui se lirait comme un capteur tombé à zéro. */
       v: i < +s.dataset.k ? "—" : fmtv(vs[k][i] || 0, u)
-    })).filter(r => r.n)
+    })).filter(r => r.n).concat(lignesBandes(svg, x, u === "dbt" && vs.every((v, k) => i >= +ss[k].dataset.k && !(v[i] > 0))))
   };
 }
 
@@ -4395,7 +4493,7 @@ function litJour(el) {
   };
 }
 
-const cacheTip = () => { TIPP.classList.remove("on"); TIPV.classList.remove("on"); };
+const cacheTip = () => { relacheBandes(); TIPP.classList.remove("on"); TIPV.classList.remove("on"); };
 
 function montreTip(e) {
   const el = e.target && e.target.closest && e.target.closest("[data-lec]");
@@ -4426,6 +4524,8 @@ function montreTip(e) {
   if (gx + TIPP.offsetWidth > innerWidth - 8) gx = e.clientX - 14 - TIPP.offsetWidth;
   let gy = b.top - TIPP.offsetHeight - 10;
   if (gy < 8) gy = b.bottom + 10;
+  /* Quand le graphe occupe toute la hauteur (telephone en paysage), l infobulle reste dans l ecran. */
+  if (gy + TIPP.offsetHeight > innerHeight - 8) gy = Math.max(8, innerHeight - TIPP.offsetHeight - 8);
   TIPP.style.transform = `translate(${Math.round(Math.max(8, gx))}px, ${Math.round(gy)}px)`;
 
   /* Deux repères pour deux natures de graphe : un TRAIT sur une courbe, qui
@@ -4445,8 +4545,14 @@ function montreTip(e) {
     TIPV.style.background = "";
     TIPV.classList.remove("bloc");
   }
-  TIPV.style.transform = `translate(${Math.round(cx)}px, ${Math.round(b.top)}px)`;
-  TIPV.style.height = Math.round(b.height) + "px";
+  /* LA BARRE D UNE COURBE (03/11/2026, demande) : 8 px au-dessus de sa plus haute graduation, et jusqu au bout
+     des traits de l axe du temps, sans toucher les heures. On voit ainsi ou l on est sur l axe. */
+  const mt = t === "gr" && el.getScreenCTM();
+  const sg = mt && el.closest(".grb").nextElementSibling, eb = sg && sg.matches(".gech") && sg.querySelector(".ech");
+  const th = mt ? mt.d + mt.f - 8 : b.top;
+  const tb = eb ? eb.getBoundingClientRect().top - 1 : mt ? mt.d * 78 + mt.f + 5 : b.bottom;
+  TIPV.style.transform = `translate(${Math.round(cx)}px, ${Math.round(th)}px)`;
+  TIPV.style.height = Math.round(tb - th) + "px";
   TIPV.classList.add("on");
 }
 addEventListener("pointermove", montreTip);

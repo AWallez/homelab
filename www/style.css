@@ -285,7 +285,7 @@ dialog.dlg{border-radius:var(--r);padding:20px;
 /* Ligne d erreur des fenetres d action (mot de passe, refus), et petite
    fenetre du mot de passe seul, au-dessus de celle qui l a appelee. */
 .dlg .err{min-height:1.1em;margin:-6px 0 8px;font-size:.72rem;color:#ffd08a}
-.dlg.mdp{width:min(360px,calc(100vw - 32px))}
+.dlg.mdp{width:min(360px,calc(100% - 32px))}
 /* Icone d un raccourci (23/10/2026) : CENTREE (demande), l apercu dans une
    vraie tuile, inerte, sur la MEME LIGNE que les boutons « Importer une
    image » et « Revenir a l icone du site » ; le tout au milieu. Les deux
@@ -355,7 +355,7 @@ a.chip:hover{border-color:rgba(255,255,255,.34)}
 .dlg button.go.ok{border-color:rgba(52,199,89,.55);color:#7ee39a;background:rgba(52,199,89,.14)}
 
 /* ---- Fenêtre des mises à jour : lisible sur petit écran ---- */
-.dlg{width:min(540px,94vw)}
+.dlg{width:min(540px,94%)}
 .sub2{font-size:.66rem;color:rgba(138,148,166,.65);line-height:1.35}
 @media(max-width:560px){
   .rq{display:none}
@@ -651,20 +651,23 @@ h2:has(> svg > .neuf) { animation: apparait-titre .28s ease-out both }
    aucune fenêtre n'avait de bouton de fermeture visible, et la barre de
    défilement de la liste des conteneurs était collée au texte. */
 
-dialog.dlg{width:min(420px,94vw);max-width:94vw;max-height:88vh;max-height:88dvh;
+/* ⚠️ LES FENETRES SE COMPTENT EN POURCENTAGE, PAS EN `vw` NI EN `dvh` (03/11/2026). Sur Brave pour iPhone en
+   paysage, la page s arrete aux bandes noires de l encoche : en `vw`, une fenetre y faisait environ 830 px pour
+   745 visibles, et son cote droit etait coupe. Le pourcentage suit la meme zone que le centrage. */
+dialog.dlg{width:min(420px,94%);max-width:94%;max-height:88%;
   overflow:hidden}
 dialog.dlg[open]{display:flex;flex-direction:column}
 dialog.dlg>form{display:flex;flex-direction:column;min-height:0;flex:1}
 /* La fenêtre des mises à jour se reconnaît à sa liste : pas de classe à poser
    côté JS, donc rien à oublier au prochain appel. */
-dialog.dlg:has(.majl),dialog.dlg:has(.hist){width:min(560px,94vw)}
-.dlg.large{width:min(640px,94vw)}
+dialog.dlg:has(.majl),dialog.dlg:has(.hist){width:min(560px,94%)}
+.dlg.large{width:min(640px,94%)}
 /* La courbe d une carte en grand (18/10/2026, voir `popGraphe`) : la fenetre
    se reconnait a `.courbe`, comme celle des mises a jour a sa liste. Le trace
    prend la hauteur que lui donne la fenetre au lieu des proportions de son
    dessin ; la gouttiere des graduations (34 px) et l axe du temps restent ceux
    de la carte. */
-dialog.dlg:has(.courbe){width:min(1100px,94vw)}
+dialog.dlg:has(.courbe){width:min(1100px,94%)}
 .dlg > .periode{align-self:flex-start;margin:2px 0 4px}
 .dlg .courbe .grb{aspect-ratio:auto;height:min(56vh,460px);margin-top:12px}
 .dlg .courbe .gax{font-size:.74rem}
@@ -727,7 +730,7 @@ dialog.dlg:has(.courbe){width:min(1100px,94vw)}
 
 /* ---- Étroit : on empile plutôt que de rogner ---- */
 @media (max-width:520px){
-  dialog.dlg,dialog.dlg:has(.majl),.dlg.large{width:94vw;padding:16px}
+  dialog.dlg,dialog.dlg:has(.majl),.dlg.large{width:94%;padding:16px}
   .dlg-x{top:9px;right:9px}
   .majl li{grid-template-columns:auto minmax(0,1fr);row-gap:4px}
   .majl .vs{grid-column:2;justify-content:flex-start}
