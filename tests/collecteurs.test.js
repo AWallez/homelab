@@ -19,15 +19,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { banc, demo, genre } = require("./aide/banc.js");
+const path = require("node:path");
+const { banc, demo, genre, RACINE } = require("./aide/banc.js");
 const { fonction } = require("./aide/charge.js");
 
-/* Ce que la PAGE ajoute elle-meme au chargement, depuis `systeme.json`
-   (`fusionSysteme`, www/app.js) : `grappes`, `slots` et le `role` de chaque
-   disque dans smart.json, l `anon` de chaque conteneur dans containers.json.
-   Les collecteurs ne les ecrivent pas ; la demonstration les porte deja dans le
-   fichier, son systeme.json n ayant ni `stock` ni `mem`. On rejoue donc la
-   fusion, avec la fonction de la page, avant de comparer. */
+/* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
+   smart.json les grappes, les emplacements et les roles que systeme.py publie
+   sous `stock`, et sur chaque conteneur l `anon` de `mem`. La demonstration
+   passe par elle depuis le 03/11/2026, comme la production : ses smart.json et
+   containers.json ont donc la forme exacte de ceux des collecteurs. */
 const fusionSysteme = fonction("app.js", "fusionSysteme");
 
 const outilsPresents = ["bash", "jq", "awk", "flock"].every((o) =>
@@ -51,7 +51,7 @@ function avecBanc(t, reseauPermis = []) {
 
 /* ---- smart.sh ------------------------------------------------------------- */
 
-test("smart.sh, fusionne par la page : la forme de www/smart.json, valeurs converties", { skip: SAUF }, (t) => {
+test("smart.sh : la forme exacte de www/smart.json, valeurs converties", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
   const dm = demo("smart.json");
   // un releve smartctl par disque de la demonstration, dans les unites de smartctl
@@ -79,9 +79,6 @@ sed -n "\${n}p" "${b.chemin("releves.json")}"`);
   const r = b.lance("smart.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const smart = b.json("www/smart.json");
-  // ce que systeme.py publie sous `stock`, repris de la demonstration
-  const roles = Object.fromEntries(dm.d.filter((d) => d.role).map((d) => [d.n, d.role]));
-  fusionSysteme({ smart }, { stock: { grappes: dm.grappes, slots: dm.slots, roles } });
   assert.deepEqual(forme(smart), forme(dm));
   assert.equal(smart.d.length, dm.d.length);
   smart.d.forEach((d, i) => {
@@ -93,7 +90,7 @@ sed -n "\${n}p" "${b.chemin("releves.json")}"`);
 
 /* ---- containers.sh -------------------------------------------------------- */
 
-test("containers.sh, fusionne par la page : la forme de www/containers.json", { skip: SAUF }, (t) => {
+test("containers.sh : la forme exacte de www/containers.json", { skip: SAUF }, (t) => {
   const b = avecBanc(t);
   const dm = demo("containers.json");
   const noms = dm.c.slice(0, 3).map((c) => c.n);
@@ -111,8 +108,6 @@ esac`);
   const r = b.lance("containers.sh");
   assert.equal(r.rc, 0, r.erreurs);
   const cont = b.json("www/containers.json");
-  // `mem.anon` de systeme.py : la memoire reelle de chaque conteneur, en Mo
-  fusionSysteme({ cont }, { mem: { anon: Object.fromEntries(noms.map((n, i) => [n, 100 + i])) } });
   assert.deepEqual(forme(cont), forme(dm));
   assert.deepEqual(cont.c.map((c) => c.n).sort(), [...noms].sort());
   for (const c of cont.c) {
@@ -123,12 +118,66 @@ esac`);
     // reconvertit en Mo (`moC`) : la demonstration aussi
     assert.equal(c.mem, i + 2.25);
     assert.equal(c.rs, i === 0 ? 2 : 0);
-    assert.equal(c.anon, 100 + i);
   }
   assert.ok(dm.c.every((c) => c.mem >= 0 && c.mem <= 100), "www/containers.json : `mem` hors d un pourcentage");
   // le redemarrage (1 -> 2) entre au journal des 24 h
   assert.deepEqual(cont.ev.map((e) => e.n), [noms[0]]);
   assert.deepEqual(forme(cont.ev[0]), forme(dm.ev[0]));
+});
+
+/* ---- systeme.json : ce que la page range dans smart.json et containers.json ---- */
+
+test("la demonstration passe par fusionSysteme : grappes, emplacements, roles et anon", () => {
+  const smart = demo("smart.json"), cont = demo("containers.json"), sy = demo("systeme.json");
+  fusionSysteme({ smart, cont }, sy);
+  assert.ok(sy.stock.grappes.length > 0 && cont.c.length > 0, "une demonstration sans grappe ni conteneur ne prouverait rien");
+  assert.deepEqual(smart.grappes, sy.stock.grappes);
+  assert.deepEqual(smart.slots, sy.stock.slots);
+  for (const x of smart.d) assert.equal(x.role, sy.stock.roles[x.n], x.n + " : son role");
+  for (const c of cont.c) assert.equal(c.anon, sy.mem.anon[c.n], c.n + " : sa memoire reelle");
+});
+
+/** Les cles de premier niveau du dictionnaire Python qui s ouvre a `debut`. */
+function clesDict(src, debut) {
+  const cles = [];
+  let prof = 0, chaine = null;
+  for (let k = debut; k < src.length; k++) {
+    const c = src[k];
+    if (chaine) { if (c === "\\") k++; else if (c === chaine) chaine = null; continue; }
+    if (c === "#") { k = src.indexOf("\n", k); continue; }          // commentaire
+    if (c === '"' || c === "'") {
+      const m = prof === 1 && /^(["'])(\w+)\1\s*:/.exec(src.slice(k, k + 80));
+      if (m) { cles.push(m[2]); k += m[0].length - 1; } else chaine = c;
+      continue;
+    }
+    if ("{[(".includes(c)) prof++;
+    else if ("}])".includes(c) && --prof === 0) return cles;
+  }
+  throw new Error("dictionnaire non referme");
+}
+/** Les cles du dictionnaire que rend `def fonction` de collecteurs/systeme.py. */
+function clesRendues(fonctionPy, premiere) {
+  const src = fs.readFileSync(path.join(RACINE, "collecteurs", "systeme.py"), "utf8");
+  const f = src.indexOf("\ndef " + fonctionPy + "(");
+  const m = f < 0 ? null : new RegExp("return \\{\\s*\"" + premiere + "\"").exec(src.slice(f));
+  assert.ok(m, fonctionPy + "() introuvable dans systeme.py");
+  return { src, debut: f + m.index + m[0].indexOf("{"), cles: clesDict(src, f + m.index + m[0].indexOf("{")) };
+}
+
+test("www/systeme.json : `mem` et `stock` ont les cles que rend systeme.py", () => {
+  const sy = demo("systeme.json");
+  const tri = (l) => [...l].sort();
+  assert.deepEqual(tri(Object.keys(sy.mem)), tri(clesRendues("memoire", "tot").cles));
+  const st = clesRendues("stockage", "grappes");
+  assert.deepEqual(tri(Object.keys(sy.stock)), tri(st.cles));
+  const slots = st.src.indexOf('"slots": {', st.debut);
+  assert.ok(slots > 0, "stockage() : `slots` introuvable");
+  assert.deepEqual(tri(Object.keys(sy.stock.slots)), tri(clesDict(st.src, st.src.indexOf("{", slots))));
+});
+
+test("clesDict : premier niveau seulement, commentaires et chaines compris", () => {
+  const py = 'return {\n  "a": f(1, {"x": 2}),  # "faux": commentaire\n  "b": "c: d", "e": [{"y": 3}],\n}';
+  assert.deepEqual(clesDict(py, py.indexOf("{")), ["a", "b", "e"]);
 });
 
 /* ---- history-build.sh et history-min.sh ------------------------------------ */

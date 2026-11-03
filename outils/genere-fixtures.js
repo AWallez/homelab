@@ -243,16 +243,13 @@ const SYS = {
 for (const k in SYS) SYS[k].sort((a, b) => b.o - a.o);
 const SYSP = Object.fromEntries(Object.entries(SYS).map(([k, l]) => [k, l.reduce((a, x) => a + x.o, 0)]));
 
-ecrit("smart.json", {
-  ts: FIN,
-  d: [
-    { n: "nvme0", modele: "PCIe SSD 128GB", go: 128, ok: true, temp: 39,
-      usure: 2, spare: 100, heures: 6180, cycles: 41, brutaux: 3, erreurs: 0, ecrit: 1.62,
-      role: "systeme" },
-    { n: "nvme1", modele: "NVMe Pro 8000GB", go: 8001, ok: true, temp: 46,
-      usure: 1, spare: 100, heures: 6180, cycles: 39, brutaux: 2, erreurs: 0, ecrit: 26.4,
-      role: "donnees" }
-  ],
+/* ⚠️ LE STOCKAGE PASSE PAR systeme.json, COMME EN PRODUCTION (03/11/2026).
+   smart.json porte ce qu ecrit smart.sh, rien de plus. Les grappes, les
+   emplacements et le role de chaque disque viennent de `stockage()` de
+   systeme.py, sous `stock`, et c est la page qui les range dans smart.json
+   (`fusionSysteme`, www/app.js). Ecrits ici directement dans smart.json, ils
+   epargnaient ce chemin a la demonstration, qui ne l aurait pas vu casser. */
+const STOCK = {
   /* L organisation, comme sur la machine reelle : un RAID 1 monte pour UN seul
      disque, donc sans miroir, et le disque systeme hors grappe. La place par
      poste est celle du VOLUME, en octets. */
@@ -266,9 +263,20 @@ ecrit("smart.json", {
     { nom: "Système", sys: true, disques: ["nvme0"],
       esp: { tot: 128035676160, parts: SYSP, det: SYS, mesure: "@-19h" } }
   ],
+  roles: { nvme0: "systeme", nvme1: "donnees" },
   /* Quatre emplacements M.2 pour les donnees, le disque systeme ayant le sien a
      part : un seul est occupe. */
   slots: { tot: 4, libres: 3 }
+};
+
+ecrit("smart.json", {
+  ts: FIN,
+  d: [
+    { n: "nvme0", modele: "PCIe SSD 128GB", go: 128, ok: true, temp: 39,
+      usure: 2, spare: 100, heures: 6180, cycles: 41, brutaux: 3, erreurs: 0, ecrit: 1.62 },
+    { n: "nvme1", modele: "NVMe Pro 8000GB", go: 8001, ok: true, temp: 46,
+      usure: 1, spare: 100, heures: 6180, cycles: 39, brutaux: 2, erreurs: 0, ecrit: 26.4 }
+  ]
 });
 
 /* ---- conteneurs --------------------------------------------------------- */
@@ -311,11 +319,14 @@ const enPct = (mo) => Math.round(mo / RAM_MO * 10000) / 100;
    que la somme retombe exactement sur le groupe « conteneurs » de base.json. */
 const ANON_TOT = ((BASE.mem && BASE.mem.g) || []).find(x => x.k === "conteneurs") || { mo: 0 };
 const MEM_TOT = conteneurs.reduce((a, c) => a + c.mem, 0) || 1;
+/* ⚠️ PUBLIEE PAR systeme.json (`mem.anon`), COMME EN PRODUCTION (03/11/2026) :
+   `cgroups()` de systeme.py la mesure, containers.sh ne la connait pas, et
+   c est la page qui la range sur chaque conteneur (`fusionSysteme`). */
+const ANON = Object.fromEntries(conteneurs.map(c => [c.n, Math.round(c.mem / MEM_TOT * ANON_TOT.mo)]));
 ecrit("containers.json", {
   t: FIN,
   c: conteneurs.slice().sort((a, b) => (b.mem + b.swap) - (a.mem + a.swap))
-    .map(c => Object.assign({}, c, { mem: enPct(c.mem), mem24: enPct(c.mem24),
-                                      anon: Math.round(c.mem / MEM_TOT * ANON_TOT.mo) })),
+    .map(c => Object.assign({}, c, { mem: enPct(c.mem), mem24: enPct(c.mem24) })),
   /* Un redemarrage automatique dans les 24 h : la carte a de quoi montrer son
      bandeau de notification, qui resterait invisible autrement. */
   ev: [{ n: "veille-images", t: FIN - 5.4 * 3600 }]
@@ -491,6 +502,12 @@ ecrit("systeme.json", {
     ["@-6j", "memoire", "Processus tué faute de mémoire : indexation", "wn"]
   ],
   wan: Object.assign({}, BASE.wan, { h: wanH, h7: wanH7 }),
+  /* La memoire et le stockage, sous les cles de `memoire()` et `stockage()` de
+     systeme.py (03/11/2026) : la page range `anon` sur chaque conteneur, et
+     `stock` dans smart.json. `mem` REMPLACE celui que data.json tient de
+     base.json (en production, data.json n en a pas) : c est le meme, plus `anon`. */
+  mem: Object.assign({}, BASE.mem, { anon: ANON }),
+  stock: STOCK,
   /* Ce que FanKarr a telecharge (06/10/2026), lu en production dans ses fichiers
      de suivi : episodes importes, place, telechargements en cours. */
   fankarr: { ep: 147, o: 354619441774, absents: 0, series: ["Série Kaï"], cours: 1, dernier: "@-14j" },
