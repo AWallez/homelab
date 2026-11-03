@@ -33,7 +33,19 @@ const TYPES = {
 };
 
 const serveur = http.createServer((req, res) => {
-  let url = decodeURIComponent(req.url.split("?")[0]);
+  /* ⚠️ Une adresse mal formee (`/%`) fait lever `decodeURIComponent`, un octet
+     nul (`/%00`) fait lever `fs.readFile` : sans ce controle, une seule requete
+     arrete le serveur. */
+  let url = null;
+  try {
+    url = decodeURIComponent(req.url.split("?")[0]);
+  } catch (e) { /* url reste nulle : refusee juste en dessous */ }
+  if (url === null || url.includes("\0")) {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("adresse invalide");
+    console.log("  400  " + req.url);
+    return;
+  }
   if (url.endsWith("/")) url += "index.html";
 
   /* ⚠️ Garde-fou contre la remontee d arborescence. On resout le chemin, PUIS
@@ -69,7 +81,9 @@ serveur.on("error", (e) => {
   process.exit(1);
 });
 
-serveur.listen(PORT, () => {
+/* Sur cette machine seulement : un serveur de developpement n a aucune raison
+   d etre joignable depuis le reseau local. */
+serveur.listen(PORT, "127.0.0.1", () => {
   console.log("Tableau de bord — serveur local");
   console.log("  racine  : " + RACINE);
   console.log("  adresse : http://localhost:" + PORT);
