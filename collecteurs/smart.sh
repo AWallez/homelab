@@ -26,6 +26,13 @@ L=$(mktemp); trap 'rm -f "$L"' EXIT
       brutaux:($h.unsafe_shutdowns // 0), erreurs:($h.media_errors // 0),
       ecrit:((($h.data_units_written // 0)*512000/10000000000)|floor/100) }' >> "$L"
 done
+# ⚠️ AUCUN DISQUE LU N EST PAS « AUCUN DISQUE ». `nvme-slots.sh` ou `smartctl`
+# en echec donnaient un tableau vide, et la carte perdait tous ses disques sans
+# rien signaler. L ancien releve reste alors en place : la page juge son age.
+if [ ! -s "$L" ]; then
+  echo "smart.json NON remplace : aucun disque lu (nvme-slots.sh ou smartctl)" >&2
+  exit 1
+fi
 # Ecriture atomique, par coherence avec les autres collecteurs.
 if jq -s -c '{ts:(now|floor), d:.}' "$L" > "$OUT.tmp" \
    && jq -e . "$OUT.tmp" >/dev/null 2>&1; then

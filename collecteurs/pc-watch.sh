@@ -35,25 +35,29 @@ run(){
   case "$A" in
     on)
       st running "reveil demande"
-      /usr/bin/python3 "$ICI/reveille-pc.py" >> /var/log/pc-watch.log 2>&1
-      st done "paquet magique envoye"
+      # Le code de retour etait ignore : un envoi rate s affichait comme reussi.
+      if /usr/bin/python3 "$ICI/reveille-pc.py" >> /var/log/pc-watch.log 2>&1; then
+        st "done" "paquet magique envoye"
+      else
+        st "done" "reveil en echec (voir pc-watch.log)"
+      fi
       ;;
     off)
       # ⚠️ LA CLE EST RESTREINTE A UNE COMMANDE FORCEE cote PC. Sans cette
       # restriction, une cle sans phrase de passe posee sur le NAS donnerait
       # un acces administrateur complet au poste.
-      if [ ! -f "$CLE" ]; then st done "extinction non configuree"; return 0; fi
+      if [ ! -f "$CLE" ]; then st "done" "extinction non configuree"; return 0; fi
       st running "extinction demandee"
       if ssh -i "$CLE" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
              -o ConnectTimeout=5 "$PC_USER@$PC_IP" true >> /var/log/pc-watch.log 2>&1; then
-        st done "extinction lancee"
+        st "done" "extinction lancee"
       else
-        st done "le poste n a pas repondu"
+        st "done" "le poste n a pas repondu"
       fi
       ;;
-    *) st done "action inconnue" ;;
+    *) st "done" "action inconnue" ;;
   esac
 }
 
 exec 9>"$LOCK"; flock -n 9 || exit 0
-for i in $(seq 1 11); do run; sleep 5; done
+for _ in $(seq 1 11); do run; sleep 5; done

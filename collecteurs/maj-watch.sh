@@ -24,8 +24,10 @@ cau() { (cd "$OUTIL" && python3 -m compose_auto_update --config "$OUTIL/config.t
 # nginx le fichier visé. `mv -T` remplace le lien sans le suivre.
 st() {
   local t; t=$(mktemp "$D/.maj-status.XXXXXX") || return 0
+  # Un `jq` en echec laissait un fichier vide, publie tel quel : la page lisait
+  # un JSON invalide. L ancien etat reste alors en place.
   jq -nc --arg s "$1" --arg a "$(date '+%H:%M:%S')" --arg m "$2" --argjson ok "${3:-true}" \
-     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$t"
+     '{state:$s, at:$a, msg:$m, ok:$ok}' > "$t" || { rm -f "$t"; return 0; }
   chown 101:101 "$t" 2>/dev/null; chmod 664 "$t"; mv -fT "$t" "$ST"
 }
 
@@ -44,20 +46,20 @@ run() {
     mode)
       NOM=$(jq -r '.nom // ""' "$TRIG" 2>/dev/null); MODE=$(jq -r '.mode // ""' "$TRIG" 2>/dev/null)
       rm -f "$TRIG"
-      case "$MODE" in auto|manuel|defaut) ;; *) st done "mode refusé : « $MODE »" false; return 0 ;; esac
-      nom_valide "$NOM" || { st done "nom refusé" false; return 0; }
+      case "$MODE" in auto|manuel|defaut) ;; *) st "done" "mode refusé : « $MODE »" false; return 0 ;; esac
+      nom_valide "$NOM" || { st "done" "nom refusé" false; return 0; }
       st running "$NOM passe en $MODE"
       cau mode "$NOM" "$MODE" 2>&1 | journaliser
       case "${PIPESTATUS[0]}" in
-        0) st done "$NOM passe en $MODE" ;;
-        3) st done "une passe est en cours, réessaie dans quelques minutes" false ;;
-        *) st done "$NOM : changement refusé (journalctl -t compose-auto-update)" false ;;
+        0) st "done" "$NOM passe en $MODE" ;;
+        3) st "done" "une passe est en cours, réessaie dans quelques minutes" false ;;
+        *) st "done" "$NOM : changement refusé (journalctl -t compose-auto-update)" false ;;
       esac ;;
 
     appliquer)
       SEL=$(jq -r '.items[]?' "$TRIG" 2>/dev/null | tr -d '\r'); rm -f "$TRIG"
       LISTE=""; for c in $SEL; do nom_valide "$c" && LISTE="$LISTE $c"; done
-      [ -z "$LISTE" ] && { st done "aucun conteneur reconnu" false; return 0; }
+      [ -z "$LISTE" ] && { st "done" "aucun conteneur reconnu" false; return 0; }
       OK=0; RATES=""
       for c in $LISTE; do
         st running "mise à jour de $c"
@@ -68,12 +70,12 @@ run() {
           *) RATES="$RATES $c" ;;
         esac
       done
-      if [ -z "$RATES" ]; then st done "terminé : $OK conteneur(s) mis à jour"
-      else st done "terminé, en échec :$RATES ; la raison est affichée sur la ligne" false; fi ;;
+      if [ -z "$RATES" ]; then st "done" "terminé : $OK conteneur(s) mis à jour"
+      else st "done" "terminé, en échec :$RATES ; la raison est affichée sur la ligne" false; fi ;;
 
-    *) rm -f "$TRIG"; st done "action inconnue" false ;;
+    *) rm -f "$TRIG"; st "done" "action inconnue" false ;;
   esac
 }
 
 exec 9>"$LOCK"; flock -n 9 || exit 0
-for i in $(seq 1 11); do run; sleep 5; done
+for _ in $(seq 1 11); do run; sleep 5; done

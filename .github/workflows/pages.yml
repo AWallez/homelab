@@ -67,12 +67,18 @@ jobs:
       - name: Generateur de fixtures
         run: node outils/genere-fixtures.js
 
-      # Scripts du NAS : syntaxe, puis les ERREURS de shellcheck seulement. Les
-      # avertissements de style ne bloquent pas la publication.
+      # Scripts du NAS : syntaxe, puis shellcheck jusqu aux AVERTISSEMENTS
+      # (03/11/2026, le depot n en a plus aucun). Les simples notes ne bloquent
+      # pas la publication.
       - name: Scripts shell
         run: |
           for f in collecteurs/*.sh outils/*.sh; do bash -n "$f"; done
-          shellcheck -S error collecteurs/*.sh outils/*.sh
+          shellcheck -S warning collecteurs/*.sh outils/*.sh
+
+      # Les collecteurs face aux pannes (source muette, outil en echec), avec
+      # des bouchons : aucun acces au NAS.
+      - name: Banc d essai des collecteurs
+        run: bash outils/teste-collecteurs.sh
 
       # Python : compilation, puis erreurs de syntaxe et noms indefinis.
       - name: Scripts Python
