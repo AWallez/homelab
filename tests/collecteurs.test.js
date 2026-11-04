@@ -20,7 +20,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { banc, demo, genre, RACINE } = require("./aide/banc.js");
+const { avecBanc, demo, genre, RACINE } = require("./aide/banc.js");
 const { fonction } = require("./aide/charge.js");
 
 /* La fusion de la page (`fusionSysteme`, www/app.js) : elle range dans
@@ -36,18 +36,6 @@ const SAUF = outilsPresents ? false : "bash, jq, awk ou flock absent";
 
 /** La forme d un objet : ses cles, chacune avec son type JSON. */
 const forme = (o) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, genre(o[k])]));
-
-/** Un banc, range a la fin de l essai, avec la garde reseau. */
-function avecBanc(t, reseauPermis = []) {
-  const b = banc();
-  t.after(() => {
-    const appels = b.reseau().split("\n").filter(Boolean)
-      .filter((l) => !reseauPermis.some((p) => l.startsWith(p + " ")));
-    b.range();
-    assert.deepEqual(appels, [], "un outil reseau a ete appele");
-  });
-  return b;
-}
 
 /* ---- smart.sh ------------------------------------------------------------- */
 
