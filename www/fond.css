@@ -830,7 +830,12 @@ dialog.dlg::after {
    « v3.5.0 → v3.5.2 » : 79,5 px. Le repli n'apportait rien et coûtait 36 px de
    hauteur par ligne, en poussant le lien « notes » sous la case à cocher.
    Si une transition devenait vraiment longue, c'est le NOM qui se réduit, ce
-   qui est le bon arbitrage : on lit une version en entier, pas un nom. */
+   qui est le bon arbitrage : on lit une version en entier, pas un nom.
+   ⚠️ SAUF LE BADGE (04/11/2026) : « 2.7.0.5723-ls166 → 2.7.0.5723-ls167 » fait
+   197 px et ne laisse que 114 px à « arr-prowlarr » + « seul à 7 h » (147 px).
+   Le label n'étant pas coupé sur ces lignes, le badge passait sur la version.
+   Il descend maintenant sous le nom, cette ligne-là seulement ; en dernier
+   recours le nom se coupe par des points de suspension, et plus rien ne déborde. */
 .hist li.att { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.1) }
 .hist li.att .hv s { text-decoration: line-through; opacity: .6 }
 .hist li.att .hv i { opacity: .55; margin: 0 2px }
@@ -842,13 +847,18 @@ dialog.dlg::after {
    toute la liste s'affiche en capitales. */
 .hist .hn {
   font-size: .8rem; margin: 0;
-  display: flex; align-items: center; gap: 6px;
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px;
+  /* Coupe en largeur seulement : en hauteur, l'ombre des badges de `relief.css`
+     dépasse du label. `hidden` reste pour les navigateurs sans `clip`. */
+  min-width: 0; overflow: hidden; overflow: clip visible; white-space: nowrap;
   text-transform: none; letter-spacing: 0; color: var(--ink);
 }
-/* La surcouche de clic est un `::before` absolu porté par le label : le masquer
-   au débordement l'amputerait de toute la largeur de la ligne. */
-.hist li.att .hn { cursor: pointer; overflow: visible }
+/* Le nom a son propre élément : `text-overflow` ne fait rien sur un conteneur flex. */
+.hist .hnom { min-width: 0; overflow: hidden; text-overflow: ellipsis }
+/* ⚠️ La coupe du label n'ampute pas la surcouche de clic : il n'est pas positionné,
+   donc son `::before` absolu dépend de la ligne et échappe à son `overflow`
+   (vérifié le 04/11/2026 : 8 points de la ligne, case bien cochée). */
+.hist li.att .hn { cursor: pointer }
 .hist .hv { font-size: .68rem; opacity: .72; white-space: nowrap; justify-self: end }
 /* ⚠️ Sans ceci, le clic sur le numéro de version ne sélectionnait pas la ligne :
    il est frère du label et capte le clic avant la surcouche de `::before`. */

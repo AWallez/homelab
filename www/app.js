@@ -2225,7 +2225,7 @@ function paintUpd(maj, note, vers) {
       ${act ? `<input type="checkbox" id="c${k}" value="${esc(x.n)}">`
             : `<span class="pastille"></span>`}
       <span class="hd">${esc(x.d)}</span>
-      <label class="hn" ${act ? `for="c${k}"` : ""}>${esc(x.n)}${
+      <label class="hn" ${act ? `for="c${k}"` : ""}><span class="hnom">${esc(x.n)}</span>${
         act && risque(x.n) ? '<span class="rq">base de données</span>' : ""}${
         act && x.meme ? '<span class="rq ri" title="Même version de l’application, nouvelle image : en général des correctifs du système qu’elle contient.">image reconstruite</span>' : ""}${
         x.nuit ? '<span class="rq ri" title="Conteneur automatique : la passe de 7 h l’installera seule, avec copie des données et retour arrière.">seul à 7 h</span>' : ""}${
