@@ -15,9 +15,11 @@
 # ⚠️ CE SONT DES DONNEES PERSONNELLES. Jetons, mots de passe et passkeys sont
 # masques (`nettoie`), mais il reste des titres, des noms d appareils, des
 # adresses du reseau local : le dossier ne doit JAMAIS entrer dans un depot, ni
-# etre partage. Pour les rejouer, sur le poste qui a le depot :
-#   scp -r nas:/tmp/homelab-reponses ~/homelab-reponses
-#   HOMELAB_REPONSES=~/homelab-reponses node --test tests/*.test.js
+# etre partage. Lance par sudo, le dossier revient a qui l a lance : c est lui
+# qui rejoue, sans sudo. Pour rejouer depuis une copie du depot, sur le NAS meme
+# (l archive de main suffit, sans git) :
+#   HOMELAB_REPONSES=/tmp/homelab-reponses node --test tests/*.test.js
+# ou depuis le poste, apres `scp -r nas:/tmp/homelab-reponses ~/homelab-reponses`.
 # Ne sont PAS enregistres : les sorties de `docker exec` (la configuration de
 # WireGuard porte sa cle privee), ni les certificats, lus par openssl.
 set -uo pipefail
@@ -91,8 +93,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   VRAI_CURL=$(command -v curl) || { echo "curl introuvable" >&2; exit 1; }
   # ⚠️ JAMAIS DANS UN DEPOT : un `git add .` suffirait a publier ces reponses.
   # Verifie AVANT de creer le dossier, sur son plus proche parent existant.
+  # ⚠️ `safe.directory` (04/11/2026) : lance par sudo, git refuse de lire un
+  # depot qui n est pas a root (« dubious ownership »), et la verification
+  # echouait en silence, c est-a-dire laissait passer.
   p=$REPONSES; while [ ! -d "$p" ]; do p=$(dirname "$p"); done
-  if git -C "$p" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if git -c safe.directory='*' -C "$p" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "refus : $REPONSES est dans un depot git, choisir un dossier hors depot" >&2
     exit 1
   fi
@@ -104,8 +109,12 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     printf '%s\n' "$CORPS_CURL"; } > "$BIN/curl"
   chmod 700 "$BIN/curl"
   PATH="$BIN:$PATH" bash "$COLLECT" --essai >/dev/null; rc=$?
+  # Lance par sudo, le dossier revient a qui l a lance (04/11/2026) : en 700 a
+  # root, `node --test` lance sans sudo ne pouvait pas le lire.
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then chown -R "$SUDO_USER:" "$REPONSES"; fi
   n=$(find "$REPONSES" -maxdepth 1 -type f | wc -l)
   echo "$n reponse(s) enregistree(s) dans $REPONSES (collect.sh --essai : code $rc)"
-  echo "⚠️ donnees personnelles : ce dossier ne doit entrer dans aucun depot"
+  echo "pour les rejouer, depuis une copie du depot : HOMELAB_REPONSES=$REPONSES node --test tests/*.test.js"
+  echo "⚠️ donnees personnelles : ce dossier ne doit entrer dans aucun depot ; a effacer apres usage"
   exit "$rc"
 fi
