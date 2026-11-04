@@ -310,6 +310,21 @@ function bancRejeu(t) {
 }
 
 const gitPresent = spawnSync("sh", ["-c", "command -v git"]).status === 0;
+const enRoot = typeof process.getuid === "function" && process.getuid() === 0;
+
+/** Lance l enregistreur dans le banc, sur collect.sh prepare, vers `dossier`. */
+function enregistre(b, dossier, env = {}) {
+  return spawnSync("bash", [ENREGISTREUR, b.prepare("collect.sh"), dossier], {
+    encoding: "utf8", timeout: 30000, cwd: b.T,
+    env: { PATH: b.B + ":" + process.env.PATH, HOME: b.T, LANG: "C.UTF-8", ...env },
+  });
+}
+/** Un depot git neuf dans le banc. */
+function depotGit(b) {
+  const depot = path.join(b.T, "depot");
+  assert.equal(spawnSync("git", ["init", "-q", depot]).status, 0, "git init");
+  return depot;
+}
 
 test("enregistre-api.sh, sans le NAS : enregistre, masque les secrets, et collect.sh rejoue", { skip: SAUF }, (t) => {
   const b = bancRejeu(t);
@@ -334,10 +349,7 @@ case "$*" in
   *:8080/api/v2/sync/maindata*) echo '${maindata}' ;;
   *) exit 7 ;;
 esac`);
-  const r = spawnSync("bash", [ENREGISTREUR, b.prepare("collect.sh"), reponses], {
-    encoding: "utf8", timeout: 30000, cwd: b.T,
-    env: { PATH: b.B + ":" + process.env.PATH, HOME: b.T, LANG: "C.UTF-8" },
-  });
+  const r = enregistre(b, reponses);
   assert.equal(r.status, 0, r.stderr);
   const fichiers = fs.readdirSync(reponses).sort();
   // nommes sans l hote, slug Kuma, UUID Umami et instants remplaces
@@ -372,14 +384,38 @@ esac`);
 
 test("enregistre-api.sh refuse un dossier dans un depot git, avant de le creer", { skip: SAUF || (!gitPresent && "git absent") }, (t) => {
   const b = bancRejeu(t);
-  const dans = path.join(RACINE, "tests", "reponses-refusees");
-  const r = spawnSync("bash", [ENREGISTREUR, b.prepare("collect.sh"), dans], {
-    encoding: "utf8", timeout: 30000, env: { PATH: b.B + ":" + process.env.PATH, HOME: b.T, LANG: "C.UTF-8" },
-  });
-  assert.equal(r.status, 1);
+  // un depot a lui, dans le banc : la copie qui lance l essai n en est pas
+  // forcement un (l archive de main, sur le NAS)
+  const dans = path.join(depotGit(b), "sous", "reponses");
+  const r = enregistre(b, dans);
+  assert.equal(r.status, 1, r.stderr);
   assert.match(r.stderr, /dans un depot git/);
-  assert.ok(!fs.existsSync(dans), "le dossier a ete cree malgre le refus");
+  assert.ok(!fs.existsSync(path.dirname(dans)), "le dossier a ete cree malgre le refus");
 });
+
+/* Lance par sudo, l enregistreur est root : git lui refuse d ordinaire le depot
+   d un autre utilisateur (« dubious ownership »), et les reponses lui
+   appartiendraient. Root seulement, comme sudo : saute en CI. */
+test("enregistre-api.sh par sudo : refuse le depot d un autre, rend les reponses a qui l a lance",
+  { skip: SAUF || (!gitPresent && "git absent") || (!enRoot && "a lancer en root, comme sudo") }, (t) => {
+    const b = bancRejeu(t);
+    const depot = depotGit(b);
+    assert.equal(spawnSync("chown", ["-R", "12345:12345", depot]).status, 0);
+    const r = enregistre(b, path.join(depot, "reponses"));
+    assert.equal(r.status, 1, "depot d un autre utilisateur accepte : " + r.stderr);
+    // hors depot : le dossier et ses reponses reviennent a SUDO_USER
+    const uid = Number(spawnSync("id", ["-u", "nobody"], { encoding: "utf8" }).stdout.trim());
+    assert.ok(uid > 0, "utilisateur nobody introuvable");
+    b.bouchon("curl", `echo "curl $*" >> "${b.T}/reseau.log"
+case "$*" in *:7878/api/v3/wanted/missing*) echo '{"totalRecords":3}' ;; *) exit 7 ;; esac`);
+    const hors = path.join(b.T, "reponses");
+    const r2 = enregistre(b, hors, { SUDO_USER: "nobody" });
+    assert.equal(r2.status, 0, r2.stderr);
+    const fichiers = fs.readdirSync(hors);
+    assert.ok(fichiers.length > 0);
+    for (const f of [".", ...fichiers]) assert.equal(fs.statSync(path.join(hors, f)).uid, uid, f);
+    assert.equal(fs.statSync(hors).mode & 0o777, 0o700, "toujours en 700");
+  });
 
 /* Le service que nomme chaque port de collect.sh (`PORT_RADARR=7878` : radarr). */
 const SERVICE_DU_PORT = Object.fromEntries([...source("collect.sh").matchAll(/PORT_([A-Z]+)=(\d+)/g)]
