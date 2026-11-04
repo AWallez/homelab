@@ -60,3 +60,8 @@ www/data/pc-status.json
 
 # notes de travail de l'atelier (jamais publiées)
 atelier-notes/
+
+# ⚠️ REPONSES D API ENREGISTREES SUR LE NAS (`outils/enregistre-api.sh`) :
+# des donnees personnelles. Elles vivent hors du depot, que le script refuse ;
+# si une copie y atterrit malgre tout, git ne doit pas la voir.
+homelab-reponses/

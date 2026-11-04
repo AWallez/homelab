@@ -279,3 +279,125 @@ esac; done`);
   assert.equal(d.site.cert, 60);
   assert.deepEqual(ecartsDeForme(d.certs, demo("data.json").certs), []);
 });
+
+/* ---- les vraies reponses des API, enregistrees sur le NAS --------------- */
+/* `outils/enregistre-api.sh`, lance sur le NAS, fait tourner collect.sh en
+   `--essai` derriere un curl ENREGISTREUR : un fichier par requete reussie,
+   nomme par sa fonction `cle`, nettoye de ses secrets. Ici, un curl de REJEU
+   reprend cette meme fonction et rend ces fichiers a collect.sh. Le mecanisme
+   est eprouve a chaque fois sur des reponses fabriquees ; les vraies, elles,
+   sont personnelles et n entrent jamais dans le depot :
+     HOMELAB_REPONSES=~/homelab-reponses node --test tests/*.test.js */
+
+const ENREGISTREUR = path.join(RACINE, "outils", "enregistre-api.sh");
+const CLE = fs.readFileSync(ENREGISTREUR, "utf8").match(/^cle\(\) \{[\s\S]*?^\}/m)[0];
+
+/** Un curl qui rend les reponses de `dossier`, et reste muet pour les autres. */
+function rejoue(b, dossier) {
+  b.bouchon("curl", `echo "curl $*" >> "${b.T}/reseau.log"
+${CLE}
+url=""; for a in "$@"; do case "$a" in http://*|https://*) url=$a ;; esac; done
+[ -n "$url" ] && f=${JSON.stringify(dossier)}/$(cle "$url") && [ -f "$f" ] && { cat "$f"; exit 0; }
+exit 7`);
+}
+
+/** Un banc pour rejouer : une page de statut Kuma et un site Umami configures. */
+function bancRejeu(t) {
+  const b = bancCollecte(t);
+  b.ecrit("tools/homepage.env", "HOMEPAGE_VAR_KUMA_SLUG=essai\n");
+  b.ecrit("collect.conf", "UMAMI_SITE_ID=12345678-aaaa-bbbb-cccc-1234567890ab\n");
+  return b;
+}
+
+const gitPresent = spawnSync("sh", ["-c", "command -v git"]).status === 0;
+
+test("enregistre-api.sh, sans le NAS : enregistre, masque les secrets, et collect.sh rejoue", { skip: SAUF }, (t) => {
+  const b = bancRejeu(t);
+  const reponses = path.join(b.T, "reponses");
+  // le « vrai » curl : des reponses fabriquees, avec des secrets a masquer. Une
+  // passkey dans le CHEMIN de l URL d annonce, une autre dans la requete d une
+  // URL cachee au milieu d un texte.
+  const PK = "https://tk.vega.example/PASSKEY-SECRET/announce";
+  const maindata = JSON.stringify({
+    server_state: { dl_info_speed: 10, up_info_speed: 20, connection_status: "connected" },
+    torrents: { h1: { name: "t", state: "uploading", tracker: PK, magnet_uri: "magnet:?xt=urn:btih:h1&tr=" + PK,
+                      comment: "fiche : https://tk.vega.example/t/9?passkey=PASSKEY-SECRET merci" } },
+    trackers: { [PK]: ["h1"] },
+  });
+  b.bouchon("curl", `echo "curl $*" >> "${b.T}/reseau.log"
+case "$*" in
+  *:7878/api/v3/wanted/missing*) echo '{"totalRecords":3,"records":[]}' ;;
+  *:8989/api/v3/wanted/missing*) echo '{"totalRecords":5,"records":[]}' ;;
+  *:3002/api/auth/login*) echo '{"token":"JETON-SECRET","user":{"username":"essai"}}' ;;
+  *:3002/api/websites/*/stats*) echo '{"visitors":7,"pageviews":30,"visits":9}' ;;
+  *:3001/api/status-page/heartbeat/essai*) echo '{"heartbeatList":{},"uptimeList":{}}' ;;
+  *:8080/api/v2/sync/maindata*) echo '${maindata}' ;;
+  *) exit 7 ;;
+esac`);
+  const r = spawnSync("bash", [ENREGISTREUR, b.prepare("collect.sh"), reponses], {
+    encoding: "utf8", timeout: 30000, cwd: b.T,
+    env: { PATH: b.B + ":" + process.env.PATH, HOME: b.T, LANG: "C.UTF-8" },
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const fichiers = fs.readdirSync(reponses).sort();
+  // nommes sans l hote, slug Kuma, UUID Umami et instants remplaces
+  for (const f of ["7878_api_v3_wanted_missing", "8080_api_v2_sync_maindata", "3001_api_status-page_heartbeat_SLUG",
+                   "3002_api_websites_ID_stats_startAt_N_endAt_N"])
+    assert.ok(fichiers.includes(f), f + " absent de " + fichiers.join(", "));
+  // les requetes en echec ne sont pas enregistrees : le rejeu les retrouve muettes
+  assert.ok(!fichiers.some((f) => f.startsWith("9696_")), "prowlarr n a pas repondu");
+  const tout = fichiers.map((f) => fs.readFileSync(path.join(reponses, f), "utf8")).join("\n");
+  assert.doesNotMatch(tout, /PASSKEY-SECRET|JETON-SECRET/);
+  const md = JSON.parse(fs.readFileSync(path.join(reponses, "8080_api_v2_sync_maindata"), "utf8"));
+  assert.equal(md.torrents.h1.tracker, "https://tk.vega.example/", "l hote reste : collect.sh en tire le nom du tracker");
+  assert.ok(!("magnet_uri" in md.torrents.h1));
+  assert.equal(md.torrents.h1.comment, "fiche : https://tk.vega.example/ merci");
+  assert.deepEqual(Object.keys(md.trackers), ["https://tk.vega.example/"]);
+  // le mode essai : rien d ecrit hors de son fichier
+  assert.ok(!fs.existsSync(b.chemin("www/data.json")) && !fs.existsSync(b.chemin("history.csv")));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(b.T, "collect-essai.json"), "utf8")).radarr.mis, 3);
+
+  // puis le rejeu, en passage normal, avec la fonction `cle` de l enregistreur
+  rejoue(b, reponses);
+  const r2 = b.lance("collect.sh");
+  assert.equal(r2.rc, 0, r2.erreurs);
+  const d = b.json("www/data.json");
+  assert.equal(d.radarr.mis, 3);
+  assert.equal(d.sonarr.mis, 5);
+  assert.equal(d.umami.visitors, 7);
+  assert.equal(d.qbit.nb, 1);
+  for (const s of ["radarr", "sonarr", "umami"]) assert.ok(!d.ko.includes(s), s + " rejoue mais declare muet");
+  assert.ok(d.ko.includes("prowlarr"), "prowlarr, jamais enregistre, reste muet");
+});
+
+test("enregistre-api.sh refuse un dossier dans un depot git, avant de le creer", { skip: SAUF || (!gitPresent && "git absent") }, (t) => {
+  const b = bancRejeu(t);
+  const dans = path.join(RACINE, "tests", "reponses-refusees");
+  const r = spawnSync("bash", [ENREGISTREUR, b.prepare("collect.sh"), dans], {
+    encoding: "utf8", timeout: 30000, env: { PATH: b.B + ":" + process.env.PATH, HOME: b.T, LANG: "C.UTF-8" },
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /dans un depot git/);
+  assert.ok(!fs.existsSync(dans), "le dossier a ete cree malgre le refus");
+});
+
+/* Le service que nomme chaque port de collect.sh (`PORT_RADARR=7878` : radarr). */
+const SERVICE_DU_PORT = Object.fromEntries([...source("collect.sh").matchAll(/PORT_([A-Z]+)=(\d+)/g)]
+  .map((m) => [m[2], m[1].toLowerCase()]));
+
+const REELLES = process.env.HOMELAB_REPONSES;
+test("collect.sh, reponses enregistrees sur le NAS : chaque service repond, data.json de la forme de la demo",
+  { skip: SAUF || (!REELLES && "HOMELAB_REPONSES non defini : voir outils/enregistre-api.sh") }, (t) => {
+    const b = bancRejeu(t);
+    rejoue(b, path.resolve(REELLES));
+    const r = b.lance("collect.sh");
+    assert.equal(r.rc, 0, r.erreurs);
+    const d = b.json("www/data.json");
+    // un service dont une reponse a ete enregistree, et qu une carte suit, ne doit pas etre muet
+    const { lire } = charge(["site.js", "cartes.js"]);
+    const suivis = new Set([...lire("GROUPS")].flatMap((g) => [...g.s]).filter((s) => s.ko).map((s) => s.ko));
+    const enregistres = new Set(fs.readdirSync(REELLES).map((f) => SERVICE_DU_PORT[f.split("_")[0]]).filter((s) => suivis.has(s)));
+    assert.ok(enregistres.size > 0, "aucune reponse d un service suivi dans " + REELLES);
+    for (const s of enregistres) assert.ok(!d.ko.includes(s), s + " : enregistre, mais declare muet (filtre jq ?)");
+    assert.deepEqual(ecartsDeForme(d, demo("data.json")), []);
+  });
