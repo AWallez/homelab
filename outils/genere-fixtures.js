@@ -393,6 +393,51 @@ function remplaceCle(texte, cle, valeur) {
   }
   throw new Error(`cle ${cle} : objet non referme`);
 }
+/* ⚠️ ET ON RETIRE, DANS LE TEXTE AUSSI (03/11/2026), ce que data.json n a pas
+   en production. `chemin` : une cle, ou la cle d un objet (« nas.fans »). Elle
+   part avec sa valeur et la virgule voisine ; le reste du fichier sort identique
+   a l octet. */
+function retireCle(texte, chemin) {
+  const blanc = (i) => { while (i < texte.length && /\s/.test(texte[i])) i++; return i; };
+  const finChaine = (i) => {
+    for (i++; i < texte.length; i++) { if (texte[i] === "\\") i++; else if (texte[i] === '"') return i + 1; }
+    throw new Error(`cle ${chemin} : chaine non refermee`);
+  };
+  const finValeur = (i) => {
+    if (texte[i] === '"') return finChaine(i);
+    if (texte[i] !== "{" && texte[i] !== "[") { while (i < texte.length && !/[,}\]\s]/.test(texte[i])) i++; return i; }
+    for (let p = 0; i < texte.length; i++) {
+      const c = texte[i];
+      if (c === '"') i = finChaine(i) - 1;
+      else if (c === "{" || c === "[") p++;
+      else if ((c === "}" || c === "]") && --p === 0) return i + 1;
+    }
+    throw new Error(`cle ${chemin} : valeur non refermee`);
+  };
+  // les membres de l objet ouvert en `o` : { cle, debut, valeur, fin }
+  const membres = (o) => {
+    const l = [];
+    for (let i = blanc(o + 1); texte[i] !== "}"; ) {
+      const debut = i, fc = finChaine(i), valeur = blanc(blanc(fc) + 1), fin = finValeur(valeur);
+      l.push({ cle: JSON.parse(texte.slice(debut, fc)), debut, valeur, fin });
+      i = blanc(fin);
+      if (texte[i] === ",") i = blanc(i + 1);
+    }
+    return l;
+  };
+  let o = blanc(0), m = null;
+  for (const cle of chemin.split(".")) {
+    if (m) o = m.valeur;
+    m = texte[o] === "{" && membres(o).find((x) => x.cle === cle);
+    if (!m) throw new Error(`cle ${chemin} introuvable`);
+  }
+  let a = m.debut - 1;
+  while (/\s/.test(texte[a])) a--;
+  if (texte[a] === ",") return texte.slice(0, a) + texte.slice(m.fin);     // avec la virgule d avant
+  let b = blanc(m.fin);
+  if (texte[b] === ",") b = blanc(b + 1);                                    // premiere cle : celle d apres
+  return texte.slice(0, m.debut) + texte.slice(b);
+}
 /* `acces` : les connexions des 24 h, DERIVEES D UN EMPLOI DU TEMPS comme le
    collecteur les derive des journaux : la liste complete pour la fenetre de la
    carte, les huit regroupements de la carte, le total et ce qui vient
@@ -436,12 +481,22 @@ const acces = Object.assign({}, base.acces, {
 });
 delete acces._;
 
+/* ⚠️ data.json NE PORTE QUE CE QU ECRIT collect.sh (03/11/2026). base.json decrit
+   l etat nominal ENTIER, tel que la page le voit une fois ses fichiers fusionnes.
+   Ce qu en production publie systeme.py part dans systeme.json, plus bas, et la
+   page le fusionne (`fusionSysteme`, www/app.js) : securite, acces, reseau local,
+   Internet, memoire, ventilateurs, et le compte rendu de la sauvegarde, dont
+   collect.sh n ecrit que l age et la date (`backup:{h,date}`). Laisses dans
+   data.json, ils epargnaient ce chemin a la demonstration. */
+const BACKUP_COLLECTE = ["h", "date"];
+const VERS_SYSTEME = ["_reseau_securite", "secu", "acces", "lan", "wan", "_mem", "mem", "nas.fans",
+  ...Object.keys(base.backup).filter((k) => !BACKUP_COLLECTE.includes(k)).map((k) => "backup." + k)];
 const pData = path.join(OUT, "data.json");
-fs.writeFileSync(pData, remplaceCle(remplaceCle(fs.readFileSync(path.join(SRC, "base.json"), "utf8"),
-                                    "updates", base.updates), "acces", acces));
+fs.writeFileSync(pData, VERS_SYSTEME.reduce(retireCle,
+  remplaceCle(fs.readFileSync(path.join(SRC, "base.json"), "utf8"), "updates", base.updates)));
 JSON.parse(fs.readFileSync(pData, "utf8"));      // le resultat doit rester du JSON valide
 console.log("  " + "data.json".padEnd(26) + String(fs.statSync(pData).size).padStart(8)
-            + " o   <- base.json + maj.json + " + ev.length + " connexions");
+            + " o   <- base.json + maj.json, sans ce que publie systeme.json");
 
 /* ---- les sources ecrites a la main, recopiees telles quelles -------------- */
 copie("scenarios.json", "fixtures/scenarios.json");
@@ -450,10 +505,11 @@ for (const f of fs.readdirSync(path.join(SRC, "scenarios")))
 
 /* Raccourcis : la page retombe sur sa liste par defaut si le fichier manque,
    mais autant montrer une barre remplie. */
-/* `systeme.json` : ce que ne donne pas `data.json`. Ici seulement les periodes
-   de panne de chaque sonde Kuma, CALEES sur l incident `kumaup` simule plus
-   haut, pour que l infobulle du ruban nomme des sondes la ou il est rouge.
-   Horodatages RELATIFS, resolus a l affichage comme ceux de base.json. */
+/* `systeme.json` : ce que ne donne pas `data.json`, sous les cles qu ecrit
+   systeme.py. De Kuma, seulement les periodes de panne de chaque sonde, CALEES
+   sur l incident `kumaup` simule plus haut, pour que l infobulle du ruban nomme
+   des sondes la ou il est rouge. Horodatages RELATIFS, resolus a l affichage
+   comme ceux de base.json. */
 const ik = INCIDENTS.find(i => i.col === "kumaup");
 const rel = (s) => "@-" + Math.round(-s / 60) + "min";
 /* `disq` : le detail de chaque SSD pour sa fenetre (05/10/2026), aux memes
@@ -508,6 +564,12 @@ ecrit("systeme.json", {
      base.json (en production, data.json n en a pas) : c est le meme, plus `anon`. */
   mem: Object.assign({}, BASE.mem, { anon: ANON }),
   stock: STOCK,
+  /* Ce que data.json n a plus (03/11/2026), comme en production : la securite,
+     les acces (derives plus haut, avec leurs connexions), le lien local, les
+     ventilateurs, et le compte rendu de la sauvegarde, que la page complete de
+     l age et de la date venus de data.json. */
+  secu: BASE.secu, acces, lan: BASE.lan, fans: BASE.nas.fans,
+  backup: Object.fromEntries(Object.entries(BASE.backup).filter(([k]) => !BACKUP_COLLECTE.includes(k))),
   /* Ce que FanKarr a telecharge (06/10/2026), lu en production dans ses fichiers
      de suivi : episodes importes, place, telechargements en cours. */
   fankarr: { ep: 147, o: 354619441774, absents: 0, series: ["Série Kaï"], cours: 1, dernier: "@-14j" },

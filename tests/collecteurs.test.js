@@ -163,6 +163,31 @@ test("www/systeme.json : `mem` et `stock` ont les cles que rend systeme.py", () 
   assert.deepEqual(tri(Object.keys(sy.stock.slots)), tri(clesDict(st.src, st.src.indexOf("{", slots))));
 });
 
+test("la demonstration passe par fusionSysteme : ventilateurs et compte rendu de sauvegarde", () => {
+  const d = demo("data.json"), sy = demo("systeme.json"), backup = { ...d.backup };
+  assert.ok(sy.fans.length > 0 && Object.keys(sy.backup).length > 0, "rien a fusionner ne prouverait rien");
+  fusionSysteme(d, sy);
+  assert.deepEqual(d.nas.fans, sy.fans);
+  // `{ ...d.backup }` : la fusion cree l objet dans le contexte vm, sa copie non
+  assert.deepEqual({ ...d.backup }, { ...backup, ...sy.backup }, "l age et la date de data.json, completes du compte rendu");
+});
+
+/** Les sections de systeme.json, lues dans `main()` de systeme.py. */
+function sectionsSysteme() {
+  const src = fs.readFileSync(path.join(RACINE, "collecteurs", "systeme.py"), "utf8");
+  const debut = src.indexOf("\ndef main("), fin = src.indexOf("\nif __name__", debut);
+  assert.ok(debut > 0 && fin > debut, "main() introuvable dans systeme.py");
+  const corps = src.slice(debut, fin);
+  return [...new Set([...corps.matchAll(/out = \{"(\w+)"/g), ...corps.matchAll(/\("(\w+)", (?:lambda|\w+\))/g),
+                      ...corps.matchAll(/out\["(\w+)"\]/g)].map((x) => x[1]))].sort();
+}
+
+test("www/systeme.json : les sections que publie systeme.py, ni plus ni moins", () => {
+  const sections = sectionsSysteme();
+  assert.ok(sections.length > 10, "sections mal lues : " + sections);
+  assert.deepEqual(Object.keys(demo("systeme.json")).sort(), sections);
+});
+
 test("clesDict : premier niveau seulement, commentaires et chaines compris", () => {
   const py = 'return {\n  "a": f(1, {"x": 2}),  # "faux": commentaire\n  "b": "c: d", "e": [{"y": 3}],\n}';
   assert.deepEqual(clesDict(py, py.indexOf("{")), ["a", "b", "e"]);
