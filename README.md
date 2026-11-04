@@ -112,6 +112,8 @@ Pour lancer les tests, sans NAS ni dépendance :
 node --test tests/*.test.js
 ```
 
+Pour éprouver les collecteurs sur les vraies réponses des API : `outils/enregistre-api.sh` sur le NAS, puis `HOMELAB_REPONSES=… node --test tests/*.test.js` ; les réponses restent hors du dépôt.
+
 ## Structure du dépôt
 
 | Dossier | Contenu |
