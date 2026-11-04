@@ -21,6 +21,8 @@
 # Historique : 24 h au pas de 10 min, et la serie fine a la minute.
 * * * * * /volume1/docker/homelab/history-build.sh >/dev/null 2>&1
 * * * * * /volume1/docker/homelab/history-min.sh >/dev/null 2>&1
+# Qui consommait quoi, a la minute, sur 7 jours. En root : les compteurs de disque des autres comptes lui sont reserves.
+* * * * * /usr/bin/flock -n /tmp/processus.lock /usr/bin/python3 /volume1/docker/homelab/processus.py >/dev/null 2>>/tmp/processus.err
 # Collecteur systeme (memoire, stockage, securite, acces, reseau…) et sa passe de nuit.
 * * * * * /usr/bin/python3 /volume1/docker/homelab/systeme.py >> /volume1/docker/homelab/systeme.log 2>&1
 30 3 * * * /usr/bin/python3 /volume1/docker/homelab/systeme.py --nuit >> /volume1/docker/homelab/systeme.log 2>&1
